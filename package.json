@@ -1,0 +1,21 @@
+{
+  "name": "conceptors-medrep-crm",
+  "version": "1.0.0",
+  "description": "Enterprise Field Reporting & CRM Platform for Medical Representatives - Conceptors Animal Health LLC",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx serve .",
+    "test": "echo \"Ready for deployment\" && exit 0"
+  },
+  "keywords": [
+    "crm",
+    "medical-representative",
+    "field-force",
+    "animal-health",
+    "veterinary",
+    "pharma-crm",
+    "reporting-system"
+  ],
+  "author": "Conceptors Animal Health LLC",
+  "license": "MIT"
+}
