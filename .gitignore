@@ -1,0 +1,34 @@
+# OS generated files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs and databases
+*.log
+*.tmp
+*.bak
+scratch/
+.system_generated/
+
+# Vercel
+.vercel/
+.vercel_build_output/
+
+# Dependencies
+node_modules/
+package-lock.json
