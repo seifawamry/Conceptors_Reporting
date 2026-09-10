@@ -3823,28 +3823,20 @@ window.showToast = function(title, message, type = 'info') {
   if (!container) return;
 
   const toast = document.createElement('div');
-  toast.className = 'toast-item pointer-events-auto p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md transition-all';
-
-  if (type === 'success') {
-    toast.className += ' bg-slate-900/95 border-emerald-500/50 text-white';
-  } else if (type === 'warning') {
-    toast.className += ' bg-slate-900/95 border-amber-500/50 text-white';
-  } else {
-    toast.className += ' bg-slate-900/95 border-sky-500/50 text-white';
-  }
+  const typeClass = (type === 'success' || type === 'warning') ? `toast-${type}` : 'toast-info';
+  toast.className = `toast-item ${typeClass} pointer-events-auto p-3.5 sm:p-4 rounded-2xl shadow-2xl flex items-start gap-3 transition-all`;
 
   const iconName = type === 'success' ? 'check-circle-2' : (type === 'warning' ? 'alert-triangle' : 'info');
-  const iconColor = type === 'success' ? 'text-emerald-400' : (type === 'warning' ? 'text-amber-400' : 'text-sky-400');
 
   toast.innerHTML = `
-    <div class="p-1 rounded-lg bg-slate-800 ${iconColor} shrink-0 mt-0.5">
+    <div class="toast-icon-wrapper p-2 rounded-xl shrink-0 mt-0.5">
       <i data-lucide="${iconName}" class="w-4 h-4"></i>
     </div>
     <div class="flex-1 min-w-0">
-      <h5 class="text-xs font-bold text-white">${escapeHtml(title)}</h5>
-      <p class="text-[11px] text-slate-300 mt-0.5 font-medium leading-relaxed">${escapeHtml(message)}</p>
+      <h5 class="toast-title text-xs font-black leading-tight">${escapeHtml(title)}</h5>
+      <p class="toast-message text-[11px] mt-1 font-medium leading-relaxed">${escapeHtml(message)}</p>
     </div>
-    <button type="button" class="text-slate-400 hover:text-white p-1 shrink-0" onclick="this.parentElement.remove()">
+    <button type="button" class="toast-close-btn p-1.5 rounded-lg shrink-0 transition-colors" onclick="this.parentElement.remove()" aria-label="Dismiss notification">
       <i data-lucide="x" class="w-3.5 h-3.5"></i>
     </button>
   `;
