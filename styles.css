@@ -12,6 +12,11 @@
   --sar: env(safe-area-inset-right, 0px);
 }
 
+/* Fallback Utility Classes (Ensures reliability even if CDN is blocked/delayed) */
+.hidden {
+  display: none !important;
+}
+
 html, body {
   font-family: var(--font-main);
   background-color: #070d19;
