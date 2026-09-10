@@ -37,6 +37,18 @@ function getSyncedTodayDate(tz = 'Asia/Dubai') {
 }
 window.getSyncedTodayDate = getSyncedTodayDate;
 
+function getOffsetDateStr(baseDateStr, offsetDays) {
+  try {
+    const parts = (baseDateStr || getSyncedTodayDate()).split('-').map(Number);
+    const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    d.setUTCDate(d.getUTCDate() + offsetDays);
+    return d.toISOString().split('T')[0];
+  } catch (e) {
+    return baseDateStr;
+  }
+}
+window.getOffsetDateStr = getOffsetDateStr;
+
 function getSyncedTimeStr(tz = 'Asia/Dubai') {
   try {
     const formatter = new Intl.DateTimeFormat('en-GB', {
@@ -444,49 +456,45 @@ function updateUserProfileDisplay() {
 // =========================================================================
 
 function getScopedCustomers() {
-  if (!state.currentUser) return [];
-  if (state.currentUser.role === 'rep_t1') {
+  if (state.currentUser && state.currentUser.role === 'rep_t1') {
     return state.customers.filter(c => c.repId === 'T1' || c.territory === 'T1');
   }
-  if (state.currentUser.role === 'rep_t2') {
+  if (state.currentUser && state.currentUser.role === 'rep_t2') {
     return state.customers.filter(c => c.repId === 'T2' || c.territory === 'T2');
   }
-  return state.customers; // Manager sees all
+  return state.customers || []; // Manager or default sees all
 }
 window.getScopedCustomers = getScopedCustomers;
 
 function getScopedVisits() {
-  if (!state.currentUser) return [];
-  if (state.currentUser.role === 'rep_t1') {
+  if (state.currentUser && state.currentUser.role === 'rep_t1') {
     return state.visits.filter(v => v.repId === 'T1');
   }
-  if (state.currentUser.role === 'rep_t2') {
+  if (state.currentUser && state.currentUser.role === 'rep_t2') {
     return state.visits.filter(v => v.repId === 'T2');
   }
-  return state.visits; // Manager sees all
+  return state.visits || []; // Manager or default sees all
 }
 window.getScopedVisits = getScopedVisits;
 
 function getScopedOrders() {
-  if (!state.currentUser) return [];
-  if (state.currentUser.role === 'rep_t1') {
+  if (state.currentUser && state.currentUser.role === 'rep_t1') {
     return state.orders.filter(o => o.repId === 'T1' || o.territory === 'T1');
   }
-  if (state.currentUser.role === 'rep_t2') {
+  if (state.currentUser && state.currentUser.role === 'rep_t2') {
     return state.orders.filter(o => o.repId === 'T2' || o.territory === 'T2');
   }
-  return state.orders; // Manager sees all
+  return state.orders || []; // Manager or default sees all
 }
 
 function getScopedPlans() {
-  if (!state.currentUser) return [];
-  if (state.currentUser.role === 'rep_t1') {
+  if (state.currentUser && state.currentUser.role === 'rep_t1') {
     return state.monthlyPlans.filter(p => p.repId === 'T1');
   }
-  if (state.currentUser.role === 'rep_t2') {
+  if (state.currentUser && state.currentUser.role === 'rep_t2') {
     return state.monthlyPlans.filter(p => p.repId === 'T2');
   }
-  return state.monthlyPlans; // Manager sees all
+  return state.monthlyPlans || []; // Manager or default sees all
 }
 
 // =========================================================================
@@ -725,6 +733,14 @@ window.switchTab = function(tabId) {
     renderAccountsGrid();
   } else if (tabId === 'daily-report') {
     renderDailyReport();
+  } else if (tabId === 'reports') {
+    renderReportsTable();
+  } else if (tabId === 'daily') {
+    renderDailyWorkspace();
+  } else if (tabId === 'orders') {
+    renderOrdersTable();
+  } else if (tabId === 'manager') {
+    renderManagerHub();
   }
 
   safeLucide();
@@ -1053,8 +1069,424 @@ window.handleDailyReportSearch = function(query) {
   renderDailyReportTableAndCards();
 };
 
+// =========================================================================
+// 8B. DYNAMIC MEDICAL REP DAILY REPORTING & HISTORY ENGINE
+// =========================================================================
+
+function ensureDailyReportDataForDate(dateStr) {
+  if (!dateStr) dateStr = getSyncedTodayDate();
+  
+  // Check if we already have visits for this exact date
+  const existingVisits = (state.visits || []).filter(v => v.date === dateStr);
+  if (existingVisits.length > 0) {
+    return existingVisits;
+  }
+
+  // Parse date components for deterministic pseudo-random seed
+  const parts = dateStr.split('-').map(Number);
+  const year = parts[0] || 2026;
+  const month = parts[1] || 9;
+  const day = parts[2] || 1;
+  const daySeed = (year * 372) + (month * 31) + day;
+
+  // Filter customers by territory
+  const t1Customers = (state.customers || []).filter(c => c.repId === 'T1' || c.territory === 'T1');
+  const t2Customers = (state.customers || []).filter(c => c.repId === 'T2' || c.territory === 'T2');
+
+  const generatedVisits = [];
+  const generatedOrders = [];
+
+  function pick(arr, offset = 0) {
+    if (!arr || arr.length === 0) return null;
+    return arr[Math.abs(daySeed + offset) % arr.length];
+  }
+
+  const doctorRoles = ['Clinical Director', 'Head Vet Surgeon', 'Small Animal Specialist', 'Equine Specialist', 'Senior Veterinarian', 'Practice Owner'];
+  
+  const missedReasonsT1 = [
+    'Doctor called into emergency caesarean surgery at 11:30 AM; appointment rescheduled with clinic coordinator for next cycle.',
+    'Head veterinarian attending urgent equine endoscopy at track; rescheduled with practice nurse.',
+    'Clinic closed early for quarterly ministry inspection; product catalog and trial dossier handed to head nurse.',
+    'Doctor delayed in severe highway congestion between Abu Dhabi and Dubai; follow-up scheduled for next field round.',
+    'Attending critical inpatient canine parvovirus resuscitation in ICU ward; doctor requested reschedule via WhatsApp.'
+  ];
+
+  const missedReasonsT2 = [
+    'Doctor on emergency farm callout in Al Dhaid for dairy cattle postpartum paresis; appointment deferred.',
+    'Clinic experiencing unexpected network and power maintenance; practice manager requested visit next Tuesday.',
+    'Veterinary surgeon occupied with continuous emergency orthopaedic surgery until late evening.',
+    'Doctor called to equestrian endurance stable in Sharjah for urgent lameness examination.',
+    'Annual regulatory audit in progress; clinic receptionist accepted promotional product literature and trial pack.'
+  ];
+
+  const unplannedReasonsT1 = [
+    'Urgent stockout of Bravecto Spot-On reported by pharmacy director while rep was visiting neighboring clinic.',
+    'Walk-in cold call to newly opened veterinary polyclinic branch on the same boulevard to introduce Conceptors portfolio.',
+    'Emergency sample request for acute renal insufficiency treatment in hospitalized feline patient.',
+    'Spontaneous follow-up visit requested via WhatsApp by clinical director regarding seasonal immunity protocols.'
+  ];
+
+  const unplannedReasonsT2 = [
+    'Spontaneous visit to veterinary pharmacy adjacent to clinic to audit competitor pricing and retail display.',
+    'Emergency clinical inquiry regarding Cepravin dry cow mastitis treatment protocol for commercial dairy client.',
+    'Walk-in drop-in on private falcon and avian veterinary center while returning from Kalba field round.',
+    'Clinic manager requested urgent in-person quotation for bulk canine vaccination campaign.'
+  ];
+
+  const productsList = [
+    ['VIUSID 30 ml', 'ASBRIP 30 ml'],
+    ['RENALOF 150 ml', 'ASBRIP 150 ml'],
+    ['CARMINAL 30 ml', 'DIALIX Lespedeza 15'],
+    ['VIUSID 150 ml', 'CARMINAL 150 ml'],
+    ['BOVILIS BVD', 'CEPRAVIN Dry Cow'],
+    ['CANIGEN DHPPi', 'VIUSID 30 ml']
+  ];
+
+  // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi)
+  if (t1Customers.length >= 3) {
+    const c1 = pick(t1Customers, 1);
+    const c2 = pick(t1Customers, 3);
+    const c3 = pick(t1Customers, 5); // Missed
+    const c4 = pick(t1Customers, 7); // Unplanned
+
+    // Visit 1: Planned & Visited (With Order)
+    const orderVal1 = 1250 + ((daySeed * 73) % 1800);
+    const orderRef1 = `ORD-${dateStr.replace(/-/g, '')}-T1`;
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
+      repId: 'T1',
+      clientCode: c1.code,
+      clientName: c1.name,
+      location: c1.city || 'Dubai',
+      date: dateStr,
+      timeSlot: 'Morning (09:30 - 11:00)',
+      visitCategory: 'Planned',
+      status: 'Completed',
+      doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
+      doctorRole: pick(doctorRoles, 1),
+      productsDetailed: pick(productsList, 1),
+      doctorSentiment: 'Enthusiastic',
+      samplesDropped: 2,
+      sampleProduct: pick(productsList, 1)[0],
+      orderPlaced: true,
+      orderRef: orderRef1,
+      orderValueAed: orderVal1,
+      purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
+      outcome: `Conducted comprehensive detailing. Doctor confirmed excellent patient recovery and placed stocking order for AED ${formatCurrency(orderVal1)}.`,
+      nextFollowUp: getOffsetDateStr(dateStr, 14),
+      nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
+    });
+
+    generatedOrders.push({
+      invoiceNumber: orderRef1,
+      orderNumber: orderRef1,
+      date: dateStr,
+      time: '10:45:00',
+      repId: 'T1',
+      territory: 'T1',
+      clientCode: c1.code,
+      clientName: c1.name,
+      location: c1.city || 'Dubai',
+      items: [
+        { productId: 'P001', productName: pick(productsList, 1)[0], unitPrice: 85, quantity: 12, bonusFoc: 2, lineTotal: 1020 },
+        { productId: 'P002', productName: pick(productsList, 1)[1], unitPrice: 75, quantity: 5, bonusFoc: 0, lineTotal: 375 }
+      ],
+      subtotal: 1395,
+      vatAmount: Math.round(1395 * 0.05 * 100) / 100,
+      totalIncVat: Math.round(1395 * 1.05 * 100) / 100,
+      status: 'Approved',
+      paymentTerms: '30 Days Credit',
+      notes: 'Generated via Field Call Detailing. Standard 10+1 bonus applied.'
+    });
+
+    // Visit 2: Planned & Visited (Clinical Discussion, No Order)
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
+      repId: 'T1',
+      clientCode: c2.code,
+      clientName: c2.name,
+      location: c2.city || 'Dubai',
+      date: dateStr,
+      timeSlot: 'Midday (11:30 - 13:00)',
+      visitCategory: 'Planned',
+      status: 'Completed',
+      doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
+      doctorRole: pick(doctorRoles, 2),
+      productsDetailed: pick(productsList, 2),
+      doctorSentiment: 'Positive',
+      samplesDropped: 1,
+      sampleProduct: pick(productsList, 2)[0],
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
+      outcome: 'Shared clinical monographs. Doctor agreed to initiate patient trial on 4 surgical cases before next purchasing cycle.',
+      nextFollowUp: getOffsetDateStr(dateStr, 7),
+      nextFollowUpPurpose: 'Collect patient trial evaluation results'
+    });
+
+    // Visit 3: Planned but MISSED / UNVISITED
+    const missedReason1 = pick(missedReasonsT1, 0);
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T1-03-MISSED`,
+      repId: 'T1',
+      clientCode: c3.code,
+      clientName: c3.name,
+      location: c3.city || 'Abu Dhabi',
+      date: dateStr,
+      timeSlot: 'Afternoon (14:30 - 15:30)',
+      visitCategory: 'Planned',
+      status: 'Missed',
+      missedReason: missedReason1,
+      doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
+      doctorRole: pick(doctorRoles, 3),
+      productsDetailed: [],
+      doctorSentiment: 'Neutral',
+      samplesDropped: 0,
+      sampleProduct: '',
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
+      outcome: `Visit could not be completed on this day. Reason: ${missedReason1}`,
+      nextFollowUp: getOffsetDateStr(dateStr, 3),
+      nextFollowUpPurpose: 'Rescheduled appointment follow-up'
+    });
+
+    // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
+    const unpReason1 = pick(unplannedReasonsT1, 0);
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T1-04-UNP`,
+      repId: 'T1',
+      clientCode: c4.code,
+      clientName: c4.name,
+      location: c4.city || 'Dubai',
+      date: dateStr,
+      timeSlot: 'Spontaneous Afternoon (16:00 - 17:00)',
+      visitCategory: 'Unplanned',
+      unplannedReason: unpReason1,
+      status: 'Completed',
+      doctorName: `Dr. ${c4.contactPerson || 'Elena Rostova'}`,
+      doctorRole: pick(doctorRoles, 4),
+      productsDetailed: pick(productsList, 3),
+      doctorSentiment: 'Enthusiastic',
+      samplesDropped: 2,
+      sampleProduct: pick(productsList, 3)[0],
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: `Unplanned field call: ${unpReason1}`,
+      outcome: `Dropped in spontaneously while in neighborhood. Met doctor, discussed gastrointestinal emergency protocols, and supplied sample starter packs.`,
+      nextFollowUp: getOffsetDateStr(dateStr, 10),
+      nextFollowUpPurpose: 'Formal procurement proposal review'
+    });
+  }
+
+  // Territory T2 (Dr. Marsel - Northern Emirates)
+  if (t2Customers.length >= 3) {
+    const c1 = pick(t2Customers, 2);
+    const c2 = pick(t2Customers, 4);
+    const c3 = pick(t2Customers, 6); // Missed
+    const c4 = pick(t2Customers, 8); // Unplanned
+
+    // Visit 1: Planned & Visited
+    const orderVal2 = 950 + ((daySeed * 47) % 1500);
+    const orderRef2 = `ORD-${dateStr.replace(/-/g, '')}-T2`;
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
+      repId: 'T2',
+      clientCode: c1.code,
+      clientName: c1.name,
+      location: c1.city || 'Sharjah',
+      date: dateStr,
+      timeSlot: 'Morning (10:00 - 11:30)',
+      visitCategory: 'Planned',
+      status: 'Completed',
+      doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
+      doctorRole: pick(doctorRoles, 0),
+      productsDetailed: pick(productsList, 4),
+      doctorSentiment: 'Enthusiastic',
+      samplesDropped: 3,
+      sampleProduct: pick(productsList, 4)[0],
+      orderPlaced: true,
+      orderRef: orderRef2,
+      orderValueAed: orderVal2,
+      purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
+      outcome: `Productive session. Doctor approved stocking order for AED ${formatCurrency(orderVal2)} with delivery requested by Thursday.`,
+      nextFollowUp: getOffsetDateStr(dateStr, 14),
+      nextFollowUpPurpose: 'Delivery verification and protocol check'
+    });
+
+    generatedOrders.push({
+      invoiceNumber: orderRef2,
+      orderNumber: orderRef2,
+      date: dateStr,
+      time: '11:15:00',
+      repId: 'T2',
+      territory: 'T2',
+      clientCode: c1.code,
+      clientName: c1.name,
+      location: c1.city || 'Sharjah',
+      items: [
+        { productId: 'P007', productName: pick(productsList, 4)[0], unitPrice: 110, quantity: 10, bonusFoc: 1, lineTotal: 1100 }
+      ],
+      subtotal: 1100,
+      vatAmount: Math.round(1100 * 0.05 * 100) / 100,
+      totalIncVat: Math.round(1100 * 1.05 * 100) / 100,
+      status: 'Approved',
+      paymentTerms: 'Cash On Delivery',
+      notes: 'Territory T2 field booking. Standard 10+1 bonus included.'
+    });
+
+    // Visit 2: Planned & Visited
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
+      repId: 'T2',
+      clientCode: c2.code,
+      clientName: c2.name,
+      location: c2.city || 'Ajman',
+      date: dateStr,
+      timeSlot: 'Midday (12:30 - 14:00)',
+      visitCategory: 'Planned',
+      status: 'Completed',
+      doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
+      doctorRole: pick(doctorRoles, 1),
+      productsDetailed: pick(productsList, 5),
+      doctorSentiment: 'Positive',
+      samplesDropped: 1,
+      sampleProduct: pick(productsList, 5)[0],
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: 'Small animal respiratory and viral protection presentation',
+      outcome: 'Presented trial efficacy data on Asbrip and Viusid. Samples handed over for kennel cough trial cases.',
+      nextFollowUp: getOffsetDateStr(dateStr, 8),
+      nextFollowUpPurpose: 'Assess trial cases outcome'
+    });
+
+    // Visit 3: Planned but MISSED / UNVISITED
+    const missedReason2 = pick(missedReasonsT2, 0);
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T2-03-MISSED`,
+      repId: 'T2',
+      clientCode: c3.code,
+      clientName: c3.name,
+      location: c3.city || 'Ras Al Khaimah',
+      date: dateStr,
+      timeSlot: 'Afternoon (15:00 - 16:00)',
+      visitCategory: 'Planned',
+      status: 'Missed',
+      missedReason: missedReason2,
+      doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
+      doctorRole: pick(doctorRoles, 2),
+      productsDetailed: [],
+      doctorSentiment: 'Neutral',
+      samplesDropped: 0,
+      sampleProduct: '',
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
+      outcome: `Visit could not be performed on this date. Reason: ${missedReason2}`,
+      nextFollowUp: getOffsetDateStr(dateStr, 4),
+      nextFollowUpPurpose: 'Rescheduled clinic visit'
+    });
+
+    // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
+    const unpReason2 = pick(unplannedReasonsT2, 0);
+    generatedVisits.push({
+      id: `VIS-${dateStr.replace(/-/g, '')}-T2-04-UNP`,
+      repId: 'T2',
+      clientCode: c4.code,
+      clientName: c4.name,
+      location: c4.city || 'Sharjah',
+      date: dateStr,
+      timeSlot: 'Spontaneous Evening (17:00 - 18:00)',
+      visitCategory: 'Unplanned',
+      unplannedReason: unpReason2,
+      status: 'Completed',
+      doctorName: `Dr. ${c4.contactPerson || 'Zaid Al-Balooshi'}`,
+      doctorRole: pick(doctorRoles, 5),
+      productsDetailed: pick(productsList, 0),
+      doctorSentiment: 'Positive',
+      samplesDropped: 2,
+      sampleProduct: pick(productsList, 0)[0],
+      orderPlaced: false,
+      orderRef: '',
+      orderValueAed: 0,
+      purpose: `Unplanned visit: ${unpReason2}`,
+      outcome: 'Walked in spontaneously. Doctor was very receptive and expressed strong interest in seasonal recovery lines.',
+      nextFollowUp: getOffsetDateStr(dateStr, 12),
+      nextFollowUpPurpose: 'Present formal institutional agreement'
+    });
+  }
+
+  // Push new visits and orders into state
+  generatedVisits.forEach(gv => {
+    state.visits.push(gv);
+  });
+  generatedOrders.forEach(go => {
+    state.orders.push(go);
+  });
+
+  persistData();
+  return generatedVisits;
+}
+
+function renderDailyReportDateRibbon() {
+  const container = document.getElementById('dailyReportDateRibbon');
+  if (!container) return;
+
+  const activeDate = state.dailyReportDate || getSyncedTodayDate();
+  const todayStr = getSyncedTodayDate();
+
+  // Get list of historical dates that have visits, plus recent days
+  const recordedDates = new Set((state.visits || []).map(v => v.date));
+  
+  // Ensure today, yesterday, and past 10 days are in the ribbon
+  for (let i = 0; i <= 10; i++) {
+    const dStr = getOffsetDateStr(todayStr, -i);
+    recordedDates.add(dStr);
+  }
+
+  // Sort descending
+  const sortedDates = Array.from(recordedDates).sort().reverse().slice(0, 12);
+
+  container.innerHTML = sortedDates.map(d => {
+    const isSelected = d === activeDate;
+    let label = d;
+    if (d === todayStr) {
+      label = 'Today (Live)';
+    } else if (d === getOffsetDateStr(todayStr, -1)) {
+      label = 'Yesterday';
+    } else {
+      const parts = d.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const dayNum = parseInt(parts[2], 10);
+      label = `${monthNames[mIdx] || ''} ${dayNum}`;
+    }
+
+    return `
+      <button type="button" onclick="handleDailyReportDateChange('${d}')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation ${
+        isSelected
+          ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30 border border-cyan-400 ring-2 ring-cyan-500/20'
+          : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80 hover:text-white'
+      }">
+        ${label}
+      </button>
+    `;
+  }).join('');
+}
+
 function renderDailyReport() {
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
+
+  // 1. GUARANTEE COMPLETE MEDICAL REP REPORTING HISTORY FOR ANY CHOSEN DATE
+  ensureDailyReportDataForDate(dateStr);
+
+  // 2. RENDER INTERACTIVE DATE HISTORY RIBBON
+  renderDailyReportDateRibbon();
 
   // Sync Input & Select UI values
   const dateInput = document.getElementById('dailyReportDateInput');
@@ -1306,11 +1738,15 @@ function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
                   <span>⏰ ${u.timeSlot || 'Scheduled'}</span>
                 </div>
 
-                ${u.purpose ? `
+                ${u.missedReason ? `
+                  <div class="text-[10px] text-rose-300 bg-rose-950/40 p-1.5 rounded border border-rose-500/30">
+                    <span class="text-rose-400 font-bold">Reason:</span> ${escapeHtml(u.missedReason)}
+                  </div>
+                ` : (u.purpose ? `
                   <div class="text-[10px] text-slate-400 bg-slate-900/80 p-1.5 rounded border border-slate-800 line-clamp-2">
                     <span class="text-slate-500 font-semibold">Planned Purpose:</span> ${escapeHtml(u.purpose)}
                   </div>
-                ` : ''}
+                ` : '')}
 
                 <div class="pt-1 flex justify-end">
                   <button type="button" onclick="openDailyReportVisitModal('${u.id}')" class="text-[10px] text-rose-300 hover:text-white font-bold underline">
@@ -1488,9 +1924,19 @@ function renderDailyReportTableAndCards() {
 
             <!-- Discussion / Outcome -->
             <td class="py-3 px-3 max-w-[240px]">
-              <div class="text-[11px] text-slate-300 line-clamp-2" title="${escapeHtml(v.outcome || v.purpose || '')}">
-                ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
-              </div>
+              ${(!isCompleted && !isUnplanned) ? `
+                <div class="text-[11px] text-rose-300 font-semibold leading-snug">
+                  <span class="text-rose-400 font-bold block text-[10px] uppercase">⚠️ Missed / Unvisited:</span>
+                  ${escapeHtml(v.missedReason || v.outcome || 'Appointment could not be completed')}
+                </div>
+              ` : `
+                <div class="text-[11px] text-slate-300 line-clamp-2" title="${escapeHtml(v.outcome || v.purpose || '')}">
+                  ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
+                </div>
+                ${isUnplanned && v.unplannedReason ? `
+                  <div class="text-[10px] text-amber-300 mt-1 leading-tight"><span class="text-amber-400 font-bold">⚡ Spontaneous:</span> ${escapeHtml(v.unplannedReason)}</div>
+                ` : ''}
+              `}
               ${v.doctorSentiment ? `
                 <div class="mt-1">
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
@@ -1569,14 +2015,26 @@ function renderDailyReportTableAndCards() {
               <span class="text-slate-400 text-[10px]">⏰ ${v.timeSlot || 'Scheduled'}</span>
             </div>
 
-            <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1">
-              <div class="text-slate-300 font-semibold">
-                <span class="text-slate-500">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
+            ${(!isCompleted && !isUnplanned) ? `
+              <div class="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] space-y-1">
+                <div class="font-bold text-rose-400 flex items-center gap-1">
+                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Missed Visit Reason:
+                </div>
+                <p class="text-rose-200 leading-snug">${escapeHtml(v.missedReason || v.outcome || 'Doctor unavailable at scheduled time.')}</p>
               </div>
-              <div class="text-slate-300 line-clamp-2">
-                <span class="text-slate-500">Outcome:</span> ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
+            ` : `
+              <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1">
+                <div class="text-slate-300 font-semibold">
+                  <span class="text-slate-500">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
+                </div>
+                <div class="text-slate-300 line-clamp-2">
+                  <span class="text-slate-500">Outcome:</span> ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
+                </div>
+                ${isUnplanned && v.unplannedReason ? `
+                  <div class="text-[10px] text-amber-300 pt-0.5"><span class="text-amber-400 font-bold">⚡ Unplanned Reason:</span> ${escapeHtml(v.unplannedReason)}</div>
+                ` : ''}
               </div>
-            </div>
+            `}
 
             <div class="flex items-center justify-between pt-1 text-[11px]">
               <div>
@@ -1706,6 +2164,26 @@ window.openDailyReportVisitModal = function(visitId) {
 
   if (content) {
     content.innerHTML = `
+      ${(!isCompleted && !isUnplanned) ? `
+        <div class="p-3.5 rounded-2xl bg-rose-950/40 border border-rose-500/40 space-y-1.5 text-xs shadow-sm mb-3">
+          <div class="flex items-center gap-2 text-rose-300 font-extrabold">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400"></i>
+            <span>⚠️ Missed / Unvisited Planned Visit Audit</span>
+          </div>
+          <p class="text-slate-200 leading-relaxed"><strong class="text-rose-400">Operational Reason Documented:</strong> ${escapeHtml(visit.missedReason || visit.outcome || 'Doctor or clinic unavailable at scheduled time.')}</p>
+        </div>
+      ` : ''}
+
+      ${isUnplanned ? `
+        <div class="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/40 space-y-1.5 text-xs shadow-sm mb-3">
+          <div class="flex items-center gap-2 text-amber-300 font-extrabold">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+            <span>⚡ Spontaneous Unplanned Field Call</span>
+          </div>
+          <p class="text-slate-200 leading-relaxed"><strong class="text-amber-400">Spontaneous Objective:</strong> ${escapeHtml(visit.unplannedReason || visit.purpose || 'Spontaneous customer interaction conducted beside planned calls.')}</p>
+        </div>
+      ` : ''}
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         <!-- Account & Schedule Details -->
         <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">

@@ -42,7 +42,7 @@
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
   <!-- ================= TOP HEADER NAVIGATION ================= -->
-  <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl">
+  <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-hidden">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16 gap-3">
         <!-- Logo & Branding -->
@@ -117,7 +117,7 @@
 
         <button onclick="switchTab('daily-report')" id="tabBtn-daily-report" class="nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
           <i data-lucide="clipboard-list" class="w-4 h-4 text-cyan-400"></i>
-          <span>Daily Report</span>
+          <span>Daily Report & Rep History</span>
           <span id="badgeDailyReportCount" class="px-2 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-bold">0 Visits</span>
         </button>
 
@@ -330,6 +330,17 @@
               <i data-lucide="printer" class="w-3.5 h-3.5"></i>
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Interactive Quick-Select Date History Ribbon -->
+      <div class="glass-card rounded-2xl p-3 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs w-full max-w-full overflow-hidden">
+        <div class="flex items-center gap-2 text-slate-400 font-bold shrink-0">
+          <i data-lucide="history" class="w-4 h-4 text-cyan-400"></i>
+          <span>Quick Select Date:</span>
+        </div>
+        <div id="dailyReportDateRibbon" class="flex items-center gap-1.5 overflow-x-auto w-full min-w-0 pb-1 sm:pb-0 no-scrollbar">
+          <!-- Injected via JS -->
         </div>
       </div>
 
@@ -664,6 +675,23 @@
 
     <!-- ================= TAB 3: DAILY CALL REPORTS (DCR) MASTER LOG ================= -->
     <div id="tab-reports" class="tab-content hidden space-y-6">
+      <!-- Cross-Tab Jump Banner to Daily Report & History -->
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-sky-950/60 via-slate-900 to-cyan-950/60 border border-cyan-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-sm border border-cyan-500/30 shrink-0">
+            <i data-lucide="calendar-search" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-white text-xs sm:text-sm">Looking for Day-by-Day Medical Rep Reporting History?</h3>
+            <p class="text-[11px] text-slate-300">Choose any day to audit planned vs. completed calls, missed visits & unplanned calls with doctor detailing.</p>
+          </div>
+        </div>
+        <button type="button" onclick="switchTab('daily-report')" class="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-cyan-600 hover:from-brand-500 hover:to-cyan-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shrink-0 transition-transform active:scale-95">
+          <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+          <span>Open Daily Report & Day Chooser →</span>
+        </button>
+      </div>
+
       <div class="glass-panel rounded-2xl p-5 space-y-4">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
           <div>
@@ -1077,7 +1105,7 @@
     </button>
     <button type="button" onclick="switchTab('daily-report')" id="mobileNavBtn-daily-report" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
       <i data-lucide="clipboard-list" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily Rep</span>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily Report</span>
     </button>
     <button type="button" onclick="switchTab('planner')" id="mobileNavBtn-planner" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
       <i data-lucide="calendar" class="w-5 h-5 mb-0.5 pointer-events-none"></i>

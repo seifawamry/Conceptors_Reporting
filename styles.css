@@ -1767,4 +1767,33 @@ html:not(.dark) #dailyReportVisitModal p.text-slate-200 {
   color: #0f172a !important;
 }
 
+/* Quick Select Date History Ribbon in Bright Mode */
+html:not(.dark) #dailyReportDateRibbon button:not(.bg-cyan-600) {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+html:not(.dark) #dailyReportDateRibbon button:not(.bg-cyan-600):hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+html:not(.dark) #dailyReportDateRibbon button.bg-cyan-600 {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0ea5e9 !important;
+}
+
+/* Cross-tab Jump Banner in Bright Mode */
+html:not(.dark) #tab-reports .bg-gradient-to-r {
+  background: linear-gradient(to right, #f0f9ff, #ffffff, #f0fdf4) !important;
+  border-color: #bae6fd !important;
+}
+html:not(.dark) #tab-reports .bg-gradient-to-r h3 {
+  color: #0f172a !important;
+}
+html:not(.dark) #tab-reports .bg-gradient-to-r p {
+  color: #475569 !important;
+}
+
+
 
