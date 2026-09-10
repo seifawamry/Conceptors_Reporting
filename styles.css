@@ -237,29 +237,172 @@ html:not(.dark) #userProfileWidget #userRoleDisplay {
   font-weight: 600 !important;
 }
 
+/* ================= UNIVERSAL BUTTON STYLING IN BRIGHT MODE ================= */
+
+/* 1. All Secondary, Slate, Neutral & Control Buttons in Bright Mode */
+html:not(.dark) button.bg-slate-800,
+html:not(.dark) button.bg-slate-900,
+html:not(.dark) button.bg-slate-700,
+html:not(.dark) button[class*="bg-slate-800"],
+html:not(.dark) button[class*="bg-slate-900"],
+html:not(.dark) button[class*="bg-slate-700"],
+html:not(.dark) button[class*="bg-slate-950"],
+html:not(.dark) button.bg-gray-800,
+html:not(.dark) button.bg-gray-900,
 html:not(.dark) #btnManagerNotifications,
+html:not(.dark) button[onclick*="navigatePlannerMonth"],
+html:not(.dark) button[onclick*="jumpPlannerCurrentMonth"],
+html:not(.dark) button[onclick*="exportReportsCSV"],
+html:not(.dark) button[onclick*="markAllNotificationsRead"],
+html:not(.dark) button[onclick*="setDailyDateOffset"],
+html:not(.dark) button[onclick*="openClientHistoryModal"],
+html:not(.dark) button[onclick*="viewNotificationEmail"],
 html:not(.dark) button[onclick*="openNotificationsModal"],
-html:not(.dark) button[onclick*="openManagerSettingsModal"] {
+html:not(.dark) button[onclick*="openManagerSettingsModal"],
+html:not(.dark) button[onclick*="close"],
+html:not(.dark) button[onclick*="Close"] {
   background-color: #ffffff !important;
   border: 1.5px solid #cbd5e1 !important;
-  color: #1e293b !important;
-}
-
-html:not(.dark) #btnManagerNotifications:hover,
-html:not(.dark) button[onclick*="openNotificationsModal"]:hover,
-html:not(.dark) button[onclick*="openManagerSettingsModal"]:hover {
-  background-color: #f1f5f9 !important;
   color: #0f172a !important;
-  border-color: #94a3b8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  font-weight: 700 !important;
 }
 
-/* Solid Colored & Gradient Action Buttons ALWAYS have razor-sharp white text */
+html:not(.dark) button.bg-slate-800:hover,
+html:not(.dark) button.bg-slate-900:hover,
+html:not(.dark) button.bg-slate-700:hover,
+html:not(.dark) button[class*="bg-slate-800"]:hover,
+html:not(.dark) button[class*="bg-slate-900"]:hover,
+html:not(.dark) button[class*="bg-slate-700"]:hover,
+html:not(.dark) button[class*="bg-slate-950"]:hover,
+html:not(.dark) button.bg-gray-800:hover,
+html:not(.dark) button.bg-gray-900:hover,
+html:not(.dark) #btnManagerNotifications:hover,
+html:not(.dark) button[onclick*="navigatePlannerMonth"]:hover,
+html:not(.dark) button[onclick*="jumpPlannerCurrentMonth"]:hover,
+html:not(.dark) button[onclick*="exportReportsCSV"]:hover,
+html:not(.dark) button[onclick*="markAllNotificationsRead"]:hover,
+html:not(.dark) button[onclick*="setDailyDateOffset"]:hover,
+html:not(.dark) button[onclick*="openClientHistoryModal"]:hover,
+html:not(.dark) button[onclick*="viewNotificationEmail"]:hover,
+html:not(.dark) button[onclick*="openNotificationsModal"]:hover,
+html:not(.dark) button[onclick*="openManagerSettingsModal"]:hover,
+html:not(.dark) button[onclick*="close"]:hover,
+html:not(.dark) button[onclick*="Close"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+/* Ensure text and non-colored icons inside secondary buttons are deep charcoal */
+html:not(.dark) button.bg-slate-800:not([class*="bg-brand"]):not([class*="bg-emerald"]):not([class*="bg-sky"]):not([class*="from-"]) *:not([class*="text-emerald"]):not([class*="text-green"]):not([class*="text-amber"]):not([class*="text-yellow"]):not([class*="text-sky"]):not([class*="text-blue"]):not([class*="text-rose"]):not([class*="text-red"]),
+html:not(.dark) button.bg-slate-900:not([class*="bg-brand"]):not([class*="bg-emerald"]):not([class*="bg-sky"]):not([class*="from-"]) *:not([class*="text-emerald"]):not([class*="text-green"]):not([class*="text-amber"]):not([class*="text-yellow"]):not([class*="text-sky"]):not([class*="text-blue"]):not([class*="text-rose"]):not([class*="text-red"]),
+html:not(.dark) button.bg-slate-700:not([class*="bg-brand"]):not([class*="bg-emerald"]):not([class*="bg-sky"]):not([class*="from-"]) *:not([class*="text-emerald"]):not([class*="text-green"]):not([class*="text-amber"]):not([class*="text-yellow"]):not([class*="text-sky"]):not([class*="text-blue"]):not([class*="text-rose"]):not([class*="text-red"]),
+html:not(.dark) button[class*="bg-slate-800"]:not([class*="bg-brand"]):not([class*="bg-emerald"]):not([class*="bg-sky"]):not([class*="from-"]) *:not([class*="text-emerald"]):not([class*="text-green"]):not([class*="text-amber"]):not([class*="text-yellow"]):not([class*="text-sky"]):not([class*="text-blue"]):not([class*="text-rose"]):not([class*="text-red"]),
+html:not(.dark) button[class*="bg-slate-900"]:not([class*="bg-brand"]):not([class*="bg-emerald"]):not([class*="bg-sky"]):not([class*="from-"]) *:not([class*="text-emerald"]):not([class*="text-green"]):not([class*="text-amber"]):not([class*="text-yellow"]):not([class*="text-sky"]):not([class*="text-blue"]):not([class*="text-rose"]):not([class*="text-red"]),
+html:not(.dark) button[onclick*="navigatePlannerMonth"] *,
+html:not(.dark) button[onclick*="jumpPlannerCurrentMonth"] *,
+html:not(.dark) button[onclick*="exportReportsCSV"] *,
+html:not(.dark) button[onclick*="markAllNotificationsRead"] *:not([class*="text-emerald"]):not([class*="text-green"]),
+html:not(.dark) button[onclick*="setDailyDateOffset"] *,
+html:not(.dark) button[onclick*="close"] *,
+html:not(.dark) button[onclick*="Close"] * {
+  color: #0f172a !important;
+}
+
+/* Preserve rich jewel-toned colored icons inside secondary buttons */
+html:not(.dark) button [class*="text-emerald"],
+html:not(.dark) button [class*="text-green"] {
+  color: #059669 !important;
+}
+html:not(.dark) button [class*="text-amber"],
+html:not(.dark) button [class*="text-yellow"] {
+  color: #d97706 !important;
+}
+html:not(.dark) button [class*="text-sky"],
+html:not(.dark) button [class*="text-blue"] {
+  color: #0284c7 !important;
+}
+html:not(.dark) button [class*="text-rose"],
+html:not(.dark) button [class*="text-red"] {
+  color: #e11d48 !important;
+}
+
+/* 2. Soft Tinted Action Buttons in Bright Mode (Vivid Pastel Cards) */
+html:not(.dark) button[class*="bg-emerald-600/20"],
+html:not(.dark) button[class*="bg-emerald-600/30"],
+html:not(.dark) button[class*="bg-emerald-500/20"],
+html:not(.dark) button[class*="bg-emerald-500/10"] {
+  background-color: #dcfce7 !important;
+  border: 1.5px solid #86efac !important;
+  color: #15803d !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-emerald-600/20"]:hover,
+html:not(.dark) button[class*="bg-emerald-500/20"]:hover {
+  background-color: #bbf7d0 !important;
+  border-color: #4ade80 !important;
+  color: #166534 !important;
+}
+html:not(.dark) button[class*="bg-emerald-600/20"] *,
+html:not(.dark) button[class*="bg-emerald-500/20"] * {
+  color: #15803d !important;
+}
+
+html:not(.dark) button[class*="bg-sky-600/20"],
+html:not(.dark) button[class*="bg-sky-600/30"],
+html:not(.dark) button[class*="bg-sky-500/20"],
+html:not(.dark) button[class*="bg-sky-500/10"] {
+  background-color: #e0f2fe !important;
+  border: 1.5px solid #7dd3fc !important;
+  color: #0369a1 !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-sky-600/20"]:hover,
+html:not(.dark) button[class*="bg-sky-500/20"]:hover {
+  background-color: #bae6fd !important;
+  border-color: #38bdf8 !important;
+  color: #075985 !important;
+}
+html:not(.dark) button[class*="bg-sky-600/20"] *,
+html:not(.dark) button[class*="bg-sky-500/20"] * {
+  color: #0369a1 !important;
+}
+
+html:not(.dark) button[class*="bg-amber-500/20"],
+html:not(.dark) button[class*="bg-amber-500/30"],
+html:not(.dark) button[class*="bg-amber-500/10"] {
+  background-color: #fef3c7 !important;
+  border: 1.5px solid #fcd34d !important;
+  color: #b45309 !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-amber-500/20"]:hover {
+  background-color: #fde68a !important;
+  border-color: #fbbf24 !important;
+  color: #92400e !important;
+}
+html:not(.dark) button[class*="bg-amber-500/20"] * {
+  color: #b45309 !important;
+}
+
+/* 3. Solid Colored & Gradient Action Buttons ALWAYS have razor-sharp white text */
 html:not(.dark) button.bg-brand-600,
 html:not(.dark) button.bg-brand-600 *,
+html:not(.dark) button.bg-brand-500,
+html:not(.dark) button.bg-brand-500 *,
 html:not(.dark) button.bg-sky-600,
 html:not(.dark) button.bg-sky-600 *,
+html:not(.dark) button.bg-sky-500,
+html:not(.dark) button.bg-sky-500 *,
 html:not(.dark) button.bg-emerald-600,
 html:not(.dark) button.bg-emerald-600 *,
+html:not(.dark) button.bg-emerald-500,
+html:not(.dark) button.bg-emerald-500 *,
+html:not(.dark) button.bg-amber-600,
+html:not(.dark) button.bg-amber-600 *,
+html:not(.dark) button.bg-indigo-600,
+html:not(.dark) button.bg-indigo-600 *,
 html:not(.dark) button[class*="from-brand-"],
 html:not(.dark) button[class*="from-brand-"] *,
 html:not(.dark) button[class*="from-emerald-"],
@@ -270,6 +413,8 @@ html:not(.dark) button[class*="from-purple-"],
 html:not(.dark) button[class*="from-purple-"] *,
 html:not(.dark) button[class*="from-rose-"],
 html:not(.dark) button[class*="from-rose-"] *,
+html:not(.dark) button[type="submit"],
+html:not(.dark) button[type="submit"] *,
 html:not(.dark) #notificationBadge {
   color: #ffffff !important;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
@@ -631,17 +776,17 @@ html:not(.dark) .border-slate-700 {
   border-color: #cbd5e1 !important;
 }
 
-html:not(.dark) .bg-slate-900:not(button):not(input):not(select):not(textarea) {
+html:not(.dark) .bg-slate-900:not(input):not(select):not(textarea) {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
 }
 
 html:not(.dark) .bg-slate-950:not(input) {
-  background-color: #e2e8f0 !important;
+  background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
 }
 
-html:not(.dark) .bg-slate-800:not(button):not(input):not(select):not(textarea) {
+html:not(.dark) .bg-slate-800:not(input):not(select):not(textarea) {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
 }
@@ -775,18 +920,166 @@ html:not(.dark) .fixed .bg-slate-950 {
 }
 
 html:not(.dark) .fixed label {
-  color: #1e293b !important;
+  color: #0f172a !important;
   font-weight: 700 !important;
 }
 
-html:not(.dark) .fixed button[onclick*="close"] {
-  background-color: #f1f5f9 !important;
-  border: 1px solid #cbd5e1 !important;
+html:not(.dark) .fixed p,
+html:not(.dark) .fixed .text-slate-400 {
   color: #334155 !important;
 }
 
-html:not(.dark) .fixed button[onclick*="close"]:hover {
-  background-color: #e2e8f0 !important;
+html:not(.dark) .fixed .text-slate-300 {
+  color: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+/* Modal Callout Banners & Notices */
+html:not(.dark) .fixed .bg-amber-500\/10,
+html:not(.dark) .fixed [class*="bg-amber-500/10"] {
+  background-color: #fffbeb !important;
+  border: 1.5px solid #fcd34d !important;
+  color: #78350f !important;
+}
+
+html:not(.dark) .fixed .bg-amber-500\/10 *,
+html:not(.dark) .fixed [class*="bg-amber-500/10"] * {
+  color: #78350f !important;
+}
+
+html:not(.dark) .fixed .bg-sky-950\/30,
+html:not(.dark) .fixed .bg-sky-950\/20,
+html:not(.dark) .fixed [class*="bg-sky-950"] {
+  background-color: #f0f9ff !important;
+  border: 1.5px solid #7dd3fc !important;
+  color: #0369a1 !important;
+}
+
+html:not(.dark) .fixed .bg-sky-950\/30 *,
+html:not(.dark) .fixed [class*="bg-sky-950"] * {
+  color: #0369a1 !important;
+}
+
+html:not(.dark) .fixed .bg-slate-900,
+html:not(.dark) .fixed .bg-slate-950 {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+/* Modal Header Close & Cancel Buttons */
+html:not(.dark) .fixed button[aria-label*="lose"],
+html:not(.dark) .fixed button[onclick*="close"],
+html:not(.dark) .fixed button[onclick*="Close"] {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .fixed button[aria-label*="lose"]:hover,
+html:not(.dark) .fixed button[onclick*="close"]:hover,
+html:not(.dark) .fixed button[onclick*="Close"]:hover {
+  background-color: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) .fixed button[aria-label*="lose"] *,
+html:not(.dark) .fixed button[onclick*="close"] *,
+html:not(.dark) .fixed button[onclick*="Close"] * {
+  color: #0f172a !important;
+}
+
+/* Senior Manager Notifications & Alert Inbox Modal in Bright Mode */
+html:not(.dark) #managerNotificationsModal .glass-panel {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #managerNotificationsModal h3 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card.border-amber-500\/50,
+html:not(.dark) #managerNotificationsList .glass-card[class*="bg-amber-950"] {
+  background-color: #fffbeb !important;
+  border: 2px solid #f59e0b !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card h4,
+html:not(.dark) #managerNotificationsList .glass-card span.font-bold,
+html:not(.dark) #managerNotificationsList .glass-card span.text-white {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card p {
+  color: #334155 !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card p strong {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerNotificationsList .bg-slate-950\/60 {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html:not(.dark) #managerNotificationsList button[onclick*="viewNotificationEmail"] {
+  background-color: #e0f2fe !important;
+  border: 1.5px solid #7dd3fc !important;
+  color: #0369a1 !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) #managerNotificationsList button[onclick*="viewNotificationEmail"]:hover {
+  background-color: #bae6fd !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+}
+
+/* Executive Email Preview Modal in Bright Mode */
+html:not(.dark) #viewEmailModal .glass-panel {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #emailPreviewContent {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #emailPreviewContent * {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #emailPreviewContent table th {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #emailPreviewContent table td {
+  border-color: #e2e8f0 !important;
+}
+
+/* Manager Settings Modal in Bright Mode */
+html:not(.dark) #managerSettingsModal .glass-panel {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #managerSettingsModal h3,
+html:not(.dark) #managerSettingsModal label {
   color: #0f172a !important;
 }
 
@@ -1193,3 +1486,134 @@ html:not(.dark) .mobile-nav-btn.active {
     width: calc(100% - 1rem) !important;
   }
 }
+
+/* ================= TOAST NOTIFICATIONS (DARK & BRIGHT SCREEN MODE) ================= */
+.toast-item {
+  background: rgba(15, 23, 42, 0.96);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  border-left-width: 6px !important;
+  color: #f8fafc;
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.toast-item.toast-success {
+  border-color: rgba(16, 185, 129, 0.5);
+  border-left-color: #10b981 !important;
+}
+.toast-item.toast-success .toast-icon-wrapper {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.toast-item.toast-warning {
+  border-color: rgba(245, 158, 11, 0.5);
+  border-left-color: #f59e0b !important;
+}
+.toast-item.toast-warning .toast-icon-wrapper {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.toast-item.toast-info {
+  border-color: rgba(14, 165, 233, 0.5);
+  border-left-color: #0ea5e9 !important;
+}
+.toast-item.toast-info .toast-icon-wrapper {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+.toast-item .toast-title {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 13px;
+}
+.toast-item .toast-message {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.toast-item .toast-close-btn {
+  color: #94a3b8;
+}
+.toast-item .toast-close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* HIGH-CONTRAST TOAST NOTIFICATIONS IN BRIGHT SCREEN MODE */
+html:not(.dark) .toast-item {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 2px solid #cbd5e1 !important;
+  border-left-width: 6px !important;
+  box-shadow: 0 20px 40px -5px rgba(15, 23, 42, 0.22), 0 8px 16px -4px rgba(15, 23, 42, 0.12) !important;
+  backdrop-filter: none !important;
+}
+
+html:not(.dark) .toast-item.toast-success {
+  border-color: #86efac !important;
+  border-left-color: #059669 !important;
+}
+html:not(.dark) .toast-item.toast-success .toast-icon-wrapper {
+  background: #dcfce7 !important;
+  color: #059669 !important;
+  border: 1.5px solid #86efac !important;
+}
+html:not(.dark) .toast-item.toast-success .toast-icon-wrapper i,
+html:not(.dark) .toast-item.toast-success .toast-icon-wrapper svg {
+  color: #059669 !important;
+}
+
+html:not(.dark) .toast-item.toast-warning {
+  border-color: #fde68a !important;
+  border-left-color: #d97706 !important;
+}
+html:not(.dark) .toast-item.toast-warning .toast-icon-wrapper {
+  background: #fef3c7 !important;
+  color: #b45309 !important;
+  border: 1.5px solid #fcd34d !important;
+}
+html:not(.dark) .toast-item.toast-warning .toast-icon-wrapper i,
+html:not(.dark) .toast-item.toast-warning .toast-icon-wrapper svg {
+  color: #b45309 !important;
+}
+
+html:not(.dark) .toast-item.toast-info {
+  border-color: #bae6fd !important;
+  border-left-color: #0284c7 !important;
+}
+html:not(.dark) .toast-item.toast-info .toast-icon-wrapper {
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+  border: 1.5px solid #7dd3fc !important;
+}
+html:not(.dark) .toast-item.toast-info .toast-icon-wrapper i,
+html:not(.dark) .toast-item.toast-info .toast-icon-wrapper svg {
+  color: #0284c7 !important;
+}
+
+html:not(.dark) .toast-item .toast-title {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+}
+
+html:not(.dark) .toast-item .toast-message {
+  color: #334155 !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+}
+
+html:not(.dark) .toast-item .toast-close-btn {
+  color: #64748b !important;
+}
+html:not(.dark) .toast-item .toast-close-btn:hover {
+  color: #0f172a !important;
+  background: #f1f5f9 !important;
+}
+
