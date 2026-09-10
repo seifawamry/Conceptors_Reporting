@@ -893,6 +893,114 @@ html:not(.dark) footer {
   font-weight: 600 !important;
 }
 
+/* =========================================================================
+   MONTHLY PLANNER INTERACTIVE CALENDAR & ACCOUNTS ACTIVITY METRICS
+   ========================================================================= */
+
+.calendar-day-cell {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.calendar-day-cell:hover:not(.cursor-not-allowed) {
+  transform: translateY(-1.5px);
+}
+
+.calendar-visit-chip {
+  line-height: 1.3;
+  transition: background-color 0.15s ease;
+}
+
+.calendar-visit-chip:hover {
+  filter: brightness(1.15);
+}
+
+/* Bright Mode Overrides for Calendar & Accounts Activity */
+html:not(.dark) .calendar-day-cell {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+html:not(.dark) .calendar-day-cell:hover:not(.cursor-not-allowed) {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.12) !important;
+}
+
+html:not(.dark) .calendar-day-cell.active-selected {
+  border-color: #0284c7 !important;
+  background-color: #f0f9ff !important;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.3), 0 4px 12px rgba(2, 132, 199, 0.18) !important;
+}
+
+html:not(.dark) .calendar-day-cell.opacity-35 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  opacity: 0.5 !important;
+}
+
+html:not(.dark) #plannerSelectedDayDrawer {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+}
+
+html:not(.dark) #plannerSelectedDayDrawer h4 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #plannerSelectedDayDrawer .bg-slate-950\/60 {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #plannerSelectedDayDrawer .bg-slate-950\/60 h5 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .calendar-visit-chip.bg-sky-950\/40 {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .calendar-visit-chip.bg-emerald-950\/40 {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+  border-color: #86efac !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) #uaeTimezonePill {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+html:not(.dark) #uaeLiveClock {
+  color: #047857 !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) .account-month-metrics {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) .account-month-metrics span.text-slate-400 {
+  color: #475569 !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) #accountsMonthFilter {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
 /* Print Styles */
 @media print {
   body {

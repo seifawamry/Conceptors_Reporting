@@ -14,10 +14,67 @@ const STORAGE_KEY_PLANS = 'conceptors_crm_monthly_plans';
 const STORAGE_KEY_SETTINGS = 'conceptors_crm_manager_settings';
 const STORAGE_KEY_NOTIFS = 'conceptors_crm_notifications';
 
+// =========================================================================
+// REAL-TIME TIMEZONE & LIVE DATE ENGINE (UAE GST UTC+4)
+// =========================================================================
+
+function getSyncedTodayDate(tz = 'Asia/Dubai') {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(new Date()); // Formats as YYYY-MM-DD
+  } catch (e) {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+}
+window.getSyncedTodayDate = getSyncedTodayDate;
+
+function getSyncedTimeStr(tz = 'Asia/Dubai') {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    return formatter.format(new Date());
+  } catch (e) {
+    const d = new Date();
+    return d.toTimeString().split(' ')[0];
+  }
+}
+window.getSyncedTimeStr = getSyncedTimeStr;
+
+function startLiveTimeTicker() {
+  function tick() {
+    const clockEl = document.getElementById('uaeLiveClock');
+    if (clockEl) {
+      const time = getSyncedTimeStr(state.timeZone || 'Asia/Dubai');
+      clockEl.textContent = `UAE ${time} GST`;
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
 const state = {
   currentUser: null, // { username, role, territory, name, email, avatar, title }
   theme: 'dark', // 'dark' or 'light'
-  dailyDate: '2026-09-09',
+  timeZone: 'Asia/Dubai', // UAE Standard Time (GST, UTC+4)
+  dailyDate: getSyncedTodayDate(),
+  plannerView: 'calendar', // 'calendar' or 'table'
+  plannerCalendarMonth: parseInt(getSyncedTodayDate().split('-')[1], 10),
+  plannerCalendarYear: parseInt(getSyncedTodayDate().split('-')[0], 10),
+  plannerSelectedDay: null,
   products: [],
   customers: [],
   reps: [],
@@ -42,6 +99,7 @@ const state = {
     ordersApproval: 'ALL',
     accountsSearch: '',
     accountsTerritory: 'ALL',
+    accountsMonthFilter: 'CURRENT',
     analyticsRepFilter: 'ALL',
     analyticsTimeframe: 'MTD',
     analyticsRosterSearch: '',
@@ -53,12 +111,19 @@ const state = {
 // 2. LIFECYCLE & INITIALIZATION
 // =========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+function initCrmApp() {
   loadStoredData();
   initTheme();
   checkAuthSession();
+  startLiveTimeTicker();
   safeLucide();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initCrmApp);
+} else {
+  initCrmApp();
+}
 
 function safeLucide() {
   if (window.lucide && typeof lucide.createIcons === 'function') {
@@ -81,7 +146,10 @@ function loadStoredData() {
   }
 
   const storedDate = localStorage.getItem(STORAGE_KEY_DATE);
-  state.dailyDate = storedDate || '2026-09-09';
+  state.dailyDate = storedDate || getSyncedTodayDate();
+  const dateParts = (state.dailyDate || getSyncedTodayDate()).split('-');
+  state.plannerCalendarYear = parseInt(dateParts[0], 10);
+  state.plannerCalendarMonth = parseInt(dateParts[1], 10);
 
   const storedVisits = localStorage.getItem(STORAGE_KEY_VISITS);
   state.visits = storedVisits ? JSON.parse(storedVisits) : [...(window.INITIAL_VISITS || [])];
@@ -355,6 +423,7 @@ function getScopedCustomers() {
   }
   return state.customers; // Manager sees all
 }
+window.getScopedCustomers = getScopedCustomers;
 
 function getScopedVisits() {
   if (!state.currentUser) return [];
@@ -366,6 +435,7 @@ function getScopedVisits() {
   }
   return state.visits; // Manager sees all
 }
+window.getScopedVisits = getScopedVisits;
 
 function getScopedOrders() {
   if (!state.currentUser) return [];
@@ -390,24 +460,25 @@ function getScopedPlans() {
 }
 
 // =========================================================================
-// 5B. 5-DAY ADVANCE PLANNING UTILITY & INTERACTIVE CUSTOMER COMBOBOX ENGINE
+// 5B. 3-DAY ADVANCE PLANNING UTILITY & INTERACTIVE CUSTOMER COMBOBOX ENGINE
 // =========================================================================
 
 /**
  * Calculates the earliest allowed date for a planned visit.
  * Under Conceptors policy, planned visits can NEVER be entered for past dates/times,
- * and must be scheduled at least 5 days in advance (plannedDate >= today + 5 days).
+ * and must be scheduled at least 3 days in advance (plannedDate >= today + 3 days).
  */
 function getMinPlannedDate(baseDateStr = null) {
-  const base = baseDateStr || state.dailyDate || '2026-09-09';
+  const base = baseDateStr || state.dailyDate || getSyncedTodayDate();
   const parts = base.split('-').map(Number);
   const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  d.setUTCDate(d.getUTCDate() + 5);
+  d.setUTCDate(d.getUTCDate() + 3);
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
+window.getMinPlannedDate = getMinPlannedDate;
 
 window.openCustomerCombobox = function(modalKey) {
   const input = document.getElementById(`${modalKey}CustomerSearchInput`);
@@ -602,6 +673,10 @@ window.switchTab = function(tabId) {
 
   if (tabId === 'analytics') {
     renderAnalyticsDashboard();
+  } else if (tabId === 'planner') {
+    renderMonthlyPlanner();
+  } else if (tabId === 'accounts') {
+    renderAccountsGrid();
   }
 
   safeLucide();
@@ -612,16 +687,19 @@ window.switchTab = function(tabId) {
 // =========================================================================
 
 window.setDailyDateToday = function() {
-  state.dailyDate = '2026-09-09';
+  state.dailyDate = getSyncedTodayDate();
   const input = document.getElementById('dailyDateInput');
   if (input) input.value = state.dailyDate;
   persistData();
   renderDailyWorkspace();
+  showToast('Synced to UAE Live Today', `Date set to ${state.dailyDate} (GST, Asia/Dubai)`, 'info');
 };
 
 window.setDailyDateOffset = function(days) {
-  const cur = new Date(state.dailyDate || '2026-09-09');
-  cur.setDate(cur.getDate() + days);
+  const base = state.dailyDate || getSyncedTodayDate();
+  const parts = base.split('-').map(Number);
+  const cur = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  cur.setUTCDate(cur.getUTCDate() + days);
   state.dailyDate = cur.toISOString().split('T')[0];
   const input = document.getElementById('dailyDateInput');
   if (input) input.value = state.dailyDate;
@@ -1039,7 +1117,7 @@ window.handleUnplannedVisitSubmit = function(e) {
   if (date !== state.dailyDate) {
     showToast(
       'Submission Day Policy',
-      `Unplanned visits can ONLY be logged for the active day of execution (${state.dailyDate}). You cannot plan an unplanned visit for future dates. Future visits must be scheduled at least 5 days in advance via the Monthly Planner.`,
+      `Unplanned visits can ONLY be logged for the active day of execution (${state.dailyDate}). You cannot plan an unplanned visit for future dates. Future visits must be scheduled at least 3 days in advance via the Monthly Planner.`,
       'error'
     );
     return;
@@ -1106,7 +1184,9 @@ function renderMonthlyPlanner() {
   if (!state.currentUser) return;
 
   const targetRep = state.currentUser.role === 'rep_t2' ? 'T2' : 'T1';
-  const repObj = state.reps.find(r => r.id === targetRep) || state.reps[0];
+  const repObj = (state.reps && state.reps.find(r => r.id === targetRep)) || 
+                 (state.reps && state.reps[0]) || 
+                 { id: targetRep, name: targetRep === 'T1' ? 'Shaimaa' : 'Marsel', emirates: ['Dubai', 'Abu Dhabi'] };
   const repName = state.currentUser.role === 'manager' ? 'All Territories (Executive)' : repObj.name;
 
   let plan = state.monthlyPlans.find(p => p.repId === targetRep && p.month === 'SEP' && p.year === 2026);
@@ -1192,8 +1272,303 @@ function renderMonthlyPlanner() {
     actionsContainer.innerHTML = btnsHtml;
   }
 
-  renderPlannerTable();
+  setPlannerView(state.plannerView || 'calendar');
 }
+
+window.setPlannerView = function(mode) {
+  state.plannerView = mode;
+  const calContainer = document.getElementById('plannerCalendarContainer');
+  const tableContainer = document.getElementById('plannerTableContainer');
+  const btnCal = document.getElementById('btnPlannerViewCalendar');
+  const btnTable = document.getElementById('btnPlannerViewTable');
+
+  if (mode === 'calendar') {
+    if (calContainer) calContainer.classList.remove('hidden');
+    if (tableContainer) tableContainer.classList.add('hidden');
+    if (btnCal) {
+      btnCal.className = 'px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all';
+    }
+    if (btnTable) {
+      btnTable.className = 'px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
+    }
+    renderPlannerCalendar();
+  } else {
+    if (calContainer) calContainer.classList.add('hidden');
+    if (tableContainer) tableContainer.classList.remove('hidden');
+    if (btnCal) {
+      btnCal.className = 'px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
+    }
+    if (btnTable) {
+      btnTable.className = 'px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all';
+    }
+    renderPlannerTable();
+  }
+  safeLucide();
+};
+
+window.renderPlannerCalendar = function() {
+  const container = document.getElementById('plannerCalendarDaysGrid');
+  if (!container) return;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const year = state.plannerCalendarYear;
+  const month = state.plannerCalendarMonth; // 1 to 12
+
+  const titleEl = document.getElementById('plannerCalendarMonthTitle');
+  if (titleEl) {
+    titleEl.textContent = `${monthNames[month - 1]} ${year}`;
+  }
+
+  const minNoticeEl = document.getElementById('calendarMinDateNotice');
+  const minDateStr = getMinPlannedDate(state.dailyDate);
+  if (minNoticeEl) {
+    minNoticeEl.textContent = minDateStr;
+  }
+
+  // First day of month (0 = Sun, 1 = Mon, ..., 6 = Sat)
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const startingDay = firstDay.getUTCDay();
+  // Number of days in month
+  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  // Days in previous month for padding
+  const prevMonthTotalDays = new Date(Date.UTC(year, month - 1, 0)).getUTCDate();
+
+  const scopedVisits = getScopedVisits();
+  const todayStr = getSyncedTodayDate();
+
+  let cellsHtml = '';
+
+  // 1. Previous month muted padding cells
+  for (let i = startingDay - 1; i >= 0; i--) {
+    const prevDayNum = prevMonthTotalDays - i;
+    cellsHtml += `
+      <div class="calendar-day-cell opacity-35 min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
+        <span class="text-xs font-semibold text-slate-600">${prevDayNum}</span>
+        <div class="text-[9px] text-slate-600 font-medium">Prior Month</div>
+      </div>
+    `;
+  }
+
+  // 2. Active month day cells
+  for (let day = 1; day <= totalDays; day++) {
+    const dayStr = String(day).padStart(2, '0');
+    const monthStr = String(month).padStart(2, '0');
+    const dateStr = `${year}-${monthStr}-${dayStr}`;
+
+    const dayVisits = scopedVisits.filter(v => v.date === dateStr);
+    const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+    const completedVisits = dayVisits.filter(v => v.status === 'Completed');
+
+    const isToday = (dateStr === todayStr || dateStr === state.dailyDate);
+    const isSelected = (dateStr === state.plannerSelectedDay);
+    const isEligibleToPlan = (dateStr >= minDateStr);
+
+    let cellBorderClass = 'border-slate-800/80 bg-slate-900/50 hover:border-slate-700';
+    if (isSelected) {
+      cellBorderClass = 'border-sky-500 bg-sky-950/20 shadow-md shadow-sky-500/20 ring-1 ring-sky-500/40 active-selected';
+    } else if (isToday) {
+      cellBorderClass = 'border-emerald-500/80 bg-emerald-950/15 shadow-sm shadow-emerald-500/20';
+    }
+
+    cellsHtml += `
+      <div 
+        onclick="selectPlannerCalendarDay('${dateStr}')" 
+        class="calendar-day-cell min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border ${cellBorderClass} transition-all flex flex-col justify-between cursor-pointer relative group"
+        title="Date: ${dateStr}${isEligibleToPlan ? ' • Click to view or plan target' : ' • Notice: 3-day advance rule applies'}"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black ${isToday ? 'w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center text-[10px] shadow' : (isEligibleToPlan ? 'text-slate-200' : 'text-slate-500')}">
+            ${day}
+          </span>
+          ${isToday ? '<span class="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-1 rounded border border-emerald-500/30">Today</span>' : ''}
+          ${isEligibleToPlan ? `
+            <button 
+              type="button" 
+              onclick="event.stopPropagation(); openPlanVisitModal('${dateStr}')" 
+              class="opacity-0 group-hover:opacity-100 p-0.5 px-1.5 rounded bg-sky-600/30 hover:bg-sky-600 text-sky-300 hover:text-white transition-all text-[10px] font-bold flex items-center gap-0.5 shadow-sm"
+              title="Schedule planned visit for ${dateStr}"
+            >
+              <i data-lucide="plus" class="w-3 h-3"></i> Plan
+            </button>
+          ` : ''}
+        </div>
+
+        <!-- Visit Chips (up to 3) -->
+        <div class="space-y-1 my-1 overflow-hidden">
+          ${plannedVisits.slice(0, 3).map(v => `
+            <div class="calendar-visit-chip px-1.5 py-0.5 rounded text-[10px] truncate font-medium flex items-center gap-1 ${v.status === 'Completed' ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30' : 'bg-sky-950/40 text-sky-300 border border-sky-500/30'}" title="${escapeHtml(v.clientName)} (${v.doctorName || 'Doctor'})">
+              <span class="font-black text-[9px] ${v.repId === 'T1' ? 'text-sky-400' : 'text-purple-400'}">${v.repId}</span>
+              <span class="truncate text-[10px]">${escapeHtml(v.clientName)}</span>
+            </div>
+          `).join('')}
+          ${plannedVisits.length > 3 ? `
+            <div class="text-[9px] text-sky-400 font-bold pl-1">+${plannedVisits.length - 3} more</div>
+          ` : ''}
+        </div>
+
+        <!-- Bottom status pill -->
+        <div class="text-[10px] flex items-center justify-between pt-1 border-t border-slate-800/60">
+          ${plannedVisits.length > 0 ? `
+            <span class="font-extrabold text-sky-400 text-[10px]">${plannedVisits.length} Target${plannedVisits.length > 1 ? 's' : ''}</span>
+          ` : (isEligibleToPlan ? `
+            <span class="text-slate-500 group-hover:text-sky-400 transition-colors text-[9px] font-medium">+ Add Plan</span>
+          ` : `
+            <span class="text-slate-600 text-[9px]">Unplanned only</span>
+          `)}
+          ${completedVisits.length > 0 ? `
+            <span class="text-emerald-400 text-[9px] font-bold">✓ ${completedVisits.length}</span>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // 3. Next month blank padding cells
+  const totalRendered = startingDay + totalDays;
+  const remainingCells = (totalRendered % 7 === 0) ? 0 : 7 - (totalRendered % 7);
+  for (let day = 1; day <= remainingCells; day++) {
+    cellsHtml += `
+      <div class="calendar-day-cell opacity-35 min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
+        <span class="text-xs font-semibold text-slate-600">${day}</span>
+        <div class="text-[9px] text-slate-600 font-medium">Next Month</div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = cellsHtml;
+
+  // If a day is selected, render its drawer
+  if (state.plannerSelectedDay) {
+    renderPlannerSelectedDayDrawer(state.plannerSelectedDay);
+  } else {
+    const drawer = document.getElementById('plannerSelectedDayDrawer');
+    if (drawer) drawer.classList.add('hidden');
+  }
+
+  safeLucide();
+};
+
+window.navigatePlannerMonth = function(delta) {
+  state.plannerCalendarMonth += delta;
+  if (state.plannerCalendarMonth > 12) {
+    state.plannerCalendarMonth = 1;
+    state.plannerCalendarYear += 1;
+  } else if (state.plannerCalendarMonth < 1) {
+    state.plannerCalendarMonth = 12;
+    state.plannerCalendarYear -= 1;
+  }
+  state.plannerSelectedDay = null;
+  renderPlannerCalendar();
+};
+
+window.jumpPlannerCurrentMonth = function() {
+  const parts = (state.dailyDate || getSyncedTodayDate()).split('-');
+  state.plannerCalendarYear = parseInt(parts[0], 10);
+  state.plannerCalendarMonth = parseInt(parts[1], 10);
+  state.plannerSelectedDay = null;
+  renderPlannerCalendar();
+};
+
+window.selectPlannerCalendarDay = function(dateStr) {
+  state.plannerSelectedDay = dateStr;
+  renderPlannerCalendar();
+  renderPlannerSelectedDayDrawer(dateStr);
+};
+
+window.renderPlannerSelectedDayDrawer = function(dateStr) {
+  const drawer = document.getElementById('plannerSelectedDayDrawer');
+  if (!drawer) return;
+
+  drawer.classList.remove('hidden');
+
+  const scopedVisits = getScopedVisits();
+  const dayVisits = scopedVisits.filter(v => v.date === dateStr);
+  const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const isEligibleToPlan = (dateStr >= minDateStr);
+  const isToday = (dateStr === getSyncedTodayDate() || dateStr === state.dailyDate);
+
+  let html = `
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+          <i data-lucide="calendar" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h4 class="text-sm font-extrabold text-white">Schedule for ${formatDisplayDate(dateStr)}</h4>
+            ${isToday ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">Today</span>' : ''}
+            ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 3 Days)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Under 3-Day Window</span>'}
+          </div>
+          <p class="text-xs text-slate-400">${plannedVisits.length} planned targets scheduled for this date</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        ${isEligibleToPlan ? `
+          <button onclick="openPlanVisitModal('${dateStr}')" class="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Plan Visit on ${dateStr}
+          </button>
+        ` : (isToday ? `
+          <button onclick="openUnplannedVisitModal()" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i> + Log Unplanned Visit for Today
+          </button>
+        ` : `
+          <span class="text-xs text-amber-400 font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            Cannot schedule planned visit (&lt; 3 days).
+          </span>
+        `)}
+        <button onclick="state.plannerSelectedDay = null; renderPlannerCalendar();" class="p-1.5 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  `;
+
+  if (plannedVisits.length === 0) {
+    html += `
+      <div class="py-6 text-center text-slate-500 text-xs">
+        No planned calls scheduled for this day yet.
+        ${isEligibleToPlan ? ` Click <b class="text-sky-400 cursor-pointer" onclick="openPlanVisitModal('${dateStr}')">Plan Visit on ${dateStr}</b> to schedule your first clinic target.` : ''}
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+        ${plannedVisits.map(v => `
+          <div class="rounded-xl p-3 bg-slate-950/60 border border-slate-800 flex flex-col justify-between space-y-2">
+            <div>
+              <div class="flex items-center justify-between gap-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${v.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'}">
+                  ${v.status === 'Completed' ? '✓ Completed' : '📅 Planned'}
+                </span>
+              </div>
+              <h5 class="font-bold text-white text-xs mt-1.5 truncate" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h5>
+              <p class="text-[11px] text-slate-400">${v.clientCode} • ${v.doctorName || 'Doctor'}</p>
+              <p class="text-[10px] text-slate-300 mt-1 truncate">${escapeHtml(v.purpose || 'Detailing')}</p>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <span class="text-[10px] text-slate-400 font-mono">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Day'}</span>
+              ${v.status !== 'Completed' ? `
+                <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+                  <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
+                </button>
+              ` : '<span class="text-[10px] text-emerald-400 font-bold">Executed</span>'}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  drawer.innerHTML = html;
+  safeLucide();
+};
 
 window.renderPlannerTable = function() {
   const tbody = document.getElementById('plannerTableBody');
@@ -1331,7 +1706,7 @@ window.approveMonthlyPlan = function(planId) {
   renderAll();
 };
 
-window.openPlanVisitModal = function() {
+window.openPlanVisitModal = function(preferredDate = null) {
   let targetRep = 'T1';
   if (state.currentUser && state.currentUser.role === 'rep_t1') targetRep = 'T1';
   if (state.currentUser && state.currentUser.role === 'rep_t2') targetRep = 'T2';
@@ -1348,16 +1723,27 @@ window.openPlanVisitModal = function() {
   filterPlanClinics();
   clearCustomerCombobox('plan');
 
-  // Enforce 5-day advance planning rule
+  // Enforce 3-day advance planning rule
   const minDateStr = getMinPlannedDate(state.dailyDate);
   const planDateInput = document.getElementById('planDate');
   if (planDateInput) {
     planDateInput.min = minDateStr;
-    planDateInput.value = minDateStr;
+    if (preferredDate && preferredDate >= minDateStr) {
+      planDateInput.value = preferredDate;
+    } else {
+      planDateInput.value = minDateStr;
+      if (preferredDate && preferredDate < minDateStr) {
+        showToast(
+          '3-Day Advance Notice Required',
+          `The selected date (${preferredDate}) does not meet the 3-day advance planning rule. Adjusted to earliest allowed date (${minDateStr}).`,
+          'warning'
+        );
+      }
+    }
   }
   const noticeEl = document.getElementById('planEarliestNotice');
   if (noticeEl) {
-    noticeEl.textContent = `${minDateStr} (+5 days in advance)`;
+    noticeEl.textContent = `${minDateStr} (+3 days in advance)`;
   }
 
   document.getElementById('planDoctorName').value = '';
@@ -1404,8 +1790,8 @@ window.handlePlanVisitSubmit = function(e) {
   const minDateStr = getMinPlannedDate(state.dailyDate);
   if (date < minDateStr) {
     showToast(
-      '5-Day Advance Rule Violation',
-      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 5 days in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
+      '3-Day Advance Rule Violation',
+      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 3 days in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
       'error'
     );
     return;
@@ -1444,6 +1830,9 @@ window.handlePlanVisitSubmit = function(e) {
   closePlanVisitModal();
   showToast('Target Added to Monthly Plan', `Scheduled planned visit for ${newPlannedVisit.clientName} on ${date}.`, 'success');
   renderAll();
+  if (typeof renderPlannerCalendar === 'function' && state.plannerView === 'calendar') {
+    renderPlannerCalendar();
+  }
 };
 
 // =========================================================================
@@ -2242,6 +2631,39 @@ function renderAccountsGrid() {
   const searchQ = (state.filters.accountsSearch || '').toLowerCase();
   const terrFilter = state.filters.accountsTerritory || 'ALL';
 
+  // Initialize and synchronize accountsMonthFilter dropdown
+  const monthFilterSelect = document.getElementById('accountsMonthFilter');
+  const todayStr = state.dailyDate || getSyncedTodayDate();
+  const currentMonthKey = todayStr.slice(0, 7); // 'YYYY-MM'
+
+  if (monthFilterSelect && monthFilterSelect.options.length === 0) {
+    const [curY, curM] = currentMonthKey.split('-').map(Number);
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    const options = [
+      { value: currentMonthKey, label: `${monthNames[curM - 1]} ${curY} (Active Month)` }
+    ];
+
+    let prevM = curM - 1, prevY = curY;
+    if (prevM < 1) { prevM = 12; prevY--; }
+    options.push({ value: `${prevY}-${String(prevM).padStart(2, '0')}`, label: `${monthNames[prevM - 1]} ${prevY}` });
+
+    let nextM = curM + 1, nextY = curY;
+    if (nextM > 12) { nextM = 1; nextY++; }
+    options.push({ value: `${nextY}-${String(nextM).padStart(2, '0')}`, label: `${monthNames[nextM - 1]} ${nextY}` });
+
+    options.push({ value: 'ALL', label: 'All Months Combined' });
+
+    monthFilterSelect.innerHTML = options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    if (!state.filters.accountsMonthFilter || state.filters.accountsMonthFilter === 'CURRENT') {
+      state.filters.accountsMonthFilter = currentMonthKey;
+    }
+    monthFilterSelect.value = state.filters.accountsMonthFilter;
+  }
+
+  let activeMonth = state.filters.accountsMonthFilter || currentMonthKey;
+  if (activeMonth === 'CURRENT') activeMonth = currentMonthKey;
+
   // Strictly scoped customers
   let list = getScopedCustomers();
 
@@ -2263,16 +2685,54 @@ function renderAccountsGrid() {
     return;
   }
 
+  const allVisits = state.visits || [];
+
   container.innerHTML = list.map(c => {
+    // Calculate planned and visited counts for this account in the active month
+    const clientVisits = allVisits.filter(v => {
+      const isThisAccount = (v.clientCode === c.code || v.customerCode === c.code);
+      if (!isThisAccount) return false;
+      if (activeMonth && activeMonth !== 'ALL') {
+        return v.date && v.date.startsWith(activeMonth);
+      }
+      return true;
+    });
+
+    const plannedCount = clientVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory).length;
+    const visitedCount = clientVisits.filter(v => v.status === 'Completed').length;
+
+    let badgeClass = 'badge-draft';
+    if (c.tier === 'VIP Platinum') badgeClass = 'badge-vip-platinum';
+    else if (c.tier === 'VIP Gold') badgeClass = 'badge-vip-gold';
+
     return `
       <div class="glass-card rounded-xl p-4 border border-slate-800 hover:border-teal-500/40 transition-all flex flex-col justify-between space-y-3">
         <div>
           <div class="flex items-start justify-between gap-2">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.tier === 'VIP Platinum' ? 'badge-vip-platinum' : (c.tier === 'VIP Gold' ? 'badge-vip-gold' : 'badge-draft')}">${c.tier}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
           </div>
           <h4 class="font-bold text-white text-sm mt-2 truncate" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</h4>
           <p class="text-[11px] text-slate-400">${c.code} • ${c.location}</p>
+
+          <!-- Monthly Activity: Planned vs Completed Visited Counters -->
+          <div class="account-month-metrics p-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs my-2.5">
+            <div class="flex items-center gap-1.5" title="Visits planned in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+              <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+              <span class="text-slate-400 text-[11px] font-medium">Planned:</span>
+              <span class="font-black text-sky-400 text-xs">${plannedCount}</span>
+            </div>
+            <div class="h-3.5 w-px bg-slate-700/80"></div>
+            <div class="flex items-center gap-1.5" title="Completed visits conducted in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+              <span class="text-slate-400 text-[11px] font-medium">Visited:</span>
+              <span class="font-black text-emerald-400 text-xs">${visitedCount}</span>
+            </div>
+            <div class="h-3.5 w-px bg-slate-700/80"></div>
+            <div class="text-[10px] font-extrabold ${visitedCount > 0 ? 'text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30' : (plannedCount > 0 ? 'text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30' : 'text-slate-500')}">
+              ${visitedCount > 0 ? `${visitedCount} Visited` : (plannedCount > 0 ? `${plannedCount} Planned` : '0 Activity')}
+            </div>
+          </div>
 
           <div class="mt-2 text-[11px] text-slate-300">
             <span class="text-slate-500">Contact Doctor:</span> ${escapeHtml(c.contactPerson || 'Lead Vet')}
@@ -2280,10 +2740,10 @@ function renderAccountsGrid() {
         </div>
 
         <div class="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-          <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold">
+          <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
             Plan Visit
           </button>
-          <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1">
+          <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors">
             <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned Visit
           </button>
         </div>
@@ -2291,10 +2751,12 @@ function renderAccountsGrid() {
     `;
   }).join('');
 }
+window.renderAccountsGrid = renderAccountsGrid;
 
 window.handleAccountsFilter = function() {
   state.filters.accountsSearch = document.getElementById('accountsSearchInput')?.value || '';
   state.filters.accountsTerritory = document.getElementById('accountsTerritoryFilter')?.value || 'ALL';
+  state.filters.accountsMonthFilter = document.getElementById('accountsMonthFilter')?.value || 'CURRENT';
   renderAccountsGrid();
   safeLucide();
 };
