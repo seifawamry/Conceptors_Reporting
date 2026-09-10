@@ -2,7 +2,13 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Conceptors CRM">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#070d19" id="themeColorMeta">
   <title>Conceptors Animal Health - Medical Representative CRM & Field Reporting System</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -145,7 +151,7 @@
   </header>
 
   <!-- ================= MAIN CONTENT CONTAINER ================= -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8 space-y-6">
 
     <!-- ================= TAB 1: DAILY VISITS & TODAY'S CALL SHEET ================= -->
     <div id="tab-daily" class="tab-content space-y-6">
@@ -811,6 +817,38 @@
 
   </main>
 
+  <!-- ================= MOBILE BOTTOM FLOATING NAVIGATION DOCK (<768px) ================= -->
+  <nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c1322]/95 backdrop-blur-lg border-t border-slate-800 shadow-2xl px-1.5 py-1 flex items-center justify-around select-none safe-area-bottom">
+    <button type="button" onclick="switchTab('daily')" id="mobileNavBtn-daily" class="mobile-nav-btn active flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-sky-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="calendar-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily</span>
+    </button>
+    <button type="button" onclick="switchTab('planner')" id="mobileNavBtn-planner" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="calendar" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Planner</span>
+    </button>
+    <button type="button" onclick="switchTab('reports')" id="mobileNavBtn-reports" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="file-text" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Reports</span>
+    </button>
+    <button type="button" onclick="switchTab('orders')" id="mobileNavBtn-orders" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="shopping-cart" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Orders</span>
+    </button>
+    <button type="button" onclick="switchTab('accounts')" id="mobileNavBtn-accounts" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="building-2" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Accounts</span>
+    </button>
+    <button type="button" onclick="switchTab('analytics')" id="mobileNavBtn-analytics" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="bar-chart-3" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Metrics</span>
+    </button>
+    <button type="button" onclick="switchTab('manager')" id="mobileNavBtn-manager" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation hidden">
+      <i data-lucide="shield-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Manager</span>
+    </button>
+  </nav>
+
   <!-- ================= MODAL: SUBMIT PLANNED VISIT REPORT ================= -->
   <div id="submitPlannedVisitModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
     <div class="glass-panel bg-[#0c1322] border border-sky-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[92vh] overflow-y-auto">
@@ -824,8 +862,8 @@
             <p class="text-[11px] text-slate-400" id="plannedModalSubtitle">Executing Scheduled Target Account Call</p>
           </div>
         </div>
-        <button type="button" onclick="closeSubmitPlannedModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="closeSubmitPlannedModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
         </button>
       </div>
 
@@ -940,8 +978,8 @@
             <p class="text-[11px] text-slate-400">Recording spontaneous/extra visit conducted on this day beside the planned schedule</p>
           </div>
         </div>
-        <button type="button" onclick="closeUnplannedVisitModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="closeUnplannedVisitModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
         </button>
       </div>
 
@@ -1126,8 +1164,8 @@
           <i data-lucide="calendar-plus" class="w-5 h-5 text-sky-400"></i>
           Schedule Planned Visit in Monthly Plan
         </h3>
-        <button type="button" onclick="closePlanVisitModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="closePlanVisitModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
         </button>
       </div>
 
@@ -1229,8 +1267,8 @@
             <p class="text-[11px] text-slate-400">Automated bonus FOC & senior manager instant notification</p>
           </div>
         </div>
-        <button type="button" onclick="closeOrderModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="closeOrderModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
         </button>
       </div>
 
@@ -1378,8 +1416,8 @@
           <button onclick="markAllNotificationsRead()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1">
             <i data-lucide="check-check" class="w-3.5 h-3.5 text-emerald-400"></i> Mark All Read
           </button>
-          <button type="button" onclick="closeNotificationsModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-            <i data-lucide="x" class="w-5 h-5"></i>
+          <button type="button" onclick="closeNotificationsModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close alerts modal">
+            <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
           </button>
         </div>
       </div>
@@ -1410,8 +1448,8 @@
           <button id="btnResendEmailAction" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm">
             <i data-lucide="send" class="w-3.5 h-3.5"></i> Open in Mail Client
           </button>
-          <button type="button" onclick="closeEmailModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-            <i data-lucide="x" class="w-5 h-5"></i>
+          <button type="button" onclick="closeEmailModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close email modal">
+            <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
           </button>
         </div>
       </div>
@@ -1430,8 +1468,8 @@
           <i data-lucide="settings" class="w-5 h-5 text-sky-400"></i>
           Senior Manager Alert Settings
         </h3>
-        <button type="button" onclick="closeManagerSettingsModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-white">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="closeManagerSettingsModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close settings modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
         </button>
       </div>
 

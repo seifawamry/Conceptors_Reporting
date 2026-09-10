@@ -247,6 +247,10 @@ function updateThemeButtonUI(theme) {
     }
     if (label) label.textContent = 'Bright Screen';
   }
+  const metaTheme = document.getElementById('themeColorMeta') || document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    metaTheme.setAttribute('content', theme === 'light' ? '#eaf0f8' : '#070d19');
+  }
   safeLucide();
 }
 
@@ -371,12 +375,13 @@ function updateUserProfileDisplay() {
 
   // Hide or Show Senior Manager Tab based on authenticated role
   const managerTabBtn = document.getElementById('tabBtn-manager');
-  if (managerTabBtn) {
-    if (state.currentUser.role === 'manager') {
-      managerTabBtn.classList.remove('hidden');
-    } else {
-      managerTabBtn.classList.add('hidden');
-    }
+  const mobileManagerBtn = document.getElementById('mobileNavBtn-manager');
+  if (state.currentUser && state.currentUser.role === 'manager') {
+    if (managerTabBtn) managerTabBtn.classList.remove('hidden');
+    if (mobileManagerBtn) mobileManagerBtn.classList.remove('hidden');
+  } else {
+    if (managerTabBtn) managerTabBtn.classList.add('hidden');
+    if (mobileManagerBtn) mobileManagerBtn.classList.add('hidden');
   }
 
   // Update Daily Cockpit Greeting
@@ -655,6 +660,8 @@ window.switchTab = function(tabId) {
   tabs.forEach(t => {
     const el = document.getElementById(`tab-${t}`);
     const btn = document.getElementById(`tabBtn-${t}`);
+    const mobileBtn = document.getElementById(`mobileNavBtn-${t}`);
+
     if (el) {
       if (t === tabId) {
         el.classList.remove('hidden');
@@ -665,8 +672,22 @@ window.switchTab = function(tabId) {
     if (btn) {
       if (t === tabId) {
         btn.className = 'nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all bg-brand-600 text-white shadow-md shadow-brand-600/30 whitespace-nowrap';
+        try {
+          btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+        } catch(e) {}
       } else {
         btn.className = 'nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap';
+      }
+    }
+    if (mobileBtn) {
+      if (t === tabId) {
+        mobileBtn.classList.add('active');
+        mobileBtn.classList.remove('text-slate-400');
+        mobileBtn.classList.add('text-sky-400');
+      } else {
+        mobileBtn.classList.remove('active');
+        mobileBtn.classList.remove('text-sky-400');
+        mobileBtn.classList.add('text-slate-400');
       }
     }
   });
@@ -1346,9 +1367,9 @@ window.renderPlannerCalendar = function() {
   for (let i = startingDay - 1; i >= 0; i--) {
     const prevDayNum = prevMonthTotalDays - i;
     cellsHtml += `
-      <div class="calendar-day-cell opacity-35 min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
+      <div class="calendar-day-cell opacity-35 min-h-[52px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
         <span class="text-xs font-semibold text-slate-600">${prevDayNum}</span>
-        <div class="text-[9px] text-slate-600 font-medium">Prior Month</div>
+        <div class="text-[9px] text-slate-600 font-medium hidden sm:block">Prior Month</div>
       </div>
     `;
   }
@@ -1377,19 +1398,19 @@ window.renderPlannerCalendar = function() {
     cellsHtml += `
       <div 
         onclick="selectPlannerCalendarDay('${dateStr}')" 
-        class="calendar-day-cell min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border ${cellBorderClass} transition-all flex flex-col justify-between cursor-pointer relative group"
+        class="calendar-day-cell min-h-[52px] sm:min-h-[110px] p-1 sm:p-2 rounded-xl border ${cellBorderClass} transition-all flex flex-col justify-between cursor-pointer relative group touch-manipulation"
         title="Date: ${dateStr}${isEligibleToPlan ? ' • Click to view or plan target' : ' • Notice: 3-day advance rule applies'}"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-black ${isToday ? 'w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center text-[10px] shadow' : (isEligibleToPlan ? 'text-slate-200' : 'text-slate-500')}">
             ${day}
           </span>
-          ${isToday ? '<span class="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-1 rounded border border-emerald-500/30">Today</span>' : ''}
+          ${isToday ? '<span class="text-[9px] font-bold text-emerald-400 bg-emerald-500/20 px-1 rounded border border-emerald-500/30 hidden sm:inline">Today</span>' : ''}
           ${isEligibleToPlan ? `
             <button 
               type="button" 
               onclick="event.stopPropagation(); openPlanVisitModal('${dateStr}')" 
-              class="opacity-0 group-hover:opacity-100 p-0.5 px-1.5 rounded bg-sky-600/30 hover:bg-sky-600 text-sky-300 hover:text-white transition-all text-[10px] font-bold flex items-center gap-0.5 shadow-sm"
+              class="hidden sm:flex opacity-0 group-hover:opacity-100 p-0.5 px-1.5 rounded bg-sky-600/30 hover:bg-sky-600 text-sky-300 hover:text-white transition-all text-[10px] font-bold items-center gap-0.5 shadow-sm"
               title="Schedule planned visit for ${dateStr}"
             >
               <i data-lucide="plus" class="w-3 h-3"></i> Plan
@@ -1397,8 +1418,21 @@ window.renderPlannerCalendar = function() {
           ` : ''}
         </div>
 
-        <!-- Visit Chips (up to 3) -->
-        <div class="space-y-1 my-1 overflow-hidden">
+        <!-- Mobile Compact Dots Indicator (<640px) -->
+        <div class="sm:hidden calendar-dots-row my-0.5">
+          ${plannedVisits.slice(0, 4).map(v => `
+            <span class="calendar-dot-indicator ${v.status === 'Completed' ? 'dot-completed' : (v.repId === 'T1' ? 'dot-t1' : 'dot-t2')}" title="${escapeHtml(v.clientName)}"></span>
+          `).join('')}
+          ${plannedVisits.length > 4 ? '<span class="text-[8px] text-sky-400 font-bold leading-none">+</span>' : ''}
+        </div>
+
+        <!-- Mobile Visit Count badge (<640px) -->
+        <div class="sm:hidden text-center leading-none">
+          ${plannedVisits.length > 0 ? `<span class="text-[9px] font-extrabold text-sky-400">${plannedVisits.length}</span>` : ''}
+        </div>
+
+        <!-- Visit Chips (up to 3) - Visible on Tablets & Desktops (>=640px) -->
+        <div class="hidden sm:block space-y-1 my-1 overflow-hidden">
           ${plannedVisits.slice(0, 3).map(v => `
             <div class="calendar-visit-chip px-1.5 py-0.5 rounded text-[10px] truncate font-medium flex items-center gap-1 ${v.status === 'Completed' ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30' : 'bg-sky-950/40 text-sky-300 border border-sky-500/30'}" title="${escapeHtml(v.clientName)} (${v.doctorName || 'Doctor'})">
               <span class="font-black text-[9px] ${v.repId === 'T1' ? 'text-sky-400' : 'text-purple-400'}">${v.repId}</span>
@@ -1410,8 +1444,8 @@ window.renderPlannerCalendar = function() {
           ` : ''}
         </div>
 
-        <!-- Bottom status pill -->
-        <div class="text-[10px] flex items-center justify-between pt-1 border-t border-slate-800/60">
+        <!-- Bottom status pill - Visible on Tablets & Desktops (>=640px) -->
+        <div class="hidden sm:flex text-[10px] items-center justify-between pt-1 border-t border-slate-800/60">
           ${plannedVisits.length > 0 ? `
             <span class="font-extrabold text-sky-400 text-[10px]">${plannedVisits.length} Target${plannedVisits.length > 1 ? 's' : ''}</span>
           ` : (isEligibleToPlan ? `
@@ -1432,9 +1466,9 @@ window.renderPlannerCalendar = function() {
   const remainingCells = (totalRendered % 7 === 0) ? 0 : 7 - (totalRendered % 7);
   for (let day = 1; day <= remainingCells; day++) {
     cellsHtml += `
-      <div class="calendar-day-cell opacity-35 min-h-[90px] sm:min-h-[110px] p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
+      <div class="calendar-day-cell opacity-35 min-h-[52px] sm:min-h-[110px] p-1.5 sm:p-2 rounded-xl border border-slate-800/40 bg-slate-950/30 flex flex-col justify-between cursor-not-allowed select-none">
         <span class="text-xs font-semibold text-slate-600">${day}</span>
-        <div class="text-[9px] text-slate-600 font-medium">Next Month</div>
+        <div class="text-[9px] text-slate-600 font-medium hidden sm:block">Next Month</div>
       </div>
     `;
   }
