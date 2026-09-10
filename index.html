@@ -292,24 +292,27 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          <!-- View Mode Switcher (Calendar vs Table) -->
-          <div class="flex items-center p-1 bg-slate-900 border border-slate-700/80 rounded-xl text-xs">
-            <button id="btnPlannerViewCalendar" type="button" onclick="setPlannerView('calendar')" class="px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all">
-              <i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar View
+          <!-- View Mode Switcher (Calendar vs Agenda vs Table) -->
+          <div class="flex items-center p-1 bg-slate-900 border border-slate-700/80 rounded-xl text-xs w-full sm:w-auto justify-center sm:justify-start">
+            <button id="btnPlannerViewCalendar" type="button" onclick="setPlannerView('calendar')" class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all text-[11px] sm:text-xs">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar
             </button>
-            <button id="btnPlannerViewTable" type="button" onclick="setPlannerView('table')" class="px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all">
-              <i data-lucide="list" class="w-3.5 h-3.5"></i> Targets Table
+            <button id="btnPlannerViewAgenda" type="button" onclick="setPlannerView('agenda')" class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition-all text-[11px] sm:text-xs">
+              <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i> Agenda
+            </button>
+            <button id="btnPlannerViewTable" type="button" onclick="setPlannerView('table')" class="flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition-all text-[11px] sm:text-xs">
+              <i data-lucide="list" class="w-3.5 h-3.5"></i> Table
             </button>
           </div>
 
-          <div id="plannerActionButtons" class="flex flex-wrap items-center gap-2">
+          <div id="plannerActionButtons" class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <!-- Injected via JS -->
           </div>
         </div>
       </div>
 
       <!-- Quota Progress Bar -->
-      <div class="glass-card rounded-2xl p-5 border border-slate-800 space-y-2">
+      <div class="glass-card rounded-2xl p-4 sm:p-5 border border-slate-800 space-y-2">
         <div class="flex items-center justify-between text-xs">
           <span class="font-bold text-slate-300">Monthly Call Quota Progress</span>
           <span class="font-extrabold text-brand-400" id="plannerQuotaText">34 / 100 Calls Planned (34%)</span>
@@ -320,31 +323,33 @@
       </div>
 
       <!-- ================= PLANNER VIEW 1: INTERACTIVE MONTHLY CALENDAR ================= -->
-      <div id="plannerCalendarContainer" class="glass-panel rounded-2xl p-5 space-y-4">
+      <div id="plannerCalendarContainer" class="glass-panel rounded-2xl p-3.5 sm:p-5 space-y-4">
         <!-- Calendar Toolbar: Month Nav, 3-Day Rule SOP Banner & Legend -->
-        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors" title="Previous Month">
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-800">
+          <div class="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2">
+            <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Previous Month">
               <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
-            <h3 id="plannerCalendarMonthTitle" class="text-base font-black text-white px-2 min-w-[160px] text-center">September 2026</h3>
-            <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors" title="Next Month">
+            <h3 id="plannerCalendarMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[150px]">September 2026</h3>
+            <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Next Month">
               <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
-            <button type="button" onclick="jumpPlannerCurrentMonth()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700 transition-colors">
-              Today / Current
+            <button type="button" onclick="jumpPlannerCurrentMonth()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation">
+              Today
             </button>
           </div>
 
-          <!-- SOP 3-Day Advance Rule Notice -->
-          <div class="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400 shrink-0"></i>
-            <span><b>3-Day Advance Rule:</b> Earliest planned date is <b id="calendarMinDateNotice" class="text-amber-200">--</b>. Click any eligible day to plan.</span>
-          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <!-- SOP 3-Day Advance Rule Notice -->
+            <div class="px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] sm:text-xs flex items-center gap-1.5 flex-1 sm:flex-initial min-w-0">
+              <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+              <span class="truncate sm:whitespace-normal"><b>3-Day Rule:</b> Earliest: <b id="calendarMinDateNotice" class="text-amber-200">--</b></span>
+            </div>
 
-          <button onclick="openPlanVisitModal()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all shrink-0">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Schedule Target
-          </button>
+            <button onclick="openPlanVisitModal()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all shrink-0 active:scale-95 touch-manipulation">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> Plan Target
+            </button>
+          </div>
         </div>
 
         <!-- 7-Day Weekdays Header -->
@@ -369,8 +374,39 @@
         </div>
       </div>
 
-      <!-- ================= PLANNER VIEW 2: TARGETS TABLE ================= -->
-      <div id="plannerTableContainer" class="hidden glass-panel rounded-2xl p-5 space-y-4">
+      <!-- ================= PLANNER VIEW 2: MONTHLY AGENDA / DAILY ITINERARY LIST ================= -->
+      <div id="plannerAgendaContainer" class="hidden glass-panel rounded-2xl p-3.5 sm:p-5 space-y-4">
+        <!-- Month Navigation Toolbar for Agenda -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div class="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2">
+            <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Previous Month">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <h3 id="plannerAgendaMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[140px]">September 2026</h3>
+            <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Next Month">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <button type="button" onclick="jumpPlannerCurrentMonth()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation">
+              Today
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
+            <span class="text-xs text-slate-400 font-semibold" id="agendaTotalTargetsCount">Scheduled: 0</span>
+            <button onclick="openPlanVisitModal()" class="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 active:scale-95 touch-manipulation">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Schedule Target
+            </button>
+          </div>
+        </div>
+
+        <!-- Agenda Itinerary Feed -->
+        <div id="plannerAgendaList" class="space-y-4">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- ================= PLANNER VIEW 3: TARGETS TABLE ================= -->
+      <div id="plannerTableContainer" class="hidden glass-panel rounded-2xl p-3.5 sm:p-5 space-y-4">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             <div class="relative flex-1 sm:w-64">
@@ -383,12 +419,18 @@
               <option value="Completed">Completed Only</option>
             </select>
           </div>
-          <button onclick="openPlanVisitModal()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
+          <button onclick="openPlanVisitModal()" class="w-full sm:w-auto px-3.5 py-2 sm:py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Target Account
           </button>
         </div>
 
-        <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+        <!-- Mobile Cards List (<640px) -->
+        <div id="plannerTableCards" class="sm:hidden space-y-3">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Desktop Table (>=640px) -->
+        <div class="hidden sm:block overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
           <table class="w-full text-left text-xs">
             <thead class="text-slate-400 uppercase bg-slate-900/90 border-b border-slate-800 font-semibold">
               <tr>

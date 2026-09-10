@@ -12,11 +12,12 @@
   --sar: env(safe-area-inset-right, 0px);
 }
 
-body {
+html, body {
   font-family: var(--font-main);
   background-color: #070d19;
   color: #f8fafc;
   overflow-x: hidden;
+  max-width: 100vw;
   padding-top: var(--sat);
   padding-left: var(--sal);
   padding-right: var(--sar);
@@ -996,6 +997,57 @@ html:not(.dark) #uaeTimezonePill {
 html:not(.dark) #uaeLiveClock {
   color: #047857 !important;
   font-weight: 800 !important;
+}
+
+/* Bright Mode Support for Mobile Planner Agenda & Responsive Cards */
+html:not(.dark) #plannerAgendaContainer {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #plannerAgendaList .glass-card {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) #plannerAgendaList .glass-card h4,
+html:not(.dark) #plannerAgendaList .glass-card h5 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #plannerAgendaList .bg-slate-950\/60 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+html:not(.dark) #plannerTableCards .glass-card {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+html:not(.dark) #plannerTableCards .glass-card h5 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #plannerTableCards .bg-slate-950\/60 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+html:not(.dark) #btnPlannerViewCalendar:not(.bg-brand-600),
+html:not(.dark) #btnPlannerViewAgenda:not(.bg-brand-600),
+html:not(.dark) #btnPlannerViewTable:not(.bg-brand-600) {
+  color: #475569 !important;
+}
+
+html:not(.dark) #btnPlannerViewCalendar:not(.bg-brand-600):hover,
+html:not(.dark) #btnPlannerViewAgenda:not(.bg-brand-600):hover,
+html:not(.dark) #btnPlannerViewTable:not(.bg-brand-600):hover {
+  color: #0f172a !important;
 }
 
 html:not(.dark) .account-month-metrics {
