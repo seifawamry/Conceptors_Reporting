@@ -55,6 +55,12 @@
 
         <!-- Theme Toggle, User Profile & Actions -->
         <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Live UAE Time & Timezone Sync Pill -->
+          <div id="uaeTimezonePill" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm" title="Synchronized with UAE Standard Time (GST, UTC+4)">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            <span id="uaeLiveClock" class="font-mono text-emerald-300">UAE --:-- GST</span>
+          </div>
+
           <!-- Theme Toggle Button (Bright / Dark Mode) -->
           <button id="btnThemeToggle" type="button" onclick="toggleTheme()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Toggle Bright / Dark Screen Mode">
             <i id="themeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
@@ -279,8 +285,20 @@
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto" id="plannerActionButtons">
-          <!-- Injected via JS -->
+        <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <!-- View Mode Switcher (Calendar vs Table) -->
+          <div class="flex items-center p-1 bg-slate-900 border border-slate-700/80 rounded-xl text-xs">
+            <button id="btnPlannerViewCalendar" type="button" onclick="setPlannerView('calendar')" class="px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i> Calendar View
+            </button>
+            <button id="btnPlannerViewTable" type="button" onclick="setPlannerView('table')" class="px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all">
+              <i data-lucide="list" class="w-3.5 h-3.5"></i> Targets Table
+            </button>
+          </div>
+
+          <div id="plannerActionButtons" class="flex flex-wrap items-center gap-2">
+            <!-- Injected via JS -->
+          </div>
         </div>
       </div>
 
@@ -295,8 +313,58 @@
         </div>
       </div>
 
-      <!-- Planner Filters & Planned Targets Table -->
-      <div class="glass-panel rounded-2xl p-5 space-y-4">
+      <!-- ================= PLANNER VIEW 1: INTERACTIVE MONTHLY CALENDAR ================= -->
+      <div id="plannerCalendarContainer" class="glass-panel rounded-2xl p-5 space-y-4">
+        <!-- Calendar Toolbar: Month Nav, 3-Day Rule SOP Banner & Legend -->
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors" title="Previous Month">
+              <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <h3 id="plannerCalendarMonthTitle" class="text-base font-black text-white px-2 min-w-[160px] text-center">September 2026</h3>
+            <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors" title="Next Month">
+              <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+            <button type="button" onclick="jumpPlannerCurrentMonth()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700 transition-colors">
+              Today / Current
+            </button>
+          </div>
+
+          <!-- SOP 3-Day Advance Rule Notice -->
+          <div class="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+            <i data-lucide="shield-alert" class="w-4 h-4 text-amber-400 shrink-0"></i>
+            <span><b>3-Day Advance Rule:</b> Earliest planned date is <b id="calendarMinDateNotice" class="text-amber-200">--</b>. Click any eligible day to plan.</span>
+          </div>
+
+          <button onclick="openPlanVisitModal()" class="px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all shrink-0">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Schedule Target
+          </button>
+        </div>
+
+        <!-- 7-Day Weekdays Header -->
+        <div class="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-xs font-extrabold text-slate-400 uppercase tracking-wider py-1 border-b border-slate-800/80">
+          <div class="text-rose-400">Sun</div>
+          <div>Mon</div>
+          <div>Tue</div>
+          <div>Wed</div>
+          <div>Thu</div>
+          <div>Fri</div>
+          <div class="text-indigo-400">Sat</div>
+        </div>
+
+        <!-- 7-Column Calendar Grid -->
+        <div id="plannerCalendarDaysGrid" class="grid grid-cols-7 gap-1.5 sm:gap-2 min-h-[420px]">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Selected Day Details & Schedule Inspector Drawer -->
+        <div id="plannerSelectedDayDrawer" class="hidden rounded-xl p-4 bg-slate-900/90 border border-slate-700/80 space-y-3">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- ================= PLANNER VIEW 2: TARGETS TABLE ================= -->
+      <div id="plannerTableContainer" class="hidden glass-panel rounded-2xl p-5 space-y-4">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             <div class="relative flex-1 sm:w-64">
@@ -490,6 +558,9 @@
               <option value="ALL">All Territories</option>
               <option value="T1">Territory 1 (Dubai / AUH / Al Ain)</option>
               <option value="T2">Territory 2 (Northern Emirates)</option>
+            </select>
+            <select id="accountsMonthFilter" onchange="handleAccountsFilter()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none font-semibold">
+              <!-- Dynamically populated via JS -->
             </select>
           </div>
         </div>
@@ -1109,7 +1180,7 @@
             <div class="flex items-center justify-between mb-1">
               <label class="block text-slate-400 font-semibold">Scheduled Date *</label>
               <span class="text-[10px] text-amber-400 font-bold flex items-center gap-1">
-                <i data-lucide="alert-circle" class="w-3 h-3"></i> 5-Day Advance Rule
+                <i data-lucide="alert-circle" class="w-3 h-3"></i> 3-Day Advance Rule
               </span>
             </div>
             <input type="date" id="planDate" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-sky-500 font-medium">
