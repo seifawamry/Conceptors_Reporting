@@ -71,6 +71,7 @@ const state = {
   theme: 'dark', // 'dark' or 'light'
   timeZone: 'Asia/Dubai', // UAE Standard Time (GST, UTC+4)
   dailyDate: getSyncedTodayDate(),
+  dailyReportDate: getSyncedTodayDate(),
   plannerView: 'calendar', // 'calendar' or 'table'
   plannerCalendarMonth: parseInt(getSyncedTodayDate().split('-')[1], 10),
   plannerCalendarYear: parseInt(getSyncedTodayDate().split('-')[0], 10),
@@ -89,6 +90,9 @@ const state = {
     toastAlert: true
   },
   filters: {
+    dailyReportRep: 'ALL',
+    dailyReportStatus: 'ALL',
+    dailyReportSearch: '',
     plannerSearch: '',
     plannerStatus: 'Planned',
     reportsSearch: '',
@@ -152,10 +156,30 @@ function loadStoredData() {
   state.plannerCalendarMonth = parseInt(dateParts[1], 10);
 
   const storedVisits = localStorage.getItem(STORAGE_KEY_VISITS);
-  state.visits = storedVisits ? JSON.parse(storedVisits) : [...(window.INITIAL_VISITS || [])];
+  let loadedVisits = storedVisits ? JSON.parse(storedVisits) : [];
+  if (window.INITIAL_VISITS && Array.isArray(window.INITIAL_VISITS)) {
+    const existingVisitIds = new Set(loadedVisits.map(v => v.id));
+    window.INITIAL_VISITS.forEach(iv => {
+      if (!existingVisitIds.has(iv.id)) {
+        loadedVisits.push(iv);
+      }
+    });
+  }
+  state.visits = loadedVisits.length > 0 ? loadedVisits : [...(window.INITIAL_VISITS || [])];
 
   const storedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
-  state.orders = storedOrders ? JSON.parse(storedOrders) : [...(window.INITIAL_ORDERS || [])];
+  let loadedOrders = storedOrders ? JSON.parse(storedOrders) : [];
+  if (window.INITIAL_ORDERS && Array.isArray(window.INITIAL_ORDERS)) {
+    const existingOrderNos = new Set(loadedOrders.map(o => o.invoiceNumber));
+    window.INITIAL_ORDERS.forEach(io => {
+      if (!existingOrderNos.has(io.invoiceNumber)) {
+        loadedOrders.push(io);
+      }
+    });
+  }
+  state.orders = loadedOrders.length > 0 ? loadedOrders : [...(window.INITIAL_ORDERS || [])];
+
+  state.dailyReportDate = state.dailyReportDate || getSyncedTodayDate();
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
   state.monthlyPlans = storedPlans ? JSON.parse(storedPlans) : [...(window.INITIAL_MONTHLY_PLANS || [])];
@@ -192,6 +216,7 @@ function renderAll() {
   updateUserProfileDisplay();
   updateNotificationBell();
   renderDailyWorkspace();
+  renderDailyReport();
   renderMonthlyPlanner();
   renderReportsTable();
   renderOrdersTable();
@@ -656,7 +681,7 @@ window.switchTab = function(tabId) {
     tabId = 'daily';
   }
 
-  const tabs = ['daily', 'planner', 'reports', 'orders', 'accounts', 'analytics', 'manager'];
+  const tabs = ['daily', 'daily-report', 'planner', 'reports', 'orders', 'accounts', 'analytics', 'manager'];
   tabs.forEach(t => {
     const el = document.getElementById(`tab-${t}`);
     const btn = document.getElementById(`tabBtn-${t}`);
@@ -698,6 +723,8 @@ window.switchTab = function(tabId) {
     renderMonthlyPlanner();
   } else if (tabId === 'accounts') {
     renderAccountsGrid();
+  } else if (tabId === 'daily-report') {
+    renderDailyReport();
   }
 
   safeLucide();
@@ -948,6 +975,844 @@ function getSentimentBadgeClass(sentiment) {
   if (sentiment === 'Price Sensitive') return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
   return 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
 }
+
+// =========================================================================
+// 7.5 DAILY REPORT SECTOR (FIELD ACTIVITY & RETRIEVAL ENGINE)
+// =========================================================================
+
+function getRepName(repId) {
+  if (!repId) return 'Medical Representative';
+  const found = (state.reps || []).find(r => r.id === repId || r.territory === repId);
+  if (found) return `Dr. ${found.name}`;
+  if (repId === 'T1') return 'Dr. Shaimaa';
+  if (repId === 'T2') return 'Dr. Marsel';
+  return repId;
+}
+
+function getRepAvatar(repId) {
+  const found = (state.reps || []).find(r => r.id === repId || r.territory === repId);
+  return found ? (found.avatar || 'REP') : (repId === 'T1' ? 'SH' : (repId === 'T2' ? 'MR' : 'US'));
+}
+
+function getRepTerritoryStr(repId) {
+  const found = (state.reps || []).find(r => r.id === repId || r.territory === repId);
+  if (found) return `${found.territory} (${(found.emirates || []).slice(0, 2).join(', ')})`;
+  return repId === 'T1' ? 'T1 (Dubai / Abu Dhabi)' : (repId === 'T2' ? 'T2 (Northern Emirates)' : repId);
+}
+
+window.setDailyReportDateToday = function() {
+  state.dailyReportDate = getSyncedTodayDate();
+  const input = document.getElementById('dailyReportDateInput');
+  if (input) input.value = state.dailyReportDate;
+  renderDailyReport();
+  showToast('Synced to UAE Live Today', `Daily Report retrieved for ${state.dailyReportDate} (GST, Asia/Dubai)`, 'info');
+};
+
+window.setDailyReportDateOffset = function(days) {
+  const base = state.dailyReportDate || getSyncedTodayDate();
+  const parts = base.split('-').map(Number);
+  const cur = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  cur.setUTCDate(cur.getUTCDate() + days);
+  state.dailyReportDate = cur.toISOString().split('T')[0];
+  const input = document.getElementById('dailyReportDateInput');
+  if (input) input.value = state.dailyReportDate;
+  renderDailyReport();
+};
+
+window.handleDailyReportDateChange = function(newDate) {
+  if (!newDate) return;
+  state.dailyReportDate = newDate;
+  renderDailyReport();
+};
+
+window.handleDailyReportRepFilter = function(repId) {
+  state.filters.dailyReportRep = repId || 'ALL';
+  renderDailyReport();
+};
+
+window.handleDailyReportStatusFilter = function(status) {
+  state.filters.dailyReportStatus = status || 'ALL';
+
+  const statuses = ['ALL', 'VISITED', 'UNVISITED', 'UNPLANNED', 'PLANNED'];
+  statuses.forEach(s => {
+    const btn = document.getElementById(`dailyReportFilter-${s}`);
+    if (btn) {
+      if (s === state.filters.dailyReportStatus) {
+        btn.className = 'daily-report-filter-pill active px-2.5 py-1 rounded-lg font-bold text-[11px] bg-brand-600 text-white transition-all whitespace-nowrap shadow-sm';
+      } else {
+        btn.className = 'daily-report-filter-pill px-2.5 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition-all whitespace-nowrap';
+      }
+    }
+  });
+
+  renderDailyReportTableAndCards();
+};
+
+window.handleDailyReportSearch = function(query) {
+  state.filters.dailyReportSearch = (query || '').toLowerCase().trim();
+  renderDailyReportTableAndCards();
+};
+
+function renderDailyReport() {
+  const dateStr = state.dailyReportDate || getSyncedTodayDate();
+
+  // Sync Input & Select UI values
+  const dateInput = document.getElementById('dailyReportDateInput');
+  if (dateInput && dateInput.value !== dateStr) {
+    dateInput.value = dateStr;
+  }
+
+  const repFilter = document.getElementById('dailyReportRepFilter');
+  if (repFilter) {
+    repFilter.value = state.filters.dailyReportRep || 'ALL';
+  }
+
+  // Retrieve all visits and orders on this chosen day
+  const dayVisits = (state.visits || []).filter(v => v.date === dateStr);
+  const dayOrders = (state.orders || []).filter(o => o.date === dateStr);
+  const dayOrdersVal = dayOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
+
+  // Group Visits by User's Defined Categories:
+  // 1. Planned Visits for this day
+  const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+  // 2. Visited (Planned Visits Completed)
+  const visitedPlanned = plannedVisits.filter(v => v.status === 'Completed');
+  // 3. Unvisited (Planned Visits Not Completed / Pending / Missed)
+  const unvisitedPlanned = plannedVisits.filter(v => v.status !== 'Completed');
+  // 4. Unplanned Visits (Spontaneous visits submitted on that day beside planned ones)
+  const unplannedVisits = dayVisits.filter(v => v.visitCategory === 'Unplanned');
+
+  // Total Field Execution
+  const totalCallsDone = visitedPlanned.length + unplannedVisits.length;
+  const adherencePct = plannedVisits.length > 0 
+    ? Math.round((visitedPlanned.length / plannedVisits.length) * 100) 
+    : (dayVisits.length > 0 ? 100 : 0);
+
+  // Update Header Banner
+  const bannerDate = document.getElementById('dailyReportBannerDate');
+  if (bannerDate) {
+    bannerDate.textContent = `Daily Field Audit for ${formatDisplayDate(dateStr)}`;
+  }
+
+  const bannerPills = document.getElementById('dailyReportBannerSummaryPills');
+  if (bannerPills) {
+    bannerPills.innerHTML = `
+      <span class="px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">
+        ${dayVisits.length} Total Records
+      </span>
+      <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+        ✓ ${visitedPlanned.length} Planned Visited
+      </span>
+      <span class="px-2.5 py-1 rounded-full ${unvisitedPlanned.length > 0 ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'} font-bold border">
+        ⏳ ${unvisitedPlanned.length} Unvisited
+      </span>
+      <span class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+        ⚡ ${unplannedVisits.length} Unplanned
+      </span>
+      <span class="px-2.5 py-1 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">
+        🎯 ${totalCallsDone} Calls Done
+      </span>
+    `;
+  }
+
+  // Update Top KPI Cards
+  const kpiPlanned = document.getElementById('kpiDailyReportPlanned');
+  if (kpiPlanned) kpiPlanned.textContent = plannedVisits.length;
+
+  const kpiVisited = document.getElementById('kpiDailyReportVisited');
+  if (kpiVisited) kpiVisited.textContent = visitedPlanned.length;
+
+  const kpiAdherence = document.getElementById('kpiDailyReportAdherence');
+  if (kpiAdherence) kpiAdherence.textContent = `${adherencePct}% Planned Adherence`;
+
+  const kpiUnvisited = document.getElementById('kpiDailyReportUnvisited');
+  if (kpiUnvisited) kpiUnvisited.textContent = unvisitedPlanned.length;
+
+  const kpiUnvisitedSub = document.getElementById('kpiDailyReportUnvisitedSub');
+  if (kpiUnvisitedSub) kpiUnvisitedSub.textContent = unvisitedPlanned.length > 0 ? `${unvisitedPlanned.length} Missed / Pending` : 'All Planned Visited';
+
+  const kpiUnplanned = document.getElementById('kpiDailyReportUnplanned');
+  if (kpiUnplanned) kpiUnplanned.textContent = unplannedVisits.length;
+
+  const kpiTotalDone = document.getElementById('kpiDailyReportTotalDone');
+  if (kpiTotalDone) kpiTotalDone.textContent = totalCallsDone;
+
+  const kpiOrdersValue = document.getElementById('kpiDailyReportOrdersValue');
+  if (kpiOrdersValue) kpiOrdersValue.textContent = `AED ${formatCurrency(dayOrdersVal)}`;
+
+  const kpiOrdersCount = document.getElementById('kpiDailyReportOrdersCount');
+  if (kpiOrdersCount) kpiOrdersCount.textContent = `${dayOrders.length} Field Bookings`;
+
+  // Update Tab Badge
+  const tabBadge = document.getElementById('badgeDailyReportCount');
+  if (tabBadge) {
+    tabBadge.textContent = `${dayVisits.length} Visits`;
+  }
+
+  // Render Medical Representatives Performance Roster
+  renderDailyReportRepsCards(dayVisits, dayOrders);
+
+  // Render Unvisited Accounts Alert Callout
+  renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedVisits.length);
+
+  // Render Detailed Visits Table & Mobile Cards
+  renderDailyReportTableAndCards();
+
+  safeLucide();
+}
+
+function renderDailyReportRepsCards(dayVisits, dayOrders) {
+  const container = document.getElementById('dailyReportRepsContainer');
+  if (!container) return;
+
+  const repsList = state.reps || [];
+  const repsCountEl = document.getElementById('dailyReportRepsCount');
+  if (repsCountEl) repsCountEl.textContent = `${repsList.length} Active Medical Representatives`;
+
+  if (repsList.length === 0) {
+    container.innerHTML = '<div class="text-slate-400 p-4 text-center">No representative profiles configured.</div>';
+    return;
+  }
+
+  container.innerHTML = repsList.map(rep => {
+    // Visits for this representative on the chosen date
+    const repVisits = dayVisits.filter(v => v.repId === rep.id || v.territory === rep.id);
+    const repPlanned = repVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+    const repVisited = repPlanned.filter(v => v.status === 'Completed');
+    const repUnvisited = repPlanned.filter(v => v.status !== 'Completed');
+    const repUnplanned = repVisits.filter(v => v.visitCategory === 'Unplanned');
+    const repTotalCalls = repVisited.length + repUnplanned.length;
+
+    const repAdherencePct = repPlanned.length > 0 
+      ? Math.round((repVisited.length / repPlanned.length) * 100) 
+      : (repVisits.length > 0 ? 100 : 0);
+
+    const repOrders = dayOrders.filter(o => o.repId === rep.id || o.territory === rep.id);
+    const repOrdersVal = repOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
+
+    const isFiltered = state.filters.dailyReportRep === rep.id;
+
+    return `
+      <div class="glass-card rounded-2xl p-4 border ${isFiltered ? 'border-cyan-500 ring-2 ring-cyan-500/20' : 'border-slate-800'} space-y-3.5 transition-all">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm border shadow-md" style="background-color: ${rep.color}20; color: ${rep.color}; border-color: ${rep.color}40">
+              ${rep.avatar || 'REP'}
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="font-extrabold text-white text-sm">Dr. ${escapeHtml(rep.name)}</h4>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase" style="background-color: ${rep.color}25; color: ${rep.color}">
+                  Territory ${rep.territory}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5 truncate max-w-[240px]">
+                ${(rep.emirates || []).join(', ')}
+              </p>
+            </div>
+          </div>
+
+          <button type="button" onclick="handleDailyReportRepFilter('${isFiltered ? 'ALL' : rep.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${isFiltered ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}">
+            ${isFiltered ? 'Filtered ✓ (Reset)' : 'Filter Rep'}
+          </button>
+        </div>
+
+        <!-- Plan Execution Adherence Progress Bar -->
+        <div class="space-y-1.5 pt-1">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-slate-400 font-semibold">Planned Execution Adherence:</span>
+            <span class="font-extrabold ${repAdherencePct >= 80 ? 'text-emerald-400' : (repAdherencePct >= 50 ? 'text-amber-400' : 'text-slate-400')}">
+              ${repAdherencePct}% (${repVisited.length}/${repPlanned.length} Planned Done)
+            </span>
+          </div>
+          <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+            <div class="h-full rounded-full transition-all duration-500 ${repAdherencePct >= 80 ? 'bg-emerald-500' : (repAdherencePct >= 50 ? 'bg-amber-500' : 'bg-sky-500')}" style="width: ${Math.min(100, repAdherencePct)}%"></div>
+          </div>
+        </div>
+
+        <!-- Metric Stat Chips Grid -->
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-xs pt-1">
+          <div class="p-2 rounded-xl bg-slate-900/90 border border-slate-800">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Planned</span>
+            <span class="font-black text-sky-400 text-sm mt-0.5 block">${repPlanned.length}</span>
+          </div>
+          <div class="p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+            <span class="text-[10px] text-emerald-300 uppercase font-bold block">Visited</span>
+            <span class="font-black text-emerald-400 text-sm mt-0.5 block">${repVisited.length}</span>
+          </div>
+          <div class="p-2 rounded-xl ${repUnvisited.length > 0 ? 'bg-rose-950/30 border border-rose-500/30' : 'bg-slate-900/90 border border-slate-800'}">
+            <span class="text-[10px] ${repUnvisited.length > 0 ? 'text-rose-300' : 'text-slate-400'} uppercase font-bold block">Unvisited</span>
+            <span class="font-black ${repUnvisited.length > 0 ? 'text-rose-400' : 'text-slate-400'} text-sm mt-0.5 block">${repUnvisited.length}</span>
+          </div>
+          <div class="p-2 rounded-xl bg-amber-950/30 border border-amber-500/30">
+            <span class="text-[10px] text-amber-300 uppercase font-bold block">⚡ Unplanned</span>
+            <span class="font-black text-amber-400 text-sm mt-0.5 block">${repUnplanned.length}</span>
+          </div>
+          <div class="p-2 rounded-xl bg-teal-950/30 border border-teal-500/30">
+            <span class="text-[10px] text-teal-300 uppercase font-bold block">Total Calls</span>
+            <span class="font-black text-teal-400 text-sm mt-0.5 block">${repTotalCalls}</span>
+          </div>
+          <div class="p-2 rounded-xl bg-indigo-950/30 border border-indigo-500/30">
+            <span class="text-[10px] text-indigo-300 uppercase font-bold block">Orders AED</span>
+            <span class="font-black text-indigo-300 text-xs mt-0.5 block">${formatCurrency(repOrdersVal)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
+  const container = document.getElementById('dailyReportUnvisitedAlert');
+  if (!container) return;
+
+  if (unvisitedPlanned.length > 0) {
+    container.innerHTML = `
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-rose-950/40 via-slate-900 to-rose-950/40 border border-rose-500/40 space-y-3 shadow-md">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-rose-500/20">
+          <div class="flex items-center gap-2">
+            <div class="p-1.5 rounded-lg bg-rose-500/20 text-rose-400">
+              <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h4 class="font-black text-white text-xs sm:text-sm">⚠️ Unvisited Planned Accounts (${unvisitedPlanned.length} Accounts Pending / Missed)</h4>
+              <p class="text-[11px] text-slate-300">The following scheduled accounts were not visited on this day and require rescheduling or follow-up:</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 text-[10px] font-black border border-rose-500/30 self-start sm:self-auto whitespace-nowrap">
+            Action Required
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          ${unvisitedPlanned.map(u => {
+            const repName = getRepName(u.repId);
+            return `
+              <div class="bg-slate-950/80 p-3 rounded-xl border border-rose-500/30 space-y-2 text-xs">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="font-extrabold text-white truncate" title="${escapeHtml(u.clientName)}">${escapeHtml(u.clientName)}</div>
+                    <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                      <span class="font-mono text-cyan-400">${u.clientCode || 'ACC'}</span> • <span>${u.location || 'UAE'}</span>
+                    </div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                    ${u.status || 'Pending'}
+                  </span>
+                </div>
+
+                <div class="pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-300">
+                  <span>👤 Assigned: <strong>${repName}</strong></span>
+                  <span>⏰ ${u.timeSlot || 'Scheduled'}</span>
+                </div>
+
+                ${u.purpose ? `
+                  <div class="text-[10px] text-slate-400 bg-slate-900/80 p-1.5 rounded border border-slate-800 line-clamp-2">
+                    <span class="text-slate-500 font-semibold">Planned Purpose:</span> ${escapeHtml(u.purpose)}
+                  </div>
+                ` : ''}
+
+                <div class="pt-1 flex justify-end">
+                  <button type="button" onclick="openDailyReportVisitModal('${u.id}')" class="text-[10px] text-rose-300 hover:text-white font-bold underline">
+                    View Record Details →
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  } else if (plannedTotal > 0) {
+    container.innerHTML = `
+      <div class="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 text-xs flex items-center justify-between gap-3 text-emerald-300 font-semibold shadow-sm">
+        <div class="flex items-center gap-2">
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+          <span>100% Planned Adherence: All ${plannedTotal} scheduled customer calls for this date were completed.</span>
+        </div>
+        <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 shrink-0">
+          Flawless Execution
+        </span>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="p-3 rounded-2xl bg-slate-900/60 border border-slate-800 text-xs flex items-center gap-2 text-slate-400 font-medium">
+        <i data-lucide="info" class="w-4 h-4 text-slate-400 shrink-0"></i>
+        <span>No customer calls were planned on the schedule for this date.</span>
+      </div>
+    `;
+  }
+}
+
+function renderDailyReportTableAndCards() {
+  const dateStr = state.dailyReportDate || getSyncedTodayDate();
+  const dayVisits = (state.visits || []).filter(v => v.date === dateStr);
+
+  // Apply Rep Filter
+  let filtered = dayVisits;
+  if (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
+    filtered = filtered.filter(v => v.repId === state.filters.dailyReportRep || v.territory === state.filters.dailyReportRep);
+  }
+
+  // Apply Status Filter
+  if (state.filters.dailyReportStatus === 'VISITED') {
+    filtered = filtered.filter(v => (v.visitCategory === 'Planned' || !v.visitCategory) && v.status === 'Completed');
+  } else if (state.filters.dailyReportStatus === 'UNVISITED') {
+    filtered = filtered.filter(v => (v.visitCategory === 'Planned' || !v.visitCategory) && v.status !== 'Completed');
+  } else if (state.filters.dailyReportStatus === 'UNPLANNED') {
+    filtered = filtered.filter(v => v.visitCategory === 'Unplanned');
+  } else if (state.filters.dailyReportStatus === 'PLANNED') {
+    filtered = filtered.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+  }
+
+  // Apply Search Query
+  if (state.filters.dailyReportSearch) {
+    const q = state.filters.dailyReportSearch;
+    filtered = filtered.filter(v => {
+      const rep = getRepName(v.repId).toLowerCase();
+      const client = (v.clientName || '').toLowerCase();
+      const code = (v.clientCode || '').toLowerCase();
+      const doc = (v.doctorName || '').toLowerCase();
+      const loc = (v.location || '').toLowerCase();
+      const products = Array.isArray(v.productsDetailed) ? v.productsDetailed.join(' ').toLowerCase() : '';
+      const outcome = (v.outcome || '').toLowerCase();
+      const purpose = (v.purpose || '').toLowerCase();
+      return rep.includes(q) || client.includes(q) || code.includes(q) || doc.includes(q) || loc.includes(q) || products.includes(q) || outcome.includes(q) || purpose.includes(q);
+    });
+  }
+
+  // Render Desktop Table Body
+  const tableBody = document.getElementById('dailyReportTableBody');
+  const mobileContainer = document.getElementById('dailyReportMobileCardsContainer');
+
+  if (tableBody) {
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="9" class="text-center py-10 text-slate-400">
+            <div class="flex flex-col items-center justify-center gap-2">
+              <i data-lucide="search-x" class="w-8 h-8 text-slate-600"></i>
+              <span class="font-bold text-slate-300">No visits match your selected filters on this date.</span>
+              <span class="text-xs text-slate-500">Try selecting a different date, clearing search keywords, or showing all records.</span>
+            </div>
+          </td>
+        </tr>
+      `;
+    } else {
+      tableBody.innerHTML = filtered.map(v => {
+        const isUnplanned = v.visitCategory === 'Unplanned';
+        const isCompleted = v.status === 'Completed';
+        const repName = getRepName(v.repId);
+        const repAvatar = getRepAvatar(v.repId);
+        const repTerritory = getRepTerritoryStr(v.repId);
+
+        // Status Badge Logic
+        let categoryBadge = '';
+        if (isUnplanned) {
+          categoryBadge = `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1">
+              ⚡ Unplanned Visit
+            </span>
+          `;
+        } else if (isCompleted) {
+          categoryBadge = `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1">
+              ✓ Planned • Visited
+            </span>
+          `;
+        } else {
+          categoryBadge = `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">
+              ⏳ Planned • Unvisited (${escapeHtml(v.status || 'Pending')})
+            </span>
+          `;
+        }
+
+        return `
+          <tr class="hover:bg-slate-800/40 transition-colors">
+            <!-- Medical Rep -->
+            <td class="py-3 px-3">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-xl ${v.repId === 'T1' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'} flex items-center justify-center font-bold text-[10px] shrink-0">
+                  ${repAvatar}
+                </div>
+                <div>
+                  <span class="font-bold text-white text-xs block leading-tight">${repName}</span>
+                  <span class="text-[9px] text-slate-400 font-medium">${repTerritory}</span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Clinic & Account -->
+            <td class="py-3 px-3">
+              <div class="font-bold text-white text-xs leading-tight">${escapeHtml(v.clientName)}</div>
+              <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                <span class="font-mono text-cyan-400">${v.clientCode || 'ACC'}</span>
+                <span>•</span>
+                <span>${v.location || 'UAE'}</span>
+              </div>
+            </td>
+
+            <!-- Category & Status -->
+            <td class="py-3 px-3 whitespace-nowrap">
+              ${categoryBadge}
+            </td>
+
+            <!-- Time Slot -->
+            <td class="py-3 px-3 text-slate-300 text-[11px] whitespace-nowrap font-medium">
+              ${escapeHtml(v.timeSlot || 'Scheduled Time')}
+            </td>
+
+            <!-- Doctor Met -->
+            <td class="py-3 px-3">
+              <div class="text-slate-200 font-semibold text-xs leading-tight">${escapeHtml(v.doctorName || 'Veterinarian')}</div>
+              <div class="text-[10px] text-slate-400">${escapeHtml(v.doctorRole || 'Doctor')}</div>
+            </td>
+
+            <!-- Products Detailed & Samples -->
+            <td class="py-3 px-3 max-w-[200px]">
+              <div class="text-[11px] text-slate-300 truncate" title="${Array.isArray(v.productsDetailed) ? escapeHtml(v.productsDetailed.join(', ')) : ''}">
+                ${Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 
+                  ? v.productsDetailed.map(p => `<span class="inline-block px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 text-[10px] text-cyan-300 mr-1 mb-0.5">${escapeHtml(p)}</span>`).join('') 
+                  : '<span class="text-slate-500 text-[10px]">No products detailed</span>'}
+              </div>
+              ${v.samplesDropped > 0 ? `
+                <div class="mt-1">
+                  <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
+                    💊 ${v.samplesDropped}x ${escapeHtml(v.sampleProduct || 'Sample')}
+                  </span>
+                </div>
+              ` : ''}
+            </td>
+
+            <!-- Discussion / Outcome -->
+            <td class="py-3 px-3 max-w-[240px]">
+              <div class="text-[11px] text-slate-300 line-clamp-2" title="${escapeHtml(v.outcome || v.purpose || '')}">
+                ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
+              </div>
+              ${v.doctorSentiment ? `
+                <div class="mt-1">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
+                    ${v.doctorSentiment}
+                  </span>
+                </div>
+              ` : ''}
+            </td>
+
+            <!-- Order Placed -->
+            <td class="py-3 px-3 text-right whitespace-nowrap">
+              ${v.orderPlaced ? `
+                <span class="font-black text-emerald-400 font-mono text-xs block">
+                  AED ${formatCurrency(v.orderValueAed)}
+                </span>
+                <span class="text-[9px] text-emerald-300 font-semibold block">${v.orderRef || 'Booked'}</span>
+              ` : `
+                <span class="text-slate-500 text-xs font-medium">—</span>
+              `}
+            </td>
+
+            <!-- Action -->
+            <td class="py-3 px-3 text-center whitespace-nowrap">
+              <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-bold transition-colors">
+                Details
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+
+  // Render Mobile Cards
+  if (mobileContainer) {
+    if (filtered.length === 0) {
+      mobileContainer.innerHTML = `
+        <div class="text-center py-8 text-slate-400 p-4">
+          <i data-lucide="search-x" class="w-8 h-8 text-slate-600 mx-auto mb-2"></i>
+          <p class="font-bold text-slate-300 text-xs">No visits match selected filters for this date.</p>
+        </div>
+      `;
+    } else {
+      mobileContainer.innerHTML = filtered.map(v => {
+        const isUnplanned = v.visitCategory === 'Unplanned';
+        const isCompleted = v.status === 'Completed';
+        const repName = getRepName(v.repId);
+        const repAvatar = getRepAvatar(v.repId);
+
+        let categoryBadge = '';
+        if (isUnplanned) {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">⚡ Unplanned</span>`;
+        } else if (isCompleted) {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">✓ Visited</span>`;
+        } else {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30">⏳ Unvisited</span>`;
+        }
+
+        return `
+          <div class="glass-card rounded-2xl p-4 border border-slate-800 space-y-3 text-xs">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-bold text-white text-sm truncate">${escapeHtml(v.clientName)}</div>
+                <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                  <span class="font-mono text-cyan-400">${v.clientCode || 'ACC'}</span> • <span>${v.location || 'UAE'}</span>
+                </div>
+              </div>
+              <div class="shrink-0">${categoryBadge}</div>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80">
+              <div class="flex items-center gap-1.5 text-slate-300 font-semibold">
+                <span class="w-5 h-5 rounded-md bg-sky-500/20 text-sky-300 flex items-center justify-center text-[9px] font-extrabold">${repAvatar}</span>
+                <span>${repName}</span>
+              </div>
+              <span class="text-slate-400 text-[10px]">⏰ ${v.timeSlot || 'Scheduled'}</span>
+            </div>
+
+            <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1">
+              <div class="text-slate-300 font-semibold">
+                <span class="text-slate-500">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
+              </div>
+              <div class="text-slate-300 line-clamp-2">
+                <span class="text-slate-500">Outcome:</span> ${escapeHtml(v.outcome || v.purpose || 'Detailing call conducted.')}
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-1 text-[11px]">
+              <div>
+                ${v.orderPlaced ? `
+                  <span class="font-extrabold text-emerald-400 font-mono text-xs">🛒 AED ${formatCurrency(v.orderValueAed)}</span>
+                ` : `
+                  <span class="text-slate-500 text-[10px]">No order generated</span>
+                `}
+              </div>
+              <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs">
+                View Full Details
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  safeLucide();
+}
+
+window.exportDailyReportCSV = function() {
+  const dateStr = state.dailyReportDate || getSyncedTodayDate();
+  const visits = (state.visits || []).filter(v => v.date === dateStr);
+
+  if (visits.length === 0) {
+    showToast('No Data to Export', `There are no visit records for date ${dateStr}.`, 'warning');
+    return;
+  }
+
+  const headers = [
+    'Date',
+    'Medical Rep',
+    'Territory',
+    'Clinic Code',
+    'Clinic Name',
+    'Location',
+    'Visit Category',
+    'Status',
+    'Time Slot',
+    'Doctor Met',
+    'Doctor Role',
+    'Doctor Sentiment',
+    'Products Detailed',
+    'Samples Dropped',
+    'Sample Product',
+    'Order Placed',
+    'Order Ref',
+    'Order Value AED',
+    'Purpose',
+    'Outcome / Notes',
+    'Next Follow Up Date'
+  ];
+
+  const csvRows = [headers.join(',')];
+
+  visits.forEach(v => {
+    const isUnplanned = v.visitCategory === 'Unplanned';
+    const categoryLabel = isUnplanned ? 'Unplanned' : 'Planned';
+    const statusLabel = isUnplanned ? 'Completed' : (v.status === 'Completed' ? 'Visited (Completed)' : `Unvisited (${v.status || 'Pending'})`);
+    const repName = getRepName(v.repId);
+    const row = [
+      `"${v.date || dateStr}"`,
+      `"${repName}"`,
+      `"${v.repId || ''}"`,
+      `"${v.clientCode || ''}"`,
+      `"${(v.clientName || '').replace(/"/g, '""')}"`,
+      `"${v.location || ''}"`,
+      `"${categoryLabel}"`,
+      `"${statusLabel}"`,
+      `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+      `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+      `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+      `"${v.doctorSentiment || ''}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : ''}"`,
+      v.samplesDropped || 0,
+      `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+      v.orderPlaced ? 'YES' : 'NO',
+      `"${v.orderRef || ''}"`,
+      v.orderValueAed || 0,
+      `"${(v.purpose || '').replace(/"/g, '""')}"`,
+      `"${(v.outcome || '').replace(/"/g, '""')}"`,
+      `"${v.nextFollowUp || ''}"`
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  const csvString = '\uFEFF' + csvRows.join('\r\n');
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `Conceptors_Daily_Report_${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  showToast('Daily Report Exported', `Downloaded CSV spreadsheet for ${dateStr} (${visits.length} records).`, 'success');
+};
+
+window.openDailyReportVisitModal = function(visitId) {
+  const visit = (state.visits || []).find(v => v.id === visitId);
+  if (!visit) return;
+
+  const modal = document.getElementById('dailyReportVisitModal');
+  const content = document.getElementById('dailyReportModalContent');
+  const title = document.getElementById('dailyReportModalTitle');
+  const subtitle = document.getElementById('dailyReportModalSubtitle');
+
+  if (title) title.textContent = `${visit.clientName} (${visit.location || 'UAE'})`;
+  if (subtitle) subtitle.textContent = `Field Detailing Audit • Date: ${formatDisplayDate(visit.date)} • Rep ${visit.repId}`;
+
+  const isUnplanned = visit.visitCategory === 'Unplanned';
+  const isCompleted = visit.status === 'Completed';
+  const repName = getRepName(visit.repId);
+
+  let categoryBadge = '';
+  if (isUnplanned) {
+    categoryBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">⚡ Unplanned Visit</span>`;
+  } else if (isCompleted) {
+    categoryBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">✓ Planned • Visited (Completed)</span>`;
+  } else {
+    categoryBadge = `<span class="px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">⏳ Planned • Unvisited (${escapeHtml(visit.status || 'Pending')})</span>`;
+  }
+
+  if (content) {
+    content.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <!-- Account & Schedule Details -->
+        <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Account & Schedule Profile</span>
+          <div class="space-y-1.5 text-xs text-slate-300">
+            <div><span class="text-slate-500 font-semibold">Account:</span> <strong class="text-white">${escapeHtml(visit.clientName)}</strong> (${visit.clientCode || 'ACC'})</div>
+            <div><span class="text-slate-500 font-semibold">Emirate / City:</span> ${visit.location || 'UAE'}</div>
+            <div><span class="text-slate-500 font-semibold">Medical Rep:</span> <strong class="text-cyan-400">${repName}</strong> (Territory ${visit.repId})</div>
+            <div><span class="text-slate-500 font-semibold">Visit Time:</span> ${visit.timeSlot || 'Scheduled Round'}</div>
+            <div class="pt-1">${categoryBadge}</div>
+          </div>
+        </div>
+
+        <!-- Doctor Detailing Profile -->
+        <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Doctor & Sentiment</span>
+          <div class="space-y-1.5 text-xs text-slate-300">
+            <div><span class="text-slate-500 font-semibold">Doctor Met:</span> <strong class="text-white">${escapeHtml(visit.doctorName || 'Veterinarian')}</strong></div>
+            <div><span class="text-slate-500 font-semibold">Role / Specialty:</span> ${escapeHtml(visit.doctorRole || 'Doctor')}</div>
+            <div class="flex items-center gap-1.5 pt-1">
+              <span class="text-slate-500 font-semibold">Reception Sentiment:</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getSentimentBadgeClass(visit.doctorSentiment)}">
+                ${visit.doctorSentiment || 'Positive'}
+              </span>
+            </div>
+            ${visit.samplesDropped > 0 ? `
+              <div class="pt-1">
+                <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                  💊 ${visit.samplesDropped} Samples Dropped: ${escapeHtml(visit.sampleProduct || 'Promotional Sample')}
+                </span>
+              </div>
+            ` : '<div class="text-slate-500 text-[11px]">No clinical samples dropped</div>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Products Detailed -->
+      <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Veterinary Portfolio Detailed</span>
+        <div class="flex flex-wrap gap-1.5">
+          ${Array.isArray(visit.productsDetailed) && visit.productsDetailed.length > 0 
+            ? visit.productsDetailed.map(p => `
+              <span class="px-2.5 py-1 rounded-xl bg-cyan-950/40 text-cyan-300 border border-cyan-500/30 text-xs font-bold">
+                ✓ ${escapeHtml(p)}
+              </span>
+            `).join('')
+            : '<span class="text-slate-500 text-xs">No products detailed during this call.</span>'}
+        </div>
+      </div>
+
+      <!-- Discussion & Field Notes -->
+      <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-2">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Call Objective & Detailing Outcome</span>
+        <div class="space-y-2 text-xs">
+          ${visit.purpose ? `
+            <div>
+              <span class="text-slate-400 font-bold block mb-0.5">Call Objective:</span>
+              <p class="text-slate-200 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 leading-relaxed">${escapeHtml(visit.purpose)}</p>
+            </div>
+          ` : ''}
+          <div>
+            <span class="text-slate-400 font-bold block mb-0.5">Doctor Feedback & Detailing Outcome:</span>
+            <p class="text-slate-200 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 leading-relaxed">${escapeHtml(visit.outcome || 'Call conducted according to protocol.')}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Generated & Next Follow-Up -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Field Sales Order Booking</span>
+          ${visit.orderPlaced ? `
+            <div class="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-emerald-300 font-bold">Order Generated:</span>
+                <span class="font-black text-emerald-400 font-mono text-sm">AED ${formatCurrency(visit.orderValueAed)}</span>
+              </div>
+              <div class="text-[11px] text-slate-300">Invoice Ref: <strong class="text-white">${visit.orderRef || 'Pending Ref'}</strong></div>
+            </div>
+          ` : `
+            <p class="text-xs text-slate-400">No commercial sales order was placed during this visit.</p>
+          `}
+        </div>
+
+        <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Next Scheduled Follow-Up</span>
+          ${visit.nextFollowUp ? `
+            <div class="text-xs text-slate-200 space-y-1">
+              <div><span class="text-slate-400">Date:</span> <strong class="text-cyan-400">${formatDisplayDate(visit.nextFollowUp)}</strong></div>
+              ${visit.nextFollowUpPurpose ? `<div><span class="text-slate-400">Objective:</span> ${escapeHtml(visit.nextFollowUpPurpose)}</div>` : ''}
+            </div>
+          ` : `
+            <p class="text-xs text-slate-400">No follow-up date assigned yet.</p>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  if (modal) modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeDailyReportVisitModal = function() {
+  const modal = document.getElementById('dailyReportVisitModal');
+  if (modal) modal.classList.add('hidden');
+};
 
 // =========================================================================
 // 8. SUBMIT PLANNED VISIT REPORT MODAL

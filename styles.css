@@ -1617,3 +1617,154 @@ html:not(.dark) .toast-item .toast-close-btn:hover {
   background: #f1f5f9 !important;
 }
 
+/* ================= DAILY REPORT SECTOR STYLES ================= */
+.daily-report-filter-pill {
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.daily-report-filter-pill:hover:not(.active) {
+  color: #f8fafc;
+  background-color: rgba(51, 65, 85, 0.6);
+}
+
+/* Bright Screen Mode Overrides for Daily Report */
+html:not(.dark) #dailyReportDateInput,
+html:not(.dark) #dailyReportRepFilter,
+html:not(.dark) #dailyReportSearch {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html:not(.dark) #dailyReportBanner {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 50%, #f0f9ff 100%) !important;
+  border-color: #bae6fd !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05) !important;
+}
+html:not(.dark) #dailyReportBannerDate {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #tab-daily-report .glass-panel,
+html:not(.dark) #tab-daily-report .glass-card {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05) !important;
+}
+
+html:not(.dark) .daily-report-filter-pill:not(.active) {
+  color: #475569 !important;
+}
+html:not(.dark) .daily-report-filter-pill:hover:not(.active) {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #dailyReportTableBody tr {
+  border-bottom-color: #e2e8f0 !important;
+}
+html:not(.dark) #dailyReportTableBody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+/* High-Contrast Badges in Bright Mode for Daily Report */
+html:not(.dark) #tab-daily-report span[class*="bg-emerald-500/20"] {
+  background-color: #dcfce7 !important;
+  color: #047857 !important;
+  border-color: #86efac !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) #tab-daily-report span[class*="bg-rose-500/20"] {
+  background-color: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) #tab-daily-report span[class*="bg-amber-500/20"] {
+  background-color: #ffedd5 !important;
+  color: #c2410c !important;
+  border-color: #fdba74 !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) #tab-daily-report span[class*="bg-sky-500/20"],
+html:not(.dark) #tab-daily-report span[class*="bg-cyan-500/20"] {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) #tab-daily-report span[class*="bg-teal-500/20"] {
+  background-color: #ccfbf1 !important;
+  color: #0f766e !important;
+  border-color: #5eead4 !important;
+  font-weight: 800 !important;
+}
+
+/* Unvisited Banner in Bright Mode */
+html:not(.dark) #dailyReportUnvisitedAlert .bg-gradient-to-r {
+  background: linear-gradient(to right, #fff1f2, #ffffff, #fff1f2) !important;
+  border-color: #fca5a5 !important;
+}
+html:not(.dark) #dailyReportUnvisitedAlert h4 {
+  color: #9f1239 !important;
+}
+html:not(.dark) #dailyReportUnvisitedAlert p {
+  color: #475569 !important;
+}
+html:not(.dark) #dailyReportUnvisitedAlert .bg-slate-950\/80 {
+  background-color: #ffffff !important;
+  border-color: #fecdd3 !important;
+  box-shadow: 0 2px 8px -2px rgba(225, 29, 72, 0.08) !important;
+}
+html:not(.dark) #dailyReportUnvisitedAlert .bg-slate-950\/80 strong {
+  color: #0f172a !important;
+}
+
+/* Rep Cards in Bright Mode */
+html:not(.dark) #dailyReportRepsContainer .bg-slate-900\/90,
+html:not(.dark) #dailyReportRepsContainer .bg-slate-950\/70 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) #dailyReportRepsContainer .bg-emerald-950\/30 {
+  background-color: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+}
+html:not(.dark) #dailyReportRepsContainer .bg-rose-950\/30 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+}
+html:not(.dark) #dailyReportRepsContainer .bg-amber-950\/30 {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+}
+html:not(.dark) #dailyReportRepsContainer .bg-teal-950\/30 {
+  background-color: #f0fdfa !important;
+  border-color: #99f6e4 !important;
+}
+html:not(.dark) #dailyReportRepsContainer .bg-indigo-950\/30 {
+  background-color: #eef2ff !important;
+  border-color: #c7d2fe !important;
+}
+
+/* Daily Report Modal in Bright Mode */
+html:not(.dark) #dailyReportVisitModal .glass-panel {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
+}
+html:not(.dark) #dailyReportVisitModal .bg-slate-950\/80,
+html:not(.dark) #dailyReportVisitModal .bg-slate-900\/80 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) #dailyReportVisitModal strong,
+html:not(.dark) #dailyReportVisitModal h3,
+html:not(.dark) #dailyReportVisitModal p.text-slate-200 {
+  color: #0f172a !important;
+}
+
+
