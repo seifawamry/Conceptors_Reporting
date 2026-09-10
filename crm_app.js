@@ -128,11 +128,17 @@ const state = {
 // =========================================================================
 
 function initCrmApp() {
-  loadStoredData();
-  initTheme();
-  checkAuthSession();
-  startLiveTimeTicker();
-  safeLucide();
+  try {
+    loadStoredData();
+    initTheme();
+    checkAuthSession();
+    renderAll();
+    startLiveTimeTicker();
+    safeLucide();
+  } catch (err) {
+    console.error('CRITICAL: CRM App Initialization error:', err);
+    try { renderAll(); } catch (renderErr) { console.error('Render fallback error:', renderErr); }
+  }
 }
 
 if (document.readyState === 'loading') {
@@ -143,7 +149,9 @@ if (document.readyState === 'loading') {
 
 function safeLucide() {
   if (window.lucide && typeof lucide.createIcons === 'function') {
-    lucide.createIcons();
+    try {
+      lucide.createIcons();
+    } catch(e) {}
   }
 }
 
@@ -159,6 +167,17 @@ function loadStoredData() {
   const storedUser = localStorage.getItem(STORAGE_KEY_AUTH_USER);
   if (storedUser) {
     try { state.currentUser = JSON.parse(storedUser); } catch (e) { state.currentUser = null; }
+  }
+
+  // AUTOMATIC DEMO ONBOARDING FOR GITHUB PAGES / FRESH BROWSERS:
+  // If no user is stored in localStorage (first visit, incognito, or remote deployment),
+  // automatically default to Senior Sales Manager (Dr. Sameh Ageez) so all data, tabs,
+  // KPIs, daily reports, and monthly planner render immediately without showing a blank page!
+  if (!state.currentUser && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
+    const defaultUser = window.INITIAL_USERS.find(u => u.username === 'manager') || window.INITIAL_USERS[0];
+    state.currentUser = { ...defaultUser };
+    state.filters.analyticsRepFilter = 'ALL';
+    try { localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(state.currentUser)); } catch(e) {}
   }
 
   const storedDate = localStorage.getItem(STORAGE_KEY_DATE);
@@ -1069,6 +1088,19 @@ window.handleDailyReportSearch = function(query) {
   renderDailyReportTableAndCards();
 };
 
+window.resetDailyReportFilters = function() {
+  state.filters.dailyReportRep = 'ALL';
+  state.filters.dailyReportStatus = 'ALL';
+  state.filters.dailyReportSearch = '';
+  const searchInput = document.getElementById('dailyReportSearch');
+  if (searchInput) searchInput.value = '';
+  const repFilter = document.getElementById('dailyReportRepFilter');
+  if (repFilter) repFilter.value = 'ALL';
+  handleDailyReportStatusFilter('ALL');
+  renderDailyReport();
+  showToast('Filters Reset', 'Showing all medical rep visits for selected date.', 'info');
+};
+
 // =========================================================================
 // 8B. DYNAMIC MEDICAL REP DAILY REPORTING & HISTORY ENGINE
 // =========================================================================
@@ -1831,6 +1863,9 @@ function renderDailyReportTableAndCards() {
               <i data-lucide="search-x" class="w-8 h-8 text-slate-600"></i>
               <span class="font-bold text-slate-300">No visits match your selected filters on this date.</span>
               <span class="text-xs text-slate-500">Try selecting a different date, clearing search keywords, or showing all records.</span>
+              <button type="button" onclick="resetDailyReportFilters()" class="mt-2 px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all">
+                Reset All Filters
+              </button>
             </div>
           </td>
         </tr>
@@ -1974,9 +2009,12 @@ function renderDailyReportTableAndCards() {
   if (mobileContainer) {
     if (filtered.length === 0) {
       mobileContainer.innerHTML = `
-        <div class="text-center py-8 text-slate-400 p-4">
-          <i data-lucide="search-x" class="w-8 h-8 text-slate-600 mx-auto mb-2"></i>
+        <div class="text-center py-8 text-slate-400 p-4 space-y-2">
+          <i data-lucide="search-x" class="w-8 h-8 text-slate-600 mx-auto mb-1"></i>
           <p class="font-bold text-slate-300 text-xs">No visits match selected filters for this date.</p>
+          <button type="button" onclick="resetDailyReportFilters()" class="mt-2 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all">
+            Reset All Filters
+          </button>
         </div>
       `;
     } else {
