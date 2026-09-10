@@ -6,6 +6,10 @@
   --color-brand: #0284c7;
   --color-brand-dark: #0369a1;
   --color-brand-light: #e0f2fe;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 body {
@@ -13,7 +17,16 @@ body {
   background-color: #070d19;
   color: #f8fafc;
   overflow-x: hidden;
+  padding-top: var(--sat);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, var(--sab)) !important;
 }
 
 /* Custom Scrollbar */
@@ -1018,5 +1031,113 @@ html:not(.dark) #accountsMonthFilter {
     border: 1px solid #cbd5e1 !important;
     box-shadow: none !important;
     color: #000000 !important;
+  }
+}
+
+/* ================= MOBILE & TABLET RESPONSIVE ENHANCEMENTS (iOS / Android / iPadOS) ================= */
+@media screen and (max-width: 768px) {
+  /* Prevent iOS Safari auto-zoom on input focus */
+  input, select, textarea, .customer-combobox-wrapper input {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch manipulation & scrolling performance */
+button, a, input, select, textarea, [role="button"], label {
+  touch-action: manipulation;
+}
+
+.overflow-x-auto, .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile Bottom Navigation Dock Styling */
+#mobileBottomNav {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -4px 20px -2px rgba(0, 0, 0, 0.5);
+  background-color: rgba(12, 19, 34, 0.95);
+}
+
+.mobile-nav-btn {
+  color: #94a3b8;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-nav-btn.active {
+  color: #38bdf8 !important;
+  background-color: rgba(14, 165, 233, 0.12);
+}
+
+/* Bright Mode Support for Mobile Bottom Nav */
+html:not(.dark) #mobileBottomNav {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+  border-top-color: #cbd5e1 !important;
+  box-shadow: 0 -4px 20px -2px rgba(15, 23, 42, 0.08) !important;
+}
+
+html:not(.dark) .mobile-nav-btn {
+  color: #64748b !important;
+}
+
+html:not(.dark) .mobile-nav-btn.active {
+  color: #0284c7 !important;
+  background-color: rgba(2, 132, 199, 0.1) !important;
+}
+
+/* Calendar Compact View on Phones (<640px) */
+@media screen and (max-width: 639px) {
+  .calendar-day-cell {
+    min-height: 48px !important;
+    padding: 3px 2px !important;
+  }
+  .calendar-dots-row {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 2px;
+    flex-wrap: wrap;
+  }
+}
+
+.calendar-dot-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.calendar-dot-indicator.dot-t1 {
+  background-color: #38bdf8;
+  box-shadow: 0 0 4px rgba(56, 189, 248, 0.6);
+}
+
+.calendar-dot-indicator.dot-t2 {
+  background-color: #c084fc;
+  box-shadow: 0 0 4px rgba(192, 132, 252, 0.6);
+}
+
+.calendar-dot-indicator.dot-completed {
+  background-color: #34d399;
+  box-shadow: 0 0 4px rgba(52, 211, 153, 0.6);
+}
+
+/* Responsive Modal Card padding on Phones */
+@media screen and (max-width: 639px) {
+  #submitPlannedVisitModal > div,
+  #addUnplannedVisitModal > div,
+  #planVisitModal > div,
+  #orderModal > div,
+  #managerNotificationsModal > div,
+  #viewEmailModal > div,
+  #managerSettingsModal > div {
+    margin: 0.5rem !important;
+    padding: 1.1rem !important;
+    max-height: 90vh !important;
+    border-radius: 1.25rem !important;
+    width: calc(100% - 1rem) !important;
   }
 }
