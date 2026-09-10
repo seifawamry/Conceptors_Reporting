@@ -1299,30 +1299,36 @@ function renderMonthlyPlanner() {
 window.setPlannerView = function(mode) {
   state.plannerView = mode;
   const calContainer = document.getElementById('plannerCalendarContainer');
+  const agendaContainer = document.getElementById('plannerAgendaContainer');
   const tableContainer = document.getElementById('plannerTableContainer');
   const btnCal = document.getElementById('btnPlannerViewCalendar');
+  const btnAgenda = document.getElementById('btnPlannerViewAgenda');
   const btnTable = document.getElementById('btnPlannerViewTable');
 
-  if (mode === 'calendar') {
-    if (calContainer) calContainer.classList.remove('hidden');
-    if (tableContainer) tableContainer.classList.add('hidden');
-    if (btnCal) {
-      btnCal.className = 'px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all';
-    }
-    if (btnTable) {
-      btnTable.className = 'px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
-    }
-    renderPlannerCalendar();
-  } else {
-    if (calContainer) calContainer.classList.add('hidden');
+  const activeClass = 'flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center justify-center gap-1.5 transition-all text-[11px] sm:text-xs';
+  const inactiveClass = 'flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition-all text-[11px] sm:text-xs';
+
+  if (calContainer) calContainer.classList.add('hidden');
+  if (agendaContainer) agendaContainer.classList.add('hidden');
+  if (tableContainer) tableContainer.classList.add('hidden');
+
+  if (btnCal) btnCal.className = inactiveClass;
+  if (btnAgenda) btnAgenda.className = inactiveClass;
+  if (btnTable) btnTable.className = inactiveClass;
+
+  if (mode === 'agenda') {
+    if (agendaContainer) agendaContainer.classList.remove('hidden');
+    if (btnAgenda) btnAgenda.className = activeClass;
+    renderPlannerAgenda();
+  } else if (mode === 'table') {
     if (tableContainer) tableContainer.classList.remove('hidden');
-    if (btnCal) {
-      btnCal.className = 'px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-all';
-    }
-    if (btnTable) {
-      btnTable.className = 'px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm flex items-center gap-1.5 transition-all';
-    }
+    if (btnTable) btnTable.className = activeClass;
     renderPlannerTable();
+  } else {
+    state.plannerView = 'calendar';
+    if (calContainer) calContainer.classList.remove('hidden');
+    if (btnCal) btnCal.className = activeClass;
+    renderPlannerCalendar();
   }
   safeLucide();
 };
@@ -1496,7 +1502,11 @@ window.navigatePlannerMonth = function(delta) {
     state.plannerCalendarYear -= 1;
   }
   state.plannerSelectedDay = null;
-  renderPlannerCalendar();
+  if (state.plannerView === 'agenda') {
+    renderPlannerAgenda();
+  } else {
+    renderPlannerCalendar();
+  }
 };
 
 window.jumpPlannerCurrentMonth = function() {
@@ -1504,13 +1514,33 @@ window.jumpPlannerCurrentMonth = function() {
   state.plannerCalendarYear = parseInt(parts[0], 10);
   state.plannerCalendarMonth = parseInt(parts[1], 10);
   state.plannerSelectedDay = null;
-  renderPlannerCalendar();
+  if (state.plannerView === 'agenda') {
+    renderPlannerAgenda();
+  } else {
+    renderPlannerCalendar();
+  }
 };
 
 window.selectPlannerCalendarDay = function(dateStr) {
   state.plannerSelectedDay = dateStr;
   renderPlannerCalendar();
   renderPlannerSelectedDayDrawer(dateStr);
+  const drawer = document.getElementById('plannerSelectedDayDrawer');
+  if (drawer && !drawer.classList.contains('hidden')) {
+    setTimeout(() => {
+      if (window.innerWidth < 768) {
+        const headerOffset = 76;
+        const elementPosition = drawer.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
+      } else {
+        drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 80);
+  }
 };
 
 window.renderPlannerSelectedDayDrawer = function(dateStr) {
@@ -1529,34 +1559,34 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
   let html = `
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
       <div class="flex items-center gap-3">
-        <div class="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+        <div class="p-2.5 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30 shrink-0">
           <i data-lucide="calendar" class="w-5 h-5"></i>
         </div>
         <div>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <h4 class="text-sm font-extrabold text-white">Schedule for ${formatDisplayDate(dateStr)}</h4>
             ${isToday ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">Today</span>' : ''}
             ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 3 Days)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Under 3-Day Window</span>'}
           </div>
-          <p class="text-xs text-slate-400">${plannedVisits.length} planned targets scheduled for this date</p>
+          <p class="text-xs text-slate-400">${plannedVisits.length} planned target${plannedVisits.length === 1 ? '' : 's'} scheduled for this date</p>
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
         ${isEligibleToPlan ? `
-          <button onclick="openPlanVisitModal('${dateStr}')" class="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all">
+          <button type="button" onclick="openPlanVisitModal('${dateStr}')" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
             <i data-lucide="plus" class="w-3.5 h-3.5"></i> Plan Visit on ${dateStr}
           </button>
         ` : (isToday ? `
-          <button onclick="openUnplannedVisitModal()" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/20 transition-all">
-            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i> + Log Unplanned Visit for Today
+          <button type="button" onclick="openUnplannedVisitModal()" class="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i> + Log Unplanned Visit
           </button>
         ` : `
-          <span class="text-xs text-amber-400 font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            Cannot schedule planned visit (&lt; 3 days).
+          <span class="text-xs text-amber-400 font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex-1 sm:flex-initial text-center sm:text-left">
+            Cannot schedule (&lt; 3-day notice rule).
           </span>
         `)}
-        <button onclick="state.plannerSelectedDay = null; renderPlannerCalendar();" class="p-1.5 text-slate-400 hover:text-white">
+        <button type="button" onclick="state.plannerSelectedDay = null; renderPlannerCalendar();" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation shrink-0" title="Close drawer">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
@@ -1565,9 +1595,13 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
 
   if (plannedVisits.length === 0) {
     html += `
-      <div class="py-6 text-center text-slate-500 text-xs">
-        No planned calls scheduled for this day yet.
-        ${isEligibleToPlan ? ` Click <b class="text-sky-400 cursor-pointer" onclick="openPlanVisitModal('${dateStr}')">Plan Visit on ${dateStr}</b> to schedule your first clinic target.` : ''}
+      <div class="py-6 text-center text-slate-500 text-xs space-y-2">
+        <div>No planned calls scheduled for this day yet.</div>
+        ${isEligibleToPlan ? `
+          <button type="button" onclick="openPlanVisitModal('${dateStr}')" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Schedule Target on ${dateStr}
+          </button>
+        ` : ''}
       </div>
     `;
   } else {
@@ -1583,13 +1617,13 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
                 </span>
               </div>
               <h5 class="font-bold text-white text-xs mt-1.5 truncate" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h5>
-              <p class="text-[11px] text-slate-400">${v.clientCode} • ${v.doctorName || 'Doctor'}</p>
+              <p class="text-[11px] text-slate-400">${v.clientCode} • ${escapeHtml(v.doctorName || 'Doctor')}</p>
               <p class="text-[10px] text-slate-300 mt-1 truncate">${escapeHtml(v.purpose || 'Detailing')}</p>
             </div>
             <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
               <span class="text-[10px] text-slate-400 font-mono">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Day'}</span>
               ${v.status !== 'Completed' ? `
-                <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+                <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
                   <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
                 </button>
               ` : '<span class="text-[10px] text-emerald-400 font-bold">Executed</span>'}
@@ -1604,8 +1638,146 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
   safeLucide();
 };
 
+window.renderPlannerAgenda = function() {
+  const container = document.getElementById('plannerAgendaList');
+  if (!container) return;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const year = state.plannerCalendarYear;
+  const month = state.plannerCalendarMonth;
+  const monthStr = String(month).padStart(2, '0');
+  const monthPrefix = `${year}-${monthStr}`;
+
+  const titleEl = document.getElementById('plannerAgendaMonthTitle');
+  if (titleEl) {
+    titleEl.textContent = `${monthNames[month - 1]} ${year}`;
+  }
+
+  const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const scopedVisits = getScopedVisits();
+  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const todayStr = getSyncedTodayDate();
+
+  const monthVisits = scopedVisits.filter(v => v.date && v.date.startsWith(monthPrefix) && (v.visitCategory === 'Planned' || !v.visitCategory));
+
+  const totalCounterEl = document.getElementById('agendaTotalTargetsCount');
+  if (totalCounterEl) {
+    totalCounterEl.textContent = `${monthVisits.length} Planned Calls in ${monthNames[month - 1]}`;
+  }
+
+  let html = '';
+  let daysWithVisits = 0;
+
+  for (let day = 1; day <= totalDays; day++) {
+    const dayStr = String(day).padStart(2, '0');
+    const dateStr = `${year}-${monthStr}-${dayStr}`;
+    const dayVisits = monthVisits.filter(v => v.date === dateStr);
+    const isToday = (dateStr === todayStr || dateStr === state.dailyDate);
+    const isEligibleToPlan = (dateStr >= minDateStr);
+
+    if (dayVisits.length > 0 || isToday) {
+      daysWithVisits++;
+      const dateParts = dateStr.split('-').map(Number);
+      const dateObj = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+      const weekday = dateObj.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+      const displayDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+      html += `
+        <div class="glass-card rounded-2xl p-3.5 sm:p-4 border ${isToday ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-slate-800'} space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-800/80 gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-10 h-10 rounded-xl ${isToday ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-white'} flex flex-col items-center justify-center font-bold shrink-0">
+                <span class="text-[9px] uppercase tracking-wider text-slate-400 leading-none">${weekday}</span>
+                <span class="text-sm leading-tight">${day}</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-extrabold text-white text-xs sm:text-sm">${weekday}, ${displayDate}</h4>
+                  ${isToday ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">Today</span>' : ''}
+                </div>
+                <span class="text-[11px] text-slate-400">${dayVisits.length} planned target${dayVisits.length === 1 ? '' : 's'}</span>
+              </div>
+            </div>
+
+            ${isEligibleToPlan ? `
+              <button type="button" onclick="openPlanVisitModal('${dateStr}')" class="px-3 py-1.5 rounded-xl bg-sky-600/30 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 text-xs font-bold flex items-center gap-1 transition-all active:scale-95 touch-manipulation">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Plan Call
+              </button>
+            ` : (isToday ? `
+              <button type="button" onclick="openUnplannedVisitModal()" class="px-3 py-1.5 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-500/30 text-xs font-bold flex items-center gap-1 transition-all active:scale-95 touch-manipulation">
+                <i data-lucide="zap" class="w-3.5 h-3.5"></i> + Unplanned
+              </button>
+            ` : '')}
+          </div>
+
+          ${dayVisits.length === 0 ? `
+            <div class="py-2 text-center text-xs text-slate-500">
+              No planned calls scheduled for today yet.
+            </div>
+          ` : `
+            <div class="space-y-2">
+              ${dayVisits.map(v => `
+                <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
+                      <span class="font-bold text-white text-xs truncate">${escapeHtml(v.clientName)}</span>
+                      <span class="text-[10px] font-mono text-slate-400">(${v.clientCode})</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
+                      <span>🩺 ${escapeHtml(v.doctorName || 'Doctor')}</span>
+                      <span>•</span>
+                      <span>⏰ ${escapeHtml(v.timeSlot || 'Any Time')}</span>
+                      <span>•</span>
+                      <span class="text-slate-300">🎯 ${escapeHtml(v.purpose || 'Detailing')}</span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    ${v.status === 'Completed' ? `
+                      <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+                        <i data-lucide="check" class="w-3 h-3"></i> Completed
+                      </span>
+                    ` : `
+                      <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95 touch-manipulation">
+                        <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
+                      </button>
+                    `}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+  }
+
+  if (daysWithVisits === 0) {
+    html = `
+      <div class="py-12 text-center text-slate-400 space-y-3">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-sky-500/15 text-sky-400 flex items-center justify-center">
+          <i data-lucide="calendar-plus" class="w-6 h-6"></i>
+        </div>
+        <h4 class="font-bold text-white text-sm">No Planned Visits in ${monthNames[month - 1]} ${year}</h4>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto">Start scheduling target accounts for this month (3-day advance notice applies).</p>
+        <button type="button" onclick="openPlanVisitModal()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md active:scale-95 touch-manipulation">
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i> Schedule First Target
+        </button>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+  safeLucide();
+};
+
 window.renderPlannerTable = function() {
   const tbody = document.getElementById('plannerTableBody');
+  const cardsContainer = document.getElementById('plannerTableCards');
   if (!tbody) return;
 
   const searchQuery = (state.filters.plannerSearch || '').toLowerCase();
@@ -1629,7 +1801,40 @@ window.renderPlannerTable = function() {
 
   if (list.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-500">No scheduled visits match the current filter.</td></tr>';
+    if (cardsContainer) cardsContainer.innerHTML = '<div class="text-center py-8 text-slate-500 text-xs">No scheduled visits match the current filter.</div>';
     return;
+  }
+
+  if (cardsContainer) {
+    cardsContainer.innerHTML = list.map(v => {
+      const isCompleted = v.status === 'Completed';
+      return `
+        <div class="glass-card rounded-xl p-3.5 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isCompleted ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'}">
+              ${isCompleted ? '✓ Completed' : '📅 Planned'}
+            </span>
+          </div>
+          <div>
+            <h5 class="font-bold text-white text-xs">${escapeHtml(v.clientName)}</h5>
+            <p class="text-[11px] text-slate-400">${v.clientCode} • ${escapeHtml(v.doctorName || 'Doctor')}</p>
+          </div>
+          <div class="text-[11px] text-slate-300 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 space-y-1">
+            <div><b>Date:</b> ${v.date} (${v.timeSlot || 'Day Round'})</div>
+            <div><b>Objective:</b> ${escapeHtml(v.purpose || 'Scientific Detailing')}</div>
+            ${v.sampleProduct ? `<div><b>Sample:</b> ${escapeHtml(v.sampleProduct)} (${v.sampleUnits || 0}u)</div>` : ''}
+          </div>
+          <div class="pt-1 flex items-center justify-end gap-2">
+            ${!isCompleted ? `
+              <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 touch-manipulation">
+                <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
+              </button>
+            ` : '<span class="text-xs text-emerald-400 font-bold">Call Executed</span>'}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   tbody.innerHTML = list.map(v => {
@@ -1671,7 +1876,7 @@ window.renderPlannerTable = function() {
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           ${!isCompleted ? `
-            <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 mx-auto">
+            <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 mx-auto active:scale-95 touch-manipulation">
               <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
             </button>
           ` : `
@@ -1681,6 +1886,7 @@ window.renderPlannerTable = function() {
       </tr>
     `;
   }).join('');
+  safeLucide();
 };
 
 window.handlePlannerSearch = function(q) {
