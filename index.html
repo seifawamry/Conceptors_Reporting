@@ -115,6 +115,12 @@
           <span id="badgeDailyTotal" class="px-2 py-0.5 rounded-full text-[10px] bg-white/20 text-white font-extrabold">3</span>
         </button>
 
+        <button onclick="switchTab('daily-report')" id="tabBtn-daily-report" class="nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+          <i data-lucide="clipboard-list" class="w-4 h-4 text-cyan-400"></i>
+          <span>Daily Report</span>
+          <span id="badgeDailyReportCount" class="px-2 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 font-bold">0 Visits</span>
+        </button>
+
         <button onclick="switchTab('planner')" id="tabBtn-planner" class="nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
           <i data-lucide="calendar" class="w-4 h-4 text-sky-400"></i>
           <span>Monthly Visit Planner</span>
@@ -271,6 +277,210 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ================= TAB: DAILY REPORT (FIELD ACTIVITY & RETRIEVAL) ================= -->
+    <div id="tab-daily-report" class="tab-content hidden space-y-6">
+      <!-- Date Bar & Daily Audit Cockpit Header -->
+      <div class="glass-panel rounded-2xl p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-black text-base border border-cyan-500/30 shrink-0">
+            <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <h2 class="text-base font-extrabold text-white" id="dailyReportHeading">Daily Field Activity Report</h2>
+              <span id="dailyReportTzPill" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold inline-flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Live UAE Synced (GST)
+              </span>
+            </div>
+            <p class="text-xs text-slate-400" id="dailyReportSubtitle">Choose any day to audit planned schedules, completed calls, unvisited accounts & spontaneous unplanned visits</p>
+          </div>
+        </div>
+
+        <!-- Date Controls & Rep Filter Bar -->
+        <div class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <!-- Quick Day Offset Buttons -->
+          <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1 text-xs">
+            <button type="button" onclick="setDailyReportDateOffset(-1)" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Previous Day">‹ Prev</button>
+            <button type="button" onclick="setDailyReportDateToday()" class="px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm" title="Jump to Today (UAE Live)">Today</button>
+            <button type="button" onclick="setDailyReportDateOffset(1)" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Next Day">Next ›</button>
+          </div>
+
+          <!-- HTML5 Date Picker -->
+          <div class="relative flex items-center">
+            <input type="date" id="dailyReportDateInput" onchange="handleDailyReportDateChange(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-cyan-500 shadow-inner" title="Choose any date to retrieve all daily records">
+          </div>
+
+          <!-- Medical Rep Filter Dropdown -->
+          <select id="dailyReportRepFilter" onchange="handleDailyReportRepFilter(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:border-cyan-500 shadow-inner">
+            <option value="ALL">👥 All Medical Representatives</option>
+            <option value="T1">Dr. Shaimaa (Rep T1 - DXB/AUH)</option>
+            <option value="T2">Dr. Marsel (Rep T2 - Northern Emirates)</option>
+          </select>
+
+          <!-- Export CSV & Print Actions -->
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="exportDailyReportCSV()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Export this day's report as CSV spreadsheet">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span class="hidden sm:inline">Export CSV</span>
+            </button>
+            <button type="button" onclick="window.print()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-sm" title="Print this day's field report">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Day Audit Banner -->
+      <div id="dailyReportBanner" class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800/80 to-slate-900 border border-cyan-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-sm text-xs">
+        <div class="flex items-center gap-2">
+          <i data-lucide="calendar" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+          <span class="font-bold text-white text-sm" id="dailyReportBannerDate">Retrieving data...</span>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap" id="dailyReportBannerSummaryPills">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Executive Scorecard Summary KPI Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <!-- 1. Total Planned Calls -->
+        <div class="glass-card rounded-2xl p-3.5 border border-sky-500/30 bg-sky-950/20">
+          <div class="text-[10px] font-bold text-sky-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Planned Calls</span>
+            <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-sky-400"></i>
+          </div>
+          <div class="text-2xl font-black text-sky-400 mt-1" id="kpiDailyReportPlanned">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 font-medium">Scheduled for day</div>
+        </div>
+
+        <!-- 2. Visited (Planned Completed) -->
+        <div class="glass-card rounded-2xl p-3.5 border border-emerald-500/30 bg-emerald-950/20">
+          <div class="text-[10px] font-bold text-emerald-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Visited (Done)</span>
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+          </div>
+          <div class="text-2xl font-black text-emerald-400 mt-1" id="kpiDailyReportVisited">0</div>
+          <div class="text-[11px] text-emerald-300 mt-0.5 font-semibold" id="kpiDailyReportAdherence">0% Planned Visited</div>
+        </div>
+
+        <!-- 3. Unvisited (Planned Not Completed) -->
+        <div class="glass-card rounded-2xl p-3.5 border border-rose-500/30 bg-rose-950/20" id="kpiDailyReportUnvisitedCard">
+          <div class="text-[10px] font-bold text-rose-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Unvisited (Missed)</span>
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-400"></i>
+          </div>
+          <div class="text-2xl font-black text-rose-400 mt-1" id="kpiDailyReportUnvisited">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 font-medium" id="kpiDailyReportUnvisitedSub">Pending execution</div>
+        </div>
+
+        <!-- 4. Unplanned Visits -->
+        <div class="glass-card rounded-2xl p-3.5 border border-amber-500/30 bg-amber-950/20">
+          <div class="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Unplanned Visits</span>
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-400"></i>
+          </div>
+          <div class="text-2xl font-black text-amber-400 mt-1" id="kpiDailyReportUnplanned">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 font-medium">Beside planned ones</div>
+        </div>
+
+        <!-- 5. Total Visits Executed -->
+        <div class="glass-card rounded-2xl p-3.5 border border-teal-500/30 bg-teal-950/20">
+          <div class="text-[10px] font-bold text-teal-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Total Calls Done</span>
+            <i data-lucide="activity" class="w-3.5 h-3.5 text-teal-400"></i>
+          </div>
+          <div class="text-2xl font-black text-teal-400 mt-1" id="kpiDailyReportTotalDone">0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 font-medium">Visited + Unplanned</div>
+        </div>
+
+        <!-- 6. Field Orders Value -->
+        <div class="glass-card rounded-2xl p-3.5 border border-indigo-500/30 bg-indigo-950/20">
+          <div class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between">
+            <span>Field Orders</span>
+            <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-indigo-400"></i>
+          </div>
+          <div class="text-2xl font-black text-indigo-400 mt-1" id="kpiDailyReportOrdersValue">AED 0</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 font-semibold" id="kpiDailyReportOrdersCount">0 Bookings</div>
+        </div>
+      </div>
+
+      <!-- Medical Representatives Performance Breakdown Cards for Selected Day -->
+      <div class="glass-panel rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div>
+            <h3 class="font-extrabold text-white text-sm flex items-center gap-2">
+              <i data-lucide="users" class="w-4 h-4 text-cyan-400"></i>
+              Medical Representatives Daily Activity & Plan Execution
+            </h3>
+            <p class="text-xs text-slate-400">Breakdown of planned visits, completed calls, unvisited accounts and unplanned coverage per representative</p>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-400" id="dailyReportRepsCount">2 Representatives</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="dailyReportRepsContainer">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+
+      <!-- Unvisited Accounts Attention Callout (Dynamic Banner) -->
+      <div id="dailyReportUnvisitedAlert" class="space-y-3">
+        <!-- Injected via JS -->
+      </div>
+
+      <!-- Comprehensive Field Visits Roster & Detailing Log Table -->
+      <div class="glass-panel rounded-2xl p-5 space-y-4">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div>
+            <h3 class="font-extrabold text-white text-sm flex items-center gap-2">
+              <i data-lucide="list-checks" class="w-4 h-4 text-emerald-400"></i>
+              Detailed Field Calls & Detailing Log for Chosen Day
+            </h3>
+            <p class="text-xs text-slate-400">All planned vs. unplanned customer interactions, detailing feedback, samples and orders</p>
+          </div>
+
+          <!-- Table Search & Filter Pills -->
+          <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <input type="text" id="dailyReportSearch" oninput="handleDailyReportSearch(this.value)" placeholder="Search clinic, doctor or product..." class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-xl px-3 py-1.5 outline-none focus:border-cyan-500 w-full sm:w-56">
+
+            <div class="flex items-center p-1 bg-slate-900 border border-slate-700/80 rounded-xl text-xs overflow-x-auto no-scrollbar">
+              <button id="dailyReportFilter-ALL" type="button" onclick="handleDailyReportStatusFilter('ALL')" class="daily-report-filter-pill active px-2.5 py-1 rounded-lg font-bold text-[11px] bg-brand-600 text-white transition-all whitespace-nowrap">All</button>
+              <button id="dailyReportFilter-VISITED" type="button" onclick="handleDailyReportStatusFilter('VISITED')" class="daily-report-filter-pill px-2.5 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition-all whitespace-nowrap">Visited</button>
+              <button id="dailyReportFilter-UNVISITED" type="button" onclick="handleDailyReportStatusFilter('UNVISITED')" class="daily-report-filter-pill px-2.5 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition-all whitespace-nowrap">Unvisited</button>
+              <button id="dailyReportFilter-UNPLANNED" type="button" onclick="handleDailyReportStatusFilter('UNPLANNED')" class="daily-report-filter-pill px-2.5 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition-all whitespace-nowrap">⚡ Unplanned</button>
+              <button id="dailyReportFilter-PLANNED" type="button" onclick="handleDailyReportStatusFilter('PLANNED')" class="daily-report-filter-pill px-2.5 py-1 rounded-lg font-medium text-[11px] text-slate-400 hover:text-white transition-all whitespace-nowrap">All Planned</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Desktop Table View (>= 768px) -->
+        <div class="overflow-x-auto hidden md:block">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                <th class="py-2.5 px-3">Medical Rep</th>
+                <th class="py-2.5 px-3">Clinic & Account</th>
+                <th class="py-2.5 px-3">Visit Category & Status</th>
+                <th class="py-2.5 px-3">Time Slot</th>
+                <th class="py-2.5 px-3">Doctor Met</th>
+                <th class="py-2.5 px-3">Products & Samples</th>
+                <th class="py-2.5 px-3">Discussion / Outcome</th>
+                <th class="py-2.5 px-3 text-right">Order Placed</th>
+                <th class="py-2.5 px-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody id="dailyReportTableBody" class="divide-y divide-slate-800/60">
+              <!-- Injected via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Card View (< 768px) -->
+        <div id="dailyReportMobileCardsContainer" class="space-y-3 md:hidden">
+          <!-- Injected via JS -->
+        </div>
       </div>
     </div>
 
@@ -864,6 +1074,10 @@
     <button type="button" onclick="switchTab('daily')" id="mobileNavBtn-daily" class="mobile-nav-btn active flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-sky-400 font-bold transition-transform active:scale-95 touch-manipulation">
       <i data-lucide="calendar-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily</span>
+    </button>
+    <button type="button" onclick="switchTab('daily-report')" id="mobileNavBtn-daily-report" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+      <i data-lucide="clipboard-list" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily Rep</span>
     </button>
     <button type="button" onclick="switchTab('planner')" id="mobileNavBtn-planner" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
       <i data-lucide="calendar" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
@@ -1538,6 +1752,34 @@
           <button type="submit" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold">Save Settings</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: VIEW DAILY REPORT VISIT DETAILS ================= -->
+  <div id="dailyReportVisitModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-cyan-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-cyan-500/20 text-cyan-400" id="dailyReportModalIcon">
+            <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white" id="dailyReportModalTitle">Field Call Detailing Record</h3>
+            <p class="text-[11px] text-slate-400" id="dailyReportModalSubtitle">Audited Detailing Report</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeDailyReportVisitModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <div class="py-4 space-y-4" id="dailyReportModalContent">
+        <!-- Injected via JS -->
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeDailyReportVisitModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">Close Window</button>
+      </div>
     </div>
   </div>
 
