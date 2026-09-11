@@ -15,6 +15,376 @@ const STORAGE_KEY_SETTINGS = 'conceptors_crm_manager_settings';
 const STORAGE_KEY_NOTIFS = 'conceptors_crm_notifications';
 
 // =========================================================================
+// SUPABASE CLOUD DATABASE CONFIGURATION & LIVE REST ENGINE
+// =========================================================================
+
+const SUPABASE_URL = 'https://pywtpdnhomommitlidqo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5d3RwZG5ob21vbW1pdGxpZHFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MDcyMDMsImV4cCI6MjEwNDQ4MzIwM30.tNq5iHeG4A6clPXW8LqbCl4t1O8RMq8WRG6UkUApxb0';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yKZHaHtIklq258M-XiPnlQ_Y_GC1HwU';
+
+window.SUPABASE_CONFIG = {
+  url: SUPABASE_URL,
+  anonKey: SUPABASE_ANON_KEY,
+  publishableKey: SUPABASE_PUBLISHABLE_KEY
+};
+
+let supabaseClient = null;
+try {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+  }
+} catch (e) {
+  console.warn('Supabase JS Client SDK init:', e);
+}
+
+// Resilient zero-dependency PostgREST fetch engine with automatic headers and error handling
+async function supabaseRest(endpoint, options = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/${endpoint.replace(/^\//, '')}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': options.prefer || (options.method === 'POST' || options.method === 'PATCH' ? 'return=minimal' : 'return=representation'),
+    ...(options.headers || {})
+  };
+  try {
+    const res = await fetch(url, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      return { data: null, error: { status: res.status, message: errTxt } };
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if (res.status !== 204 && contentType.includes('application/json')) {
+      const json = await res.json();
+      return { data: json, error: null };
+    }
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { status: 0, message: err.message } };
+  }
+}
+window.supabaseRest = supabaseRest;
+
+// UI Connection Indicator
+function updateSupabaseSyncBadge(status, text) {
+  const badge = document.getElementById('supabaseSyncBadge');
+  const dot = document.getElementById('supabaseSyncDot');
+  const label = document.getElementById('supabaseSyncText');
+  if (!badge || !dot || !label) return;
+
+  if (status === 'connected') {
+    dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+    label.className = 'font-mono text-emerald-300';
+    label.textContent = text || '⚡ Cloud Synced';
+    badge.title = 'Supabase Cloud Database Connected & Synced (Click to Force Refresh)';
+  } else if (status === 'syncing') {
+    dot.className = 'w-2 h-2 rounded-full bg-sky-400 shrink-0 animate-ping';
+    label.className = 'font-mono text-sky-300';
+    label.textContent = text || 'Syncing Cloud...';
+    badge.title = 'Synchronizing with Supabase Cloud';
+  } else if (status === 'offline') {
+    dot.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0';
+    label.className = 'font-mono text-amber-300';
+    label.textContent = text || '💾 Local Cache';
+    badge.title = 'Offline / Local Cache Mode (Click to retry cloud connection)';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-slate-400 shrink-0';
+    label.className = 'font-mono text-slate-400';
+    label.textContent = text || 'Cloud Ready';
+  }
+}
+window.updateSupabaseSyncBadge = updateSupabaseSyncBadge;
+
+// Data Mappers: Database (snake_case) <-> Frontend State (camelCase)
+function mapVisitFromDb(row) {
+  return {
+    id: row.id,
+    repId: row.rep_id,
+    territory: row.rep_id,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    date: row.date,
+    timeSlot: row.time_slot || 'Morning Round (09:00 - 12:00)',
+    visitCategory: row.visit_category || 'Planned',
+    status: row.status || 'Planned',
+    doctorName: row.doctor_name || '',
+    doctorRole: row.doctor_role || 'Lead Veterinarian',
+    productsDetailed: row.products_detailed || [],
+    doctorSentiment: row.doctor_sentiment || 'Pending',
+    samplesDropped: row.samples_dropped || 0,
+    sampleProduct: row.sample_product || '',
+    orderPlaced: Boolean(row.order_placed),
+    orderRef: row.order_ref || '',
+    orderValueAed: Number(row.order_value_aed) || 0,
+    purpose: row.purpose || '',
+    unplannedReason: row.unplanned_reason || '',
+    outcome: row.outcome || '',
+    missedReason: row.missed_reason || '',
+    nextFollowUp: row.next_follow_up || '',
+    nextFollowUpPurpose: row.next_follow_up_purpose || ''
+  };
+}
+
+function mapVisitToDb(v) {
+  return {
+    id: v.id,
+    rep_id: v.repId || v.territory || 'T1',
+    client_code: v.clientCode,
+    client_name: v.clientName,
+    location: v.location || 'UAE',
+    date: v.date,
+    time_slot: v.timeSlot || 'Morning Round (09:00 - 12:00)',
+    visit_category: v.visitCategory || 'Planned',
+    status: v.status || 'Planned',
+    doctor_name: v.doctorName || '',
+    doctor_role: v.doctorRole || 'Lead Veterinarian',
+    products_detailed: v.productsDetailed || [],
+    doctor_sentiment: v.doctorSentiment || 'Pending',
+    samples_dropped: v.samplesDropped || 0,
+    sample_product: v.sampleProduct || '',
+    order_placed: Boolean(v.orderPlaced),
+    order_ref: v.orderRef || '',
+    order_value_aed: Number(v.orderValueAed) || 0,
+    purpose: v.purpose || '',
+    unplanned_reason: v.unplannedReason || '',
+    outcome: v.outcome || '',
+    missed_reason: v.missedReason || '',
+    next_follow_up: v.nextFollowUp || null,
+    next_follow_up_purpose: v.nextFollowUpPurpose || '',
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapOrderFromDb(row) {
+  const items = (row.order_items || []).map(it => ({
+    productCode: it.product_code,
+    productName: it.product_name,
+    unitPrice: Number(it.unit_price) || 0,
+    salesQty: Number(it.sales_qty) || 0,
+    focQty: Number(it.foc_qty) || 0,
+    total: Number(it.line_total) || 0
+  }));
+  return {
+    invoiceNumber: row.invoice_number,
+    date: row.date,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    territory: row.territory,
+    approvalStatus: row.approval_status || 'Pending',
+    approvedBy: row.approved_by || null,
+    approvedAt: row.approved_at || null,
+    paymentTerms: row.payment_terms || '30 Days Credit',
+    deliveryUrgency: row.delivery_urgency || 'Normal (48h)',
+    items,
+    totalExcVat: Number(row.subtotal_exc_vat) || 0,
+    vatAmount: Number(row.vat_amount) || 0,
+    totalIncVat: Number(row.total_inc_vat) || 0
+  };
+}
+
+function mapOrderToDb(o) {
+  return {
+    invoice_number: o.invoiceNumber,
+    date: o.date,
+    rep_id: o.repId,
+    rep_name: o.repName,
+    client_code: o.clientCode,
+    client_name: o.clientName,
+    location: o.location,
+    territory: o.territory,
+    approval_status: o.approvalStatus || 'Pending',
+    approved_by: o.approvedBy || null,
+    approved_at: o.approvedAt || null,
+    payment_terms: o.paymentTerms || '30 Days Credit',
+    delivery_urgency: o.deliveryUrgency || 'Normal (48h)',
+    subtotal_exc_vat: Number(o.totalExcVat) || 0,
+    vat_amount: Number(o.vatAmount) || 0,
+    total_inc_vat: Number(o.totalIncVat) || 0,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapPlanFromDb(row) {
+  return {
+    id: row.id,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    year: row.year,
+    month: row.month,
+    targetVisits: row.target_visits,
+    status: row.status,
+    submittedAt: row.submitted_at,
+    approvedAt: row.approved_at,
+    approvedBy: row.approved_by,
+    managerNotes: row.manager_notes || ''
+  };
+}
+
+function mapCustomerFromDb(row) {
+  return {
+    code: row.code,
+    name: row.name,
+    location: row.location,
+    territory: row.territory,
+    repId: row.rep_id,
+    tier: row.tier,
+    contactPerson: row.contact_person,
+    phone: row.phone
+  };
+}
+
+function mapProductFromDb(row) {
+  return {
+    code: row.code,
+    id: row.sku_id || row.code,
+    brand: row.brand,
+    name: row.name,
+    unitPrice: Number(row.unit_price) || 0,
+    currentStock: Number(row.current_stock) || 0,
+    category: row.category
+  };
+}
+
+function mapNotifFromDb(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    orderNumber: row.order_number,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    totalExcVat: Number(row.total_exc_vat) || 0,
+    totalIncVat: Number(row.total_inc_vat) || 0,
+    timestamp: row.timestamp,
+    read: Boolean(row.read),
+    approvalStatus: row.approval_status,
+    itemsSummary: row.items_summary,
+    paymentTerms: row.payment_terms,
+    deliveryUrgency: row.delivery_urgency,
+    items: row.items_json || []
+  };
+}
+
+function mapNotifToDb(n) {
+  return {
+    id: n.id,
+    type: n.type || 'ORDER_SUBMITTED',
+    title: n.title,
+    order_number: n.orderNumber,
+    rep_id: n.repId,
+    rep_name: n.repName,
+    client_code: n.clientCode,
+    client_name: n.clientName,
+    location: n.location,
+    total_exc_vat: Number(n.totalExcVat) || 0,
+    total_inc_vat: Number(n.totalIncVat) || 0,
+    timestamp: n.timestamp || new Date().toISOString(),
+    read: Boolean(n.read),
+    approval_status: n.approvalStatus || 'Pending',
+    items_summary: n.itemsSummary,
+    payment_terms: n.paymentTerms,
+    delivery_urgency: n.deliveryUrgency,
+    items_json: n.items || []
+  };
+}
+
+async function syncWithSupabase(force = false) {
+  updateSupabaseSyncBadge('syncing', 'Syncing Cloud...');
+  try {
+    const visitsRes = await supabaseRest('visits?select=*&order=date.desc');
+    if (visitsRes.error) {
+      if (visitsRes.error.status === 404) {
+        console.info('Supabase: Schema not yet migrated. Operating in local cache mode.');
+        updateSupabaseSyncBadge('offline', '💾 Local Mode (Run SQL)');
+        return;
+      }
+      throw new Error(visitsRes.error.message || 'Visits fetch error');
+    }
+
+    if (visitsRes.data && Array.isArray(visitsRes.data)) {
+      if (visitsRes.data.length > 0) {
+        state.visits = visitsRes.data.map(mapVisitFromDb);
+      }
+    }
+
+    const ordersRes = await supabaseRest('orders?select=*,order_items(*)&order=date.desc');
+    if (ordersRes.data && Array.isArray(ordersRes.data) && ordersRes.data.length > 0) {
+      state.orders = ordersRes.data.map(mapOrderFromDb);
+    }
+
+    const plansRes = await supabaseRest('monthly_plans?select=*');
+    if (plansRes.data && Array.isArray(plansRes.data) && plansRes.data.length > 0) {
+      state.monthlyPlans = plansRes.data.map(mapPlanFromDb);
+    }
+
+    const custRes = await supabaseRest('customers?select=*');
+    if (custRes.data && Array.isArray(custRes.data) && custRes.data.length > 0) {
+      state.customers = custRes.data.map(mapCustomerFromDb);
+    }
+
+    const prodRes = await supabaseRest('products?select=*');
+    if (prodRes.data && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
+      state.products = prodRes.data.map(mapProductFromDb);
+    }
+
+    const notifRes = await supabaseRest('notifications?select=*&order=timestamp.desc');
+    if (notifRes.data && Array.isArray(notifRes.data) && notifRes.data.length > 0) {
+      state.notifications = notifRes.data.map(mapNotifFromDb);
+    }
+
+    const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
+    if (setRes.data && Array.isArray(setRes.data) && setRes.data.length > 0) {
+      state.managerSettings = {
+        managerEmails: setRes.data[0].manager_emails,
+        soundAlert: Boolean(setRes.data[0].sound_alert),
+        toastAlert: Boolean(setRes.data[0].toast_alert)
+      };
+    }
+
+    persistData();
+    renderAll();
+    updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    if (force) {
+      showToast('Cloud Synchronized', 'All visits, orders, monthly plans and clinics refreshed from Supabase.', 'success');
+    }
+  } catch (err) {
+    console.warn('Supabase sync warning (using local store):', err);
+    updateSupabaseSyncBadge('offline', '💾 Local Mode');
+  }
+}
+window.syncWithSupabase = syncWithSupabase;
+
+// Field Stock Request Module (Submits to Supabase stock_requests)
+window.submitStockRequest = async function(reqData) {
+  const stockReq = {
+    id: `STK-REQ-${Date.now().toString().slice(-6)}`,
+    rep_id: reqData.repId || state.currentUser?.territory || 'T1',
+    rep_name: reqData.repName || state.currentUser?.name || 'Representative',
+    product_code: reqData.productCode,
+    product_name: reqData.productName,
+    request_type: reqData.requestType || 'Sample Request',
+    quantity: parseInt(reqData.quantity) || 1,
+    status: 'Pending',
+    reason: reqData.reason || '',
+    requested_date: getSyncedTodayDate()
+  };
+  const res = await supabaseRest('stock_requests', { method: 'POST', body: stockReq });
+  return res;
+};
+
+// =========================================================================
 // REAL-TIME TIMEZONE & LIVE DATE ENGINE (UAE GST UTC+4)
 // =========================================================================
 
@@ -135,6 +505,8 @@ function initCrmApp() {
     renderAll();
     startLiveTimeTicker();
     safeLucide();
+    // Asynchronous background cloud sync with Supabase
+    syncWithSupabase();
   } catch (err) {
     console.error('CRITICAL: CRM App Initialization error:', err);
     try { renderAll(); } catch (renderErr) { console.error('Render fallback error:', renderErr); }
@@ -2701,6 +3073,16 @@ window.handlePlannedVisitSubmit = function(e) {
   closeSubmitPlannedModal();
   showToast('Planned Visit Report Submitted', `Field call report recorded for ${visit.clientName}.`, 'success');
 
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(visit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase visit update warning:', res.error);
+    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+  });
+
   if (orderPlaced) {
     setTimeout(() => {
       openOrderModal(visit.clientCode, visit.repId);
@@ -2868,6 +3250,16 @@ window.handleUnplannedVisitSubmit = function(e) {
   persistData();
   closeUnplannedVisitModal();
   showToast('⚡ Unplanned Visit Recorded', `Spontaneous visit to ${newUnplannedVisit.clientName} added beside planned schedule for ${date}.`, 'success');
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(newUnplannedVisit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase unplanned visit insert warning:', res.error);
+    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+  });
 
   if (orderPlaced) {
     setTimeout(() => {
@@ -3609,6 +4001,18 @@ window.submitPlanToManager = function(planId) {
   state.notifications.unshift(notif);
 
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    body: { status: 'Submitted', submitted_at: plan.submittedAt, updated_at: new Date().toISOString() }
+  });
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
   playNotificationChime();
   showToast('Plan Submitted to Senior Management', 'Your monthly plan is now awaiting Senior Manager approval.', 'success');
   renderAll();
@@ -3623,6 +4027,13 @@ window.approveMonthlyPlan = function(planId) {
   plan.approvedBy = 'Dr. Sameh Ageez (Senior Sales Manager)';
 
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    body: { status: 'Approved', approved_at: plan.approvedAt, approved_by: plan.approvedBy, updated_at: new Date().toISOString() }
+  });
+
   showToast('Monthly Plan Approved!', `Plan for ${plan.repName} approved and released for field execution.`, 'success');
   renderAll();
 };
@@ -3751,6 +4162,17 @@ window.handlePlanVisitSubmit = function(e) {
   state.dailyReportDate = date;
   state.filters.dailyReportStatus = 'ALL';
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(newPlannedVisit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase planned visit insert warning:', res.error);
+    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+  });
+
   closePlanVisitModal();
   showToast('Target Added to Monthly Plan', `Scheduled planned visit for ${newPlannedVisit.clientName} on ${date}.`, 'success');
   renderAll();
@@ -4239,6 +4661,40 @@ window.handleOrderSubmit = function(e) {
   state.notifications.unshift(newNotif);
 
   persistData();
+
+  // Cloud write-through to Supabase for order, line items, and notification
+  (async () => {
+    try {
+      await supabaseRest('orders', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapOrderToDb(newOrder)
+      });
+      for (const it of items) {
+        await supabaseRest('order_items', {
+          method: 'POST',
+          body: {
+            order_number: orderNumber,
+            product_code: it.productCode,
+            product_name: it.productName,
+            unit_price: it.unitPrice,
+            sales_qty: it.salesQty,
+            foc_qty: it.focQty,
+            line_total: it.total
+          }
+        });
+      }
+      await supabaseRest('notifications', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapNotifToDb(newNotif)
+      });
+      updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    } catch (err) {
+      console.warn('Supabase order write warning:', err);
+    }
+  })();
+
   closeOrderModal();
 
   if (state.managerSettings.soundAlert) playNotificationChime();
@@ -4359,6 +4815,13 @@ function renderManagerNotifications() {
 window.markAllNotificationsRead = function() {
   state.notifications.forEach(n => { n.read = true; });
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('notifications?read=eq.false', {
+    method: 'PATCH',
+    body: { read: true }
+  });
+
   updateNotificationBell();
   renderManagerNotifications();
   showToast('Notifications Acknowledged', 'All notifications marked as read.', 'info');
@@ -4389,6 +4852,26 @@ window.approveOrderDirect = function(orderNum) {
   }
 
   persistData();
+
+  // Cloud write-through to Supabase
+  if (order) {
+    supabaseRest(`orders?invoice_number=eq.${encodeURIComponent(orderNum)}`, {
+      method: 'PATCH',
+      body: {
+        approval_status: 'Approved',
+        approved_by: order.approvedBy,
+        approved_at: order.approvedAt,
+        updated_at: new Date().toISOString()
+      }
+    });
+  }
+  if (notif) {
+    supabaseRest(`notifications?order_number=eq.${encodeURIComponent(orderNum)}`, {
+      method: 'PATCH',
+      body: { approval_status: 'Approved', read: true }
+    });
+  }
+
   showToast('Order Approved', `Order #${orderNum} authorized and released for commercial delivery.`, 'success');
   renderAll();
 };
@@ -5418,6 +5901,20 @@ window.handleSaveManagerSettings = function(e) {
   };
 
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('manager_settings', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: {
+      id: 'default',
+      manager_emails: state.managerSettings.managerEmails,
+      sound_alert: state.managerSettings.soundAlert,
+      toast_alert: state.managerSettings.toastAlert,
+      updated_at: new Date().toISOString()
+    }
+  });
+
   closeManagerSettingsModal();
   showToast('Settings Saved', 'Senior manager notification preferences updated.', 'success');
 };

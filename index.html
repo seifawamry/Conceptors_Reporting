@@ -68,6 +68,12 @@
             <span id="uaeLiveClock" class="font-mono text-emerald-300">UAE --:-- GST</span>
           </div>
 
+          <!-- Supabase Live Cloud Sync Badge -->
+          <div id="supabaseSyncBadge" class="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0" onclick="syncWithSupabase(true)" title="Supabase Cloud Synchronization (Click to Force Sync)">
+            <span id="supabaseSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            <span id="supabaseSyncText" class="font-mono text-emerald-300">⚡ Cloud Synced</span>
+          </div>
+
           <!-- Theme Toggle Button (Bright / Dark Mode) -->
           <button id="btnThemeToggle" type="button" onclick="toggleTheme()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Toggle Bright / Dark Screen Mode">
             <i id="themeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
@@ -1893,7 +1899,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="./crm_data.js?v=2.6"></script>
-  <script src="./crm_app.js?v=2.6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./crm_data.js?v=3.0"></script>
+  <script src="./crm_app.js?v=3.0"></script>
 </body>
 </html>
