@@ -13,9 +13,29 @@ const STORAGE_KEY_ORDERS = 'conceptors_crm_orders';
 const STORAGE_KEY_PLANS = 'conceptors_crm_monthly_plans';
 const STORAGE_KEY_SETTINGS = 'conceptors_crm_manager_settings';
 const STORAGE_KEY_NOTIFS = 'conceptors_crm_notifications';
+const STORAGE_KEY_GDRIVE_URL = 'conceptors_crm_gdrive_url';
 
 // =========================================================================
-// SUPABASE CLOUD DATABASE CONFIGURATION & LIVE REST ENGINE
+// GOOGLE DRIVE & GOOGLE SHEETS CLOUD SYNC ENGINE
+// Keeps Laptop & Mobile Phone 100% In Sync + Auto-Updates Drive CSVs
+// =========================================================================
+
+function getGoogleDriveUrl() {
+  return localStorage.getItem(STORAGE_KEY_GDRIVE_URL) || window.CONCEPTORS_GDRIVE_URL || '';
+}
+window.getGoogleDriveUrl = getGoogleDriveUrl;
+
+function setGoogleDriveUrl(url) {
+  if (url && typeof url === 'string') {
+    localStorage.setItem(STORAGE_KEY_GDRIVE_URL, url.trim());
+  } else {
+    localStorage.removeItem(STORAGE_KEY_GDRIVE_URL);
+  }
+}
+window.setGoogleDriveUrl = setGoogleDriveUrl;
+
+// =========================================================================
+// SUPABASE CLOUD DATABASE CONFIGURATION & REST CLIENT (FALLBACK ENGINE)
 // =========================================================================
 
 const SUPABASE_URL = 'https://pywtpdnhomommitlidqo.supabase.co';
@@ -38,7 +58,6 @@ try {
   console.warn('Supabase JS Client SDK init:', e);
 }
 
-// Resilient zero-dependency PostgREST fetch engine with automatic headers and error handling
 async function supabaseRest(endpoint, options = {}) {
   const url = `${SUPABASE_URL}/rest/v1/${endpoint.replace(/^\//, '')}`;
   const headers = {
@@ -70,35 +89,170 @@ async function supabaseRest(endpoint, options = {}) {
 }
 window.supabaseRest = supabaseRest;
 
-// UI Connection Indicator
-function updateSupabaseSyncBadge(status, text) {
-  const badge = document.getElementById('supabaseSyncBadge');
-  const dot = document.getElementById('supabaseSyncDot');
-  const label = document.getElementById('supabaseSyncText');
+// Unified Cloud & Google Drive UI Connection Indicator
+function updateCloudSyncBadge(status, text) {
+  const badge = document.getElementById('cloudSyncBadge') || document.getElementById('supabaseSyncBadge');
+  const dot = document.getElementById('cloudSyncDot') || document.getElementById('supabaseSyncDot');
+  const label = document.getElementById('cloudSyncText') || document.getElementById('supabaseSyncText');
   if (!badge || !dot || !label) return;
 
   if (status === 'connected') {
     dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
     label.className = 'font-mono text-emerald-300';
-    label.textContent = text || '⚡ Cloud Synced';
-    badge.title = 'Supabase Cloud Database Connected & Synced (Click to Force Refresh)';
+    label.textContent = text || '🟢 Drive Synced';
+    badge.title = 'Google Drive Cloud Connected (Mobile & Laptop 100% Synced) - Click to Manage';
   } else if (status === 'syncing') {
     dot.className = 'w-2 h-2 rounded-full bg-sky-400 shrink-0 animate-ping';
     label.className = 'font-mono text-sky-300';
-    label.textContent = text || 'Syncing Cloud...';
-    badge.title = 'Synchronizing with Supabase Cloud';
+    label.textContent = text || '🔄 Syncing...';
+    badge.title = 'Synchronizing data with Google Drive Cloud';
+  } else if (status === 'supabase') {
+    dot.className = 'w-2 h-2 rounded-full bg-cyan-400 shrink-0';
+    label.className = 'font-mono text-cyan-300';
+    label.textContent = text || '⚡ Supabase Synced';
+    badge.title = 'Supabase Cloud Database Connected';
   } else if (status === 'offline') {
     dot.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0';
     label.className = 'font-mono text-amber-300';
     label.textContent = text || '💾 Local Cache';
-    badge.title = 'Offline / Local Cache Mode (Click to retry cloud connection)';
+    badge.title = 'Offline / Local Cache Mode (Click to Connect Google Drive)';
   } else {
     dot.className = 'w-2 h-2 rounded-full bg-slate-400 shrink-0';
     label.className = 'font-mono text-slate-400';
-    label.textContent = text || 'Cloud Ready';
+    label.textContent = text || '☁️ Cloud Sync';
+    badge.title = 'Click to configure Google Drive Cloud Sync';
   }
 }
-window.updateSupabaseSyncBadge = updateSupabaseSyncBadge;
+window.updateCloudSyncBadge = updateCloudSyncBadge;
+window.updateSupabaseSyncBadge = updateCloudSyncBadge; // Backward compatibility
+
+// Asynchronous background push to Google Drive Web App
+async function pushToGoogleDrive(action, payload = {}) {
+  const gdriveUrl = getGoogleDriveUrl();
+  if (!gdriveUrl) return false;
+  try {
+    const bodyObj = {
+      action,
+      user: (state.currentUser && state.currentUser.name) || 'Representative',
+      ...payload
+    };
+    // Send as text/plain to strictly prevent browser CORS preflight OPTIONS requests
+    fetch(gdriveUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(bodyObj),
+      redirect: 'follow'
+    }).then(res => res.json()).then(resJson => {
+      if (resJson && resJson.status === 'success') {
+        updateCloudSyncBadge('connected', '🟢 Drive Synced');
+      }
+    }).catch(err => {
+      console.warn('Background Google Drive sync push warning:', err);
+    });
+    return true;
+  } catch (e) {
+    console.warn('pushToGoogleDrive exception:', e);
+    return false;
+  }
+}
+window.pushToGoogleDrive = pushToGoogleDrive;
+
+// Complete Two-Way Sync with Google Drive
+async function syncWithGoogleDrive(force = false) {
+  const gdriveUrl = getGoogleDriveUrl();
+  if (!gdriveUrl) {
+    // If no Google Drive URL configured, fallback to Supabase check
+    return syncWithSupabase(force);
+  }
+
+  updateCloudSyncBadge('syncing', '🔄 Syncing Drive...');
+  try {
+    const res = await fetch(`${gdriveUrl}?action=GET_ALL&_t=${Date.now()}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.status !== 'success' || !json.data) {
+      throw new Error(json.message || 'Invalid response from Google Drive');
+    }
+
+    const cloudData = json.data;
+    let newVisitsMerged = 0;
+    let newOrdersMerged = 0;
+
+    // 1. Two-Way Merge Visits (Never delete any visits!)
+    if (Array.isArray(cloudData.visits)) {
+      const cloudVisitMap = new Map(cloudData.visits.map(v => [v.id, v]));
+      const localVisitMap = new Map((state.visits || []).map(v => [v.id, v]));
+
+      cloudVisitMap.forEach((cv, id) => {
+        if (!localVisitMap.has(id)) {
+          state.visits.unshift(cv);
+          newVisitsMerged++;
+        } else {
+          const lv = localVisitMap.get(id);
+          if (cv.status !== lv.status || cv.outcome !== lv.outcome || cv.doctorSentiment !== lv.doctorSentiment) {
+            Object.assign(lv, cv);
+          }
+        }
+      });
+
+      // Push any locally recorded visits that are not yet in Google Drive
+      const unpushedVisits = (state.visits || []).filter(lv => !cloudVisitMap.has(lv.id));
+      if (unpushedVisits.length > 0) {
+        pushToGoogleDrive('SYNC_ALL', { data: { visits: unpushedVisits } });
+      }
+    }
+
+    // 2. Two-Way Merge Orders
+    if (Array.isArray(cloudData.orders)) {
+      const cloudOrderMap = new Map(cloudData.orders.map(o => [o.invoiceNumber, o]));
+      const localOrderMap = new Map((state.orders || []).map(o => [o.invoiceNumber, o]));
+
+      cloudOrderMap.forEach((co, inv) => {
+        if (!localOrderMap.has(inv)) {
+          state.orders.unshift(co);
+          newOrdersMerged++;
+        } else {
+          const lo = localOrderMap.get(inv);
+          if (co.approvalStatus !== lo.approvalStatus) {
+            lo.approvalStatus = co.approvalStatus;
+            lo.approvedBy = co.approvedBy;
+            lo.approvedAt = co.approvedAt;
+          }
+        }
+      });
+
+      const unpushedOrders = (state.orders || []).filter(lo => !cloudOrderMap.has(lo.invoiceNumber));
+      if (unpushedOrders.length > 0) {
+        pushToGoogleDrive('SYNC_ALL', { data: { orders: unpushedOrders } });
+      }
+    }
+
+    // 3. Merge Monthly Plans
+    if (Array.isArray(cloudData.monthlyPlans) && cloudData.monthlyPlans.length > 0) {
+      state.monthlyPlans = cloudData.monthlyPlans;
+    }
+
+    persistData();
+    renderAll();
+    updateCloudSyncBadge('connected', '🟢 Drive Synced');
+
+    if (force) {
+      showToast('☁️ Google Drive Synchronized', `Connected to Google Drive! Merged ${newVisitsMerged} visits and ${newOrdersMerged} orders across your devices.`, 'success');
+    }
+    return { success: true };
+  } catch (err) {
+    console.warn('Google Drive sync warning (operating in local cache):', err);
+    updateCloudSyncBadge('offline', '💾 Local Mode');
+    if (force) {
+      showToast('Google Drive Sync Notice', 'Could not reach Google Drive script. Operating in local storage mode. Check your Web App URL in settings.', 'warning');
+    }
+    return { success: false, error: err.message };
+  }
+}
+window.syncWithGoogleDrive = syncWithGoogleDrive;
 
 // Data Mappers: Database (snake_case) <-> Frontend State (camelCase)
 function mapVisitFromDb(row) {
@@ -319,9 +473,21 @@ async function syncWithSupabase(force = false) {
       }
     }
 
-    const ordersRes = await supabaseRest('orders?select=*,order_items(*)&order=date.desc');
+    const [ordersRes, itemsRes] = await Promise.all([
+      supabaseRest('orders?select=*&order=date.desc'),
+      supabaseRest('order_items?select=*')
+    ]);
     if (ordersRes.data && Array.isArray(ordersRes.data) && ordersRes.data.length > 0) {
-      state.orders = ordersRes.data.map(mapOrderFromDb);
+      const allItems = (itemsRes && itemsRes.data && Array.isArray(itemsRes.data)) ? itemsRes.data : [];
+      const itemsByOrder = {};
+      allItems.forEach(it => {
+        if (!itemsByOrder[it.order_number]) itemsByOrder[it.order_number] = [];
+        itemsByOrder[it.order_number].push(it);
+      });
+      state.orders = ordersRes.data.map(o => {
+        o.order_items = itemsByOrder[o.invoice_number] || [];
+        return mapOrderFromDb(o);
+      });
     }
 
     const plansRes = await supabaseRest('monthly_plans?select=*');
@@ -505,8 +671,33 @@ function initCrmApp() {
     renderAll();
     startLiveTimeTicker();
     safeLucide();
-    // Asynchronous background cloud sync with Supabase
-    syncWithSupabase();
+
+    // Automatic Cloud Sync: Prefer Google Drive, fallback to Supabase
+    if (getGoogleDriveUrl()) {
+      syncWithGoogleDrive();
+    } else {
+      syncWithSupabase();
+    }
+
+    // Auto-sync on window focus (so mobile phone and laptop sync automatically when switching tabs or unlocking phone)
+    window.addEventListener('focus', () => {
+      if (getGoogleDriveUrl()) {
+        syncWithGoogleDrive(false);
+      } else {
+        syncWithSupabase(false);
+      }
+    });
+
+    // Periodic background sync every 30s when tab is active
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        if (getGoogleDriveUrl()) {
+          syncWithGoogleDrive(false);
+        } else {
+          syncWithSupabase(false);
+        }
+      }
+    }, 30000);
   } catch (err) {
     console.error('CRITICAL: CRM App Initialization error:', err);
     try { renderAll(); } catch (renderErr) { console.error('Render fallback error:', renderErr); }
@@ -591,12 +782,10 @@ function loadStoredData() {
 
   state.dailyReportDate = state.dailyReportDate || getSyncedTodayDate();
 
-  // Ensure clean pending planned calls for today so representatives can perform real-time field check-in and unplanned logging
+  // Ensure daily report date is initialized to UAE live today
   const todayStr = getSyncedTodayDate();
-  const hasStaleSyntheticToday = (state.visits || []).some(v => v.date === todayStr && (v.id.includes('-MISSED') || v.id.includes('-UNP')));
-  if (hasStaleSyntheticToday) {
-    state.visits = state.visits.filter(v => !(v.date === todayStr && (v.id.includes('-MISSED') || v.id.includes('-UNP') || v.id.startsWith(`VIS-${todayStr.replace(/-/g, '')}-`))));
-    state.orders = state.orders.filter(o => !(o.date === todayStr && o.invoiceNumber.startsWith(`ORD-${todayStr.replace(/-/g, '')}-`)));
+  if (!state.dailyReportDate) {
+    state.dailyReportDate = todayStr;
   }
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
@@ -3073,6 +3262,9 @@ window.handlePlannedVisitSubmit = function(e) {
   closeSubmitPlannedModal();
   showToast('Planned Visit Report Submitted', `Field call report recorded for ${visit.clientName}.`, 'success');
 
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
   // Cloud write-through to Supabase
   supabaseRest('visits', {
     method: 'POST',
@@ -3080,7 +3272,7 @@ window.handlePlannedVisitSubmit = function(e) {
     body: mapVisitToDb(visit)
   }).then(res => {
     if (res.error) console.warn('Supabase visit update warning:', res.error);
-    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
   });
 
   if (orderPlaced) {
@@ -3251,6 +3443,9 @@ window.handleUnplannedVisitSubmit = function(e) {
   closeUnplannedVisitModal();
   showToast('⚡ Unplanned Visit Recorded', `Spontaneous visit to ${newUnplannedVisit.clientName} added beside planned schedule for ${date}.`, 'success');
 
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit: newUnplannedVisit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
   // Cloud write-through to Supabase
   supabaseRest('visits', {
     method: 'POST',
@@ -3258,7 +3453,7 @@ window.handleUnplannedVisitSubmit = function(e) {
     body: mapVisitToDb(newUnplannedVisit)
   }).then(res => {
     if (res.error) console.warn('Supabase unplanned visit insert warning:', res.error);
-    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
   });
 
   if (orderPlaced) {
@@ -4002,6 +4197,9 @@ window.submitPlanToManager = function(planId) {
 
   persistData();
 
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('SAVE_PLAN', { plan, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
   // Cloud write-through to Supabase
   supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
     method: 'PATCH',
@@ -4027,6 +4225,9 @@ window.approveMonthlyPlan = function(planId) {
   plan.approvedBy = 'Dr. Sameh Ageez (Senior Sales Manager)';
 
   persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('SAVE_PLAN', { plan, user: 'Dr. Sameh Ageez (Senior Sales Manager)' });
 
   // Cloud write-through to Supabase
   supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
@@ -4163,6 +4364,9 @@ window.handlePlanVisitSubmit = function(e) {
   state.filters.dailyReportStatus = 'ALL';
   persistData();
 
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit: newPlannedVisit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
   // Cloud write-through to Supabase
   supabaseRest('visits', {
     method: 'POST',
@@ -4170,7 +4374,7 @@ window.handlePlanVisitSubmit = function(e) {
     body: mapVisitToDb(newPlannedVisit)
   }).then(res => {
     if (res.error) console.warn('Supabase planned visit insert warning:', res.error);
-    else updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
   });
 
   closePlanVisitModal();
@@ -4662,6 +4866,9 @@ window.handleOrderSubmit = function(e) {
 
   persistData();
 
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_ORDER', { order: newOrder, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
   // Cloud write-through to Supabase for order, line items, and notification
   (async () => {
     try {
@@ -4689,7 +4896,7 @@ window.handleOrderSubmit = function(e) {
         prefer: 'resolution=merge-duplicates',
         body: mapNotifToDb(newNotif)
       });
-      updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+      updateCloudSyncBadge('connected', '⚡ Cloud Synced');
     } catch (err) {
       console.warn('Supabase order write warning:', err);
     }
@@ -4852,6 +5059,13 @@ window.approveOrderDirect = function(orderNum) {
   }
 
   persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('UPDATE_ORDER_STATUS', {
+    invoiceNumber: orderNum,
+    status: 'Approved',
+    approvedBy: order ? order.approvedBy : 'Dr. Sameh Ageez (Senior Sales Manager)'
+  });
 
   // Cloud write-through to Supabase
   if (order) {
@@ -6056,4 +6270,226 @@ function formatDisplayDate(dateStr) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+// =========================================================================
+// 18. GOOGLE DRIVE CLOUD SYNC UI CONTROLLERS & MASTER CSV EXPORTERS
+// =========================================================================
+
+window.openCloudSyncModal = function() {
+  const modal = document.getElementById('cloudSyncModal');
+  if (!modal) return;
+
+  const input = document.getElementById('gdriveUrlInput');
+  if (input) {
+    input.value = getGoogleDriveUrl();
+  }
+
+  const statusEl = document.getElementById('cloudSyncStatusBadge');
+  if (statusEl) {
+    const url = getGoogleDriveUrl();
+    if (url) {
+      statusEl.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-xs border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+          Connected & Synced with Google Drive
+        </span>
+      `;
+    } else {
+      statusEl.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold text-xs border border-amber-500/30">
+          <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+          Operating in Local Device Storage Mode
+        </span>
+      `;
+    }
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  safeLucide();
+};
+
+window.closeCloudSyncModal = function() {
+  const modal = document.getElementById('cloudSyncModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+};
+
+window.saveGoogleDriveSyncConfig = async function() {
+  const input = document.getElementById('gdriveUrlInput');
+  const url = input ? input.value.trim() : '';
+
+  if (url) {
+    if (!url.startsWith('http') || !url.includes('script.google.com')) {
+      showToast('Invalid URL', 'Please enter a valid Google Apps Script Web App URL ending with /exec', 'warning');
+      return;
+    }
+    setGoogleDriveUrl(url);
+    showToast('Connecting to Google Drive...', 'Verifying cloud sync endpoint...', 'info');
+    const res = await syncWithGoogleDrive(true);
+    if (res && res.success) {
+      closeCloudSyncModal();
+    }
+  } else {
+    setGoogleDriveUrl('');
+    updateCloudSyncBadge('offline', '💾 Local Mode');
+    showToast('Sync URL Cleared', 'Operating in local offline storage mode.', 'info');
+    closeCloudSyncModal();
+  }
+};
+
+window.testGoogleDriveConnection = async function() {
+  const input = document.getElementById('gdriveUrlInput');
+  const url = input ? input.value.trim() : '';
+  if (!url) {
+    showToast('Missing Web App URL', 'Please paste your Google Apps Script Web App URL first.', 'warning');
+    return;
+  }
+
+  showToast('Testing Connection...', 'Pinging your Google Drive Apps Script endpoint...', 'info');
+  try {
+    const res = await fetch(`${url}?action=PING&_t=${Date.now()}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    const json = await res.json();
+    if (json.status === 'success') {
+      setGoogleDriveUrl(url);
+      updateCloudSyncBadge('connected', '🟢 Drive Synced');
+      showToast('⚡ Google Drive Connected!', 'Your Google Drive & Sheets CRM endpoint is active and ready for cross-device sync.', 'success');
+      const statusEl = document.getElementById('cloudSyncStatusBadge');
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-xs border border-emerald-500/30">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            Connected & Synced with Google Drive
+          </span>
+        `;
+      }
+    } else {
+      throw new Error(json.message || 'Invalid endpoint response');
+    }
+  } catch (err) {
+    showToast('Connection Failed', `Could not reach script: ${err.message}. Make sure your deployment access is set to 'Anyone'.`, 'error');
+  }
+};
+
+window.copyGoogleAppsScriptCode = async function() {
+  try {
+    // Try fetching the local file
+    const res = await fetch('./google_drive_sync.gs');
+    if (res.ok) {
+      const code = await res.text();
+      await navigator.clipboard.writeText(code);
+      showToast('📋 Script Copied!', 'Full Google Apps Script sync code copied to your clipboard. Paste into your Google Sheet script editor!', 'success');
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback direct copy instruction
+  showToast('📋 Google Apps Script', 'Open google_drive_sync.gs from the project folder and paste into Extensions -> Apps Script.', 'info');
+};
+
+// 1-Click Complete CRM CSV Data Downloader
+window.exportAllDataCSVs = function() {
+  const dateStr = getSyncedTodayDate();
+  showToast('Exporting All CRM CSVs', 'Generating master CSV spreadsheets for Visits, Orders, Clinics, and Planning Targets...', 'info');
+
+  // 1. Visits Master CSV
+  const visitHeaders = [
+    'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code', 'Clinic Name',
+    'Location', 'Visit Category', 'Status', 'Time Slot', 'Doctor Met',
+    'Doctor Role', 'Doctor Sentiment', 'Products Detailed', 'Samples Dropped',
+    'Sample Product', 'Order Placed', 'Order Ref', 'Order Value AED',
+    'Purpose', 'Unplanned Reason', 'Outcome / Notes', 'Missed Reason', 'Next Follow Up Date'
+  ];
+  const visitRows = (state.visits || []).map(v => [
+    `"${v.date || ''}"`,
+    `"${v.repId || ''}"`,
+    `"${getRepName(v.repId)}"`,
+    `"${v.territory || v.repId || ''}"`,
+    `"${v.clientCode || ''}"`,
+    `"${(v.clientName || '').replace(/"/g, '""')}"`,
+    `"${v.location || ''}"`,
+    `"${v.visitCategory || 'Planned'}"`,
+    `"${v.status || 'Planned'}"`,
+    `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+    `"${v.doctorSentiment || ''}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    v.samplesDropped || 0,
+    `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+    v.orderPlaced ? 'YES' : 'NO',
+    `"${v.orderRef || ''}"`,
+    v.orderValueAed || 0,
+    `"${(v.purpose || '').replace(/"/g, '""')}"`,
+    `"${(v.unplannedReason || '').replace(/"/g, '""')}"`,
+    `"${(v.outcome || '').replace(/"/g, '""')}"`,
+    `"${(v.missedReason || '').replace(/"/g, '""')}"`,
+    `"${v.nextFollowUp || ''}"`
+  ]);
+  downloadCsvFile(`Conceptors_Visits_Master_${dateStr}.csv`, [visitHeaders.join(','), ...visitRows.map(r => r.join(','))].join('\r\n'));
+
+  // 2. Orders Master CSV
+  setTimeout(() => {
+    const orderHeaders = [
+      'Invoice Number', 'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code',
+      'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency', 'Subtotal Exc VAT (AED)',
+      'VAT 5% (AED)', 'Total Inc VAT (AED)', 'Approval Status', 'Approved By', 'Items Summary'
+    ];
+    const orderRows = (state.orders || []).map(o => [
+      `"${o.invoiceNumber}"`,
+      `"${o.date || ''}"`,
+      `"${o.repId || ''}"`,
+      `"${o.repName || getRepName(o.repId)}"`,
+      `"${o.territory || o.repId || ''}"`,
+      `"${o.clientCode || ''}"`,
+      `"${(o.clientName || '').replace(/"/g, '""')}"`,
+      `"${o.location || ''}"`,
+      `"${o.paymentTerms || ''}"`,
+      `"${o.deliveryUrgency || ''}"`,
+      o.totalExcVat || 0,
+      o.vatAmount || 0,
+      o.totalIncVat || 0,
+      `"${o.approvalStatus || 'Pending'}"`,
+      `"${o.approvedBy || ''}"`,
+      `"${(o.itemsSummary || (o.items || []).map(i => `${i.productName} (${i.salesQty}x)`).join('; ')).replace(/"/g, '""')}"`
+    ]);
+    downloadCsvFile(`Conceptors_Orders_Master_${dateStr}.csv`, [orderHeaders.join(','), ...orderRows.map(r => r.join(','))].join('\r\n'));
+  }, 350);
+
+  // 3. Clinics Directory CSV
+  setTimeout(() => {
+    const clinicHeaders = ['Clinic Code', 'Clinic Name', 'Location / Emirate', 'Territory', 'Assigned Rep', 'Tier', 'Contact Person', 'Phone'];
+    const clinicRows = (state.customers || []).map(c => [
+      `"${c.code}"`,
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${c.location || ''}"`,
+      `"${c.territory || c.repId || ''}"`,
+      `"${getRepName(c.repId)}"`,
+      `"${c.tier || 'Tier 1'}"`,
+      `"${(c.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${c.phone || ''}"`
+    ]);
+    downloadCsvFile(`Conceptors_Clinics_Directory_${dateStr}.csv`, [clinicHeaders.join(','), ...clinicRows.map(r => r.join(','))].join('\r\n'));
+  }, 700);
+
+  showToast('📥 Master CSVs Generated', `Visits, Orders, and Clinic spreadsheets saved to your device.`, 'success');
+};
+
+function downloadCsvFile(filename, csvContent) {
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
