@@ -763,10 +763,10 @@ function loadStoredData() {
   }
 
   // AUTOMATIC DEMO ONBOARDING FOR GITHUB PAGES / FRESH BROWSERS:
-  // If no user is stored in localStorage (first visit, incognito, or remote deployment),
-  // automatically default to Senior Sales Manager (Dr. Sameh Ageez) so all data, tabs,
-  // KPIs, daily reports, and monthly planner render immediately without showing a blank page!
-  if (!state.currentUser && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
+  // If no user is stored in localStorage and user hasn't explicitly logged out,
+  // default to Senior Sales Manager (Dr. Sameh Ageez) so data renders immediately.
+  const hasLoggedOut = localStorage.getItem('conceptors_crm_logged_out');
+  if (!state.currentUser && !hasLoggedOut && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
     const defaultUser = window.INITIAL_USERS.find(u => u.username === 'manager') || window.INITIAL_USERS[0];
     state.currentUser = { ...defaultUser };
     state.filters.analyticsRepFilter = 'ALL';
@@ -961,6 +961,7 @@ function performLogin(username, password) {
 
   if (errorEl) errorEl.classList.add('hidden');
 
+  localStorage.removeItem('conceptors_crm_logged_out');
   state.currentUser = { ...foundUser };
   if (state.currentUser.role === 'manager') {
     state.filters.analyticsRepFilter = 'ALL';
@@ -973,7 +974,10 @@ function performLogin(username, password) {
   persistData();
 
   const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.add('hidden');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.add('hidden');
+  }
 
   showToast(
     `Welcome, ${state.currentUser.name}!`,
@@ -986,18 +990,105 @@ function performLogin(username, password) {
   renderAll();
 }
 
-window.handleLogout = function() {
-  state.currentUser = null;
+window.quickSwitchUser = function(username) {
+  const users = window.INITIAL_USERS || [];
+  const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!foundUser) {
+    showToast('User Not Found', `Profile ${username} not found.`, 'warning');
+    return;
+  }
+
+  localStorage.removeItem('conceptors_crm_logged_out');
+  state.currentUser = { ...foundUser };
+
+  if (state.currentUser.role === 'manager') {
+    state.filters.analyticsRepFilter = 'ALL';
+    state.filters.dailyReportRep = 'ALL';
+  } else {
+    const userTerritory = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    state.filters.analyticsRepFilter = userTerritory;
+    state.filters.dailyReportRep = userTerritory;
+
+    // If currently on manager tab, redirect to daily
+    const currentTabManager = document.getElementById('tab-manager');
+    if (currentTabManager && !currentTabManager.classList.contains('hidden')) {
+      switchTab('daily');
+    }
+  }
+
   persistData();
 
-  document.getElementById('loginPassword').value = '';
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.add('hidden');
+  }
+  closeProfileSwitcherModal();
+  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
+
+  showToast(
+    `Switched to ${state.currentUser.name}`,
+    `Active Profile: ${state.currentUser.title}. Data restricted to ${state.currentUser.territory === 'ALL' ? 'All UAE Territories' : state.currentUser.territory}.`,
+    'success'
+  );
+
+  renderAll();
+};
+
+window.openProfileSwitcherModal = function() {
+  const m = document.getElementById('profileSwitcherModal');
+  if (!m) return;
+  updateProfileSwitcherModalContent();
+  m.style.display = 'flex';
+  m.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeProfileSwitcherModal = function() {
+  const m = document.getElementById('profileSwitcherModal');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.add('hidden');
+  }
+};
+
+function updateProfileSwitcherModalContent() {
+  if (!state.currentUser) return;
+  const avatar = document.getElementById('activeProfileAvatar');
+  const name = document.getElementById('activeProfileName');
+  const role = document.getElementById('activeProfileRole');
+  if (avatar) avatar.textContent = state.currentUser.avatar || 'US';
+  if (name) name.textContent = state.currentUser.name;
+  if (role) role.textContent = `${state.currentUser.title} (${state.currentUser.territory === 'ALL' ? 'All UAE' : state.currentUser.territory})`;
+}
+
+window.handleLogout = function() {
+  state.currentUser = null;
+  localStorage.setItem('conceptors_crm_logged_out', 'true');
+  persistData();
+
+  const pwdInput = document.getElementById('loginPassword');
+  if (pwdInput) pwdInput.value = '';
   const errorEl = document.getElementById('loginErrorMessage');
   if (errorEl) errorEl.classList.add('hidden');
 
+  switchTab('daily');
+
   const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.remove('hidden');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+  }
+
+  const switcherModal = document.getElementById('profileSwitcherModal');
+  if (switcherModal) {
+    switcherModal.style.display = 'none';
+    switcherModal.classList.add('hidden');
+  }
+  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
 
   showToast('Logged Out', 'Your session has ended. CRM locked.', 'info');
+  safeLucide();
 };
 
 window.togglePasswordReveal = function() {
@@ -5544,13 +5635,22 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
 
 window.openAddAccountModal = function() {
   const modal = document.getElementById('addAccountModal');
-  if (!modal) return;
+  if (!modal) {
+    console.error('addAccountModal not found in DOM');
+    return;
+  }
 
   const form = document.getElementById('addAccountForm');
   if (form) form.reset();
 
   const terrSelect = document.getElementById('newAccountTerritory');
-  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : (state.currentUser.role === 'rep_t2' ? 'T2' : 'T1'))) : 'T1';
+  let userTerritory = 'T1';
+  if (state.currentUser) {
+    if (state.currentUser.role === 'rep_t1') userTerritory = 'T1';
+    else if (state.currentUser.role === 'rep_t2') userTerritory = 'T2';
+    else userTerritory = state.currentUser.territory || 'T1';
+  }
+  if (userTerritory === 'ALL') userTerritory = 'T1';
 
   if (terrSelect) {
     if (state.currentUser && state.currentUser.role === 'manager') {
@@ -5563,134 +5663,155 @@ window.openAddAccountModal = function() {
   }
 
   generateClinicCode();
+  modal.style.display = 'flex';
   modal.classList.remove('hidden');
   safeLucide();
 };
 
 window.closeAddAccountModal = function() {
   const modal = document.getElementById('addAccountModal');
-  if (modal) modal.classList.add('hidden');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+  }
 };
 
 window.generateClinicCode = function() {
   const terrSelect = document.getElementById('newAccountTerritory');
-  const terr = terrSelect ? terrSelect.value : (state.currentUser?.territory || 'T1');
+  let terr = terrSelect ? terrSelect.value : (state.currentUser?.territory || 'T1');
+  if (!terr || terr === 'ALL') terr = 'T1';
   const prefix = terr === 'T2' ? 'AC' : 'DC';
 
   // Find existing max numeric code with prefix
-  let maxNum = 1000;
+  let maxNum = 900;
   (state.customers || []).forEach(c => {
-    if (c.code && c.code.toUpperCase().startsWith(prefix)) {
+    if (c && c.code && typeof c.code === 'string' && c.code.toUpperCase().startsWith(prefix)) {
       const num = parseInt(c.code.slice(prefix.length), 10);
       if (!isNaN(num) && num > maxNum) maxNum = num;
     }
   });
 
-  const nextCode = `${prefix}${String(maxNum + 10).padStart(4, '0')}`;
+  const nextCode = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
   const codeInput = document.getElementById('newAccountCode');
   if (codeInput) codeInput.value = nextCode;
 };
 
 window.handleAddAccountSubmit = async function(e) {
-  e.preventDefault();
+  if (e && e.preventDefault) e.preventDefault();
 
-  const codeInput = document.getElementById('newAccountCode');
-  const nameInput = document.getElementById('newAccountName');
-  const tierSelect = document.getElementById('newAccountTier');
-  const terrSelect = document.getElementById('newAccountTerritory');
-  const locSelect = document.getElementById('newAccountLocation');
-  const docInput = document.getElementById('newAccountDoctor');
-  const phoneInput = document.getElementById('newAccountPhone');
-  const addrInput = document.getElementById('newAccountAddress');
-  const notesInput = document.getElementById('newAccountNotes');
+  try {
+    const codeInput = document.getElementById('newAccountCode');
+    const nameInput = document.getElementById('newAccountName');
+    const tierSelect = document.getElementById('newAccountTier');
+    const terrSelect = document.getElementById('newAccountTerritory');
+    const locSelect = document.getElementById('newAccountLocation');
+    const docInput = document.getElementById('newAccountDoctor');
+    const phoneInput = document.getElementById('newAccountPhone');
+    const addrInput = document.getElementById('newAccountAddress');
+    const notesInput = document.getElementById('newAccountNotes');
 
-  const code = (codeInput?.value || '').trim().toUpperCase();
-  const name = (nameInput?.value || '').trim();
-  const tier = tierSelect?.value || 'Silver';
-  const assignedTerritory = terrSelect?.value || (state.currentUser?.territory || 'T1');
-  const location = locSelect?.value || 'Dubai';
-  const contactPerson = (docInput?.value || '').trim();
-  const phone = (phoneInput?.value || '').trim();
-  const address = (addrInput?.value || '').trim();
-  const notes = (notesInput?.value || '').trim();
+    const code = (codeInput?.value || '').trim().toUpperCase();
+    const name = (nameInput?.value || '').trim();
+    const tier = tierSelect?.value || 'Silver';
+    let assignedTerritory = terrSelect?.value || (state.currentUser?.territory || 'T1');
+    if (!assignedTerritory || assignedTerritory === 'ALL') assignedTerritory = 'T1';
+    const location = locSelect?.value || 'Dubai';
+    const contactPerson = (docInput?.value || '').trim();
+    const phone = (phoneInput?.value || '').trim();
+    const address = (addrInput?.value || '').trim();
+    const notes = (notesInput?.value || '').trim();
 
-  if (!code || !name) {
-    showToast('Missing Details', 'Please specify account code and clinic name.', 'warning');
-    return;
+    if (!code || !name) {
+      showToast('Missing Details', 'Please specify account code and clinic name.', 'warning');
+      return;
+    }
+
+    // Check code uniqueness
+    const existing = (state.customers || []).find(c => c && c.code && c.code.toUpperCase() === code);
+    if (existing) {
+      showToast('Duplicate Code', `Account code "${code}" already belongs to ${existing.name}. Please choose or auto-generate another code.`, 'warning');
+      return;
+    }
+
+    const newCust = {
+      code,
+      name,
+      location,
+      territory: assignedTerritory,
+      repId: assignedTerritory,
+      tier,
+      contactPerson: contactPerson || 'Lead Veterinarian',
+      phone: phone || '',
+      address: address || '',
+      notes: notes || '',
+      isActive: true
+    };
+
+    // Add to local state
+    state.customers.unshift(newCust);
+    persistData();
+
+    // Cloud write-through to Supabase
+    try {
+      supabaseRest('customers', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapCustomerToDb(newCust)
+      });
+    } catch(err) {
+      console.warn('Customer cloud sync skipped:', err);
+    }
+
+    // Create real-time Senior Manager Alert
+    const repName = state.currentUser ? (state.currentUser.name || (assignedTerritory === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${assignedTerritory}`;
+    const notif = {
+      id: `NOTIF-ACC-${Date.now()}`,
+      type: 'ACCOUNT_ADDED',
+      title: `New Account Added: ${newCust.name}`,
+      orderNumber: newCust.code,
+      repId: assignedTerritory,
+      repName: repName,
+      clientCode: newCust.code,
+      clientName: newCust.name,
+      location: newCust.location,
+      timestamp: new Date().toISOString(),
+      read: false,
+      approvalStatus: 'Active',
+      itemsSummary: `New ${newCust.tier} account added by ${repName} in ${newCust.location}. Dr: ${newCust.contactPerson}. Tel: ${newCust.phone || 'N/A'}.`
+    };
+
+    state.notifications.unshift(notif);
+    persistData();
+
+    // Cloud write-through notification to Supabase
+    try {
+      supabaseRest('notifications', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapNotifToDb(notif)
+      });
+    } catch(err) {
+      console.warn('Notification cloud sync skipped:', err);
+    }
+
+    if (state.managerSettings && state.managerSettings.soundAlert && typeof playNotificationChime === 'function') {
+      playNotificationChime();
+    }
+    showToast(
+      '🎉 Clinic Account Added',
+      `Registered ${newCust.name} (${newCust.code}) in ${assignedTerritory}. Senior Manager Dr. Sameh Ageez alerted.`,
+      'success'
+    );
+
+    closeAddAccountModal();
+    updateNotificationBell();
+    renderAccountsGrid();
+    renderManagerNotifications();
+    renderManagerHub();
+  } catch (ex) {
+    console.error('Error submitting add account form:', ex);
+    showToast('Submission Error', ex.message, 'error');
   }
-
-  // Check code uniqueness
-  const existing = (state.customers || []).find(c => c.code.toUpperCase() === code);
-  if (existing) {
-    showToast('Duplicate Code', `Account code "${code}" already belongs to ${existing.name}. Please choose or auto-generate another code.`, 'warning');
-    return;
-  }
-
-  const newCust = {
-    code,
-    name,
-    location,
-    territory: assignedTerritory,
-    repId: assignedTerritory,
-    tier,
-    contactPerson: contactPerson || 'Lead Vet',
-    phone: phone || '',
-    address: address || '',
-    notes: notes || '',
-    isActive: true
-  };
-
-  // Add to local state
-  state.customers.unshift(newCust);
-  persistData();
-
-  // Cloud write-through to Supabase
-  supabaseRest('customers', {
-    method: 'POST',
-    prefer: 'resolution=merge-duplicates',
-    body: mapCustomerToDb(newCust)
-  });
-
-  // Create real-time Senior Manager Alert
-  const repName = state.currentUser ? (state.currentUser.name || (assignedTerritory === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${assignedTerritory}`;
-  const notif = {
-    id: `NOTIF-ACC-${Date.now()}`,
-    type: 'ACCOUNT_ADDED',
-    title: `New Account Added: ${newCust.name}`,
-    orderNumber: newCust.code,
-    repId: assignedTerritory,
-    repName: repName,
-    clientCode: newCust.code,
-    clientName: newCust.name,
-    location: newCust.location,
-    timestamp: new Date().toISOString(),
-    read: false,
-    approvalStatus: 'Active',
-    itemsSummary: `New ${newCust.tier} account added by ${repName} in ${newCust.location}. Dr/Contact: ${newCust.contactPerson}. Phone: ${newCust.phone || 'N/A'}.`
-  };
-
-  state.notifications.unshift(notif);
-  persistData();
-
-  // Cloud write-through notification to Supabase
-  supabaseRest('notifications', {
-    method: 'POST',
-    prefer: 'resolution=merge-duplicates',
-    body: mapNotifToDb(notif)
-  });
-
-  if (state.managerSettings.soundAlert) playNotificationChime();
-  showToast(
-    '🎉 Clinic Account Added',
-    `Registered ${newCust.name} (${newCust.code}) in ${assignedTerritory}. Senior Manager Dr. Sameh Ageez alerted.`,
-    'success'
-  );
-
-  closeAddAccountModal();
-  updateNotificationBell();
-  renderAccountsGrid();
-  renderManagerNotifications();
-  renderManagerHub();
 };
 
 window.toggleAccountFreeze = async function(clientCode) {

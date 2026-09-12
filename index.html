@@ -108,14 +108,17 @@
             <span class="sm:hidden text-[11px]">+ Order</span>
           </button>
 
-          <!-- Authenticated User Profile Badge & Logout (Desktop/Tablet) -->
-          <div id="userProfileWidget" class="hidden sm:flex items-center gap-2 bg-slate-900 border border-slate-700/80 rounded-xl px-2 py-1 text-xs shadow-inner">
-            <div id="userAvatarBadge" class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-xs border border-sky-500/30">SH</div>
-            <div class="hidden lg:block text-left">
-              <div id="userNameDisplay" class="font-bold text-white text-[11px] leading-tight truncate max-w-[100px]">Shaimaa</div>
-              <div id="userRolePill" class="text-[9px] text-sky-400 font-bold uppercase">Rep T1</div>
-            </div>
-            <button type="button" onclick="handleLogout()" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Log Out & Lock CRM">
+          <!-- Authenticated User Profile Badge & Fast Switcher (Accessible across Desktop, Tablet & Mobile) -->
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="openProfileSwitcherModal()" id="userProfileWidget" class="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/90 rounded-xl px-2 py-1 text-xs shadow-inner transition-all hover:border-sky-500/40 active:scale-95 touch-manipulation cursor-pointer" title="Click to Switch Profile or Log Out">
+              <div id="userAvatarBadge" class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-[11px] sm:text-xs border border-sky-500/30 shrink-0">SH</div>
+              <div class="text-left max-w-[80px] sm:max-w-[110px]">
+                <div id="userNameDisplay" class="font-bold text-white text-[10px] sm:text-[11px] leading-tight truncate">Shaimaa</div>
+                <div id="userRolePill" class="text-[8px] sm:text-[9px] text-sky-400 font-bold uppercase truncate">Rep T1</div>
+              </div>
+              <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 shrink-0"></i>
+            </button>
+            <button type="button" onclick="handleLogout()" class="p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors touch-manipulation" title="Log Out & Lock CRM">
               <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
             </button>
           </div>
@@ -920,6 +923,29 @@
         </div>
       </div>
 
+      <!-- Senior Manager Fast Profile Switcher & Rep Testing Controls -->
+      <div class="glass-panel rounded-2xl p-4 border border-indigo-500/40 bg-indigo-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2.5">
+          <span class="px-2.5 py-1 rounded-xl bg-indigo-500/20 text-indigo-300 font-extrabold text-xs border border-indigo-500/30 flex items-center gap-1.5">
+            <i data-lucide="shield" class="w-3.5 h-3.5"></i> Senior Manager View
+          </span>
+          <span class="text-slate-300 font-medium">Logged in as <strong>Dr. Sameh Ageez</strong></span>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <span class="text-[11px] text-slate-400 font-semibold">Switch to Field Rep:</span>
+          <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="user" class="w-3.5 h-3.5"></i> Dr. Shaimaa (Rep T1)
+          </button>
+          <button type="button" onclick="quickSwitchUser('marsel.t2')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="user" class="w-3.5 h-3.5"></i> Dr. Marsel (Rep T2)
+          </button>
+          <button type="button" onclick="handleLogout()" class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Log Out
+          </button>
+        </div>
+      </div>
+
       <!-- Pending Plans, Live Orders & Account Activity Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Monthly Plans Review Queue -->
@@ -957,7 +983,12 @@
               <i data-lucide="building-2" class="w-4 h-4 text-teal-400"></i>
               Clinic Accounts Activity
             </h3>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">Rep Updates</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="openAddAccountModal()" class="px-2 py-1 rounded-lg bg-teal-600/30 hover:bg-teal-600/50 text-teal-300 border border-teal-500/40 text-[10px] font-bold flex items-center gap-1 transition-all active:scale-95" title="Register New Clinic Account">
+                <i data-lucide="plus" class="w-3 h-3"></i> Add Clinic
+              </button>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">Rep Updates</span>
+            </div>
           </div>
           <div id="managerAccountsAlertsList" class="space-y-3">
             <!-- Injected via JS -->
@@ -1257,6 +1288,25 @@
           <span>Theme Toggle</span>
           <span class="text-[10px] text-slate-400 font-normal">Bright / Dark</span>
         </button>
+      </div>
+
+      <!-- Fast Profile Switcher in Mobile Drawer -->
+      <div class="pt-3 border-t border-slate-800 space-y-1.5">
+        <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <span>Switch Profile (1-Tap)</span>
+          <span class="text-sky-400 font-semibold">Instant Access</span>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 text-xs font-bold">
+          <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="py-2 px-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-center active:scale-95 transition-all">
+            Shaimaa (T1)
+          </button>
+          <button type="button" onclick="quickSwitchUser('marsel.t2')" class="py-2 px-1 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-center active:scale-95 transition-all">
+            Marsel (T2)
+          </button>
+          <button type="button" onclick="quickSwitchUser('manager')" class="py-2 px-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-center active:scale-95 transition-all">
+            Manager
+          </button>
+        </div>
       </div>
 
       <!-- Logged-in User & Logout Section -->
@@ -2036,6 +2086,91 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: QUICK PROFILE SWITCHER ================= -->
+  <div id="profileSwitcherModal" onclick="if(event.target === this) closeProfileSwitcherModal();" class="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-panel bg-[#0c1322] border border-sky-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-sky-500/20 text-sky-400">
+            <i data-lucide="users" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-white">Switch User Profile</h3>
+            <p class="text-[11px] text-slate-400">Select which role or territory to view</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeProfileSwitcherModal()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <!-- Active Profile Card -->
+      <div id="activeProfileCard" class="p-3.5 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="activeProfileAvatar" class="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-sm border border-sky-500/30">SH</div>
+          <div>
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Currently Logged In As</div>
+            <div id="activeProfileName" class="font-extrabold text-white text-sm">Shaimaa</div>
+            <div id="activeProfileRole" class="text-[11px] text-sky-400 font-semibold">Rep T1 (Dubai / AUH / Al Ain)</div>
+          </div>
+        </div>
+        <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Active</span>
+      </div>
+
+      <!-- Switch Options -->
+      <div class="space-y-2">
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Switch To Profile:</div>
+        
+        <!-- Option 1: Shaimaa -->
+        <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-sky-500/10 border border-slate-700 hover:border-sky-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-300 font-bold flex items-center justify-center text-xs border border-sky-500/30">SH</div>
+            <div>
+              <div class="font-bold text-white text-xs group-hover:text-sky-300 transition-colors">Dr. Shaimaa (Medical Rep T1)</div>
+              <div class="text-[10px] text-slate-400">Territory 1: Dubai, Abu Dhabi & Al Ain (160 Clinics)</div>
+            </div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors"></i>
+        </button>
+
+        <!-- Option 2: Marsel -->
+        <button type="button" onclick="quickSwitchUser('marsel.t2')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-purple-500/10 border border-slate-700 hover:border-purple-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 font-bold flex items-center justify-center text-xs border border-purple-500/30">MA</div>
+            <div>
+              <div class="font-bold text-white text-xs group-hover:text-purple-300 transition-colors">Dr. Marsel (Medical Rep T2)</div>
+              <div class="text-[10px] text-slate-400">Territory 2: Northern Emirates (100 Clinics)</div>
+            </div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-purple-400 transition-colors"></i>
+        </button>
+
+        <!-- Option 3: Senior Manager -->
+        <button type="button" onclick="quickSwitchUser('manager')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-emerald-500/10 border border-slate-700 hover:border-emerald-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-xs border border-emerald-500/30">SA</div>
+            <div>
+              <div class="font-bold text-white text-xs group-hover:text-emerald-300 transition-colors">Dr. Sameh Ageez (Senior Sales Manager)</div>
+              <div class="text-[10px] text-slate-400">Executive Command: Approvals, Quotas & Live Alerts</div>
+            </div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors"></i>
+        </button>
+      </div>
+
+      <!-- Bottom Actions: Sign Out -->
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+        <button type="button" onclick="handleLogout()" class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+          <span>Sign Out & Lock CRM</span>
+        </button>
+        <button type="button" onclick="closeProfileSwitcherModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: GOOGLE DRIVE CLOUD SYNC & MASTER CSV BACKUP ================= -->
   <div id="cloudSyncModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
     <div class="glass-panel bg-[#0c1322] border border-emerald-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[92vh] overflow-y-auto">
@@ -2152,8 +2287,8 @@
   </div>
 
   <!-- ================= MODAL: ADD VETERINARY ACCOUNT CRM ================= -->
-  <div id="addAccountModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-    <div class="glass-panel bg-[#0c1322] border border-teal-500/40 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col">
+  <div id="addAccountModal" onclick="if(event.target === this) closeAddAccountModal();" class="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-teal-500/40 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col" onclick="event.stopPropagation()">
       <!-- Header -->
       <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
         <div class="flex items-center gap-3">
@@ -2489,9 +2624,9 @@
     </div>
   </div>
 
-  <!-- Scripts -->
+  <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js"></script>
-  <script src="./crm_app.js"></script>
+  <script src="./crm_data.js?v=2.6.0"></script>
+  <script src="./crm_app.js?v=2.6.0"></script>
 </body>
 </html>
