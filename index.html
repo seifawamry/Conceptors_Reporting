@@ -38,6 +38,8 @@
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <base href="./">
+  <link rel="icon" type="image/png" href="conceptors_logo.png">
+  <link rel="apple-touch-icon" href="conceptors_logo.png">
   <link rel="stylesheet" href="./styles.css?v=2.6">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
@@ -45,77 +47,88 @@
   <!-- ================= TOP HEADER NAVIGATION ================= -->
   <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-hidden">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16 gap-3">
+      <div class="flex items-center justify-between h-16 gap-2 sm:gap-3">
         <!-- Logo & Branding -->
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-sky-400 to-emerald-400 flex items-center justify-center shadow-lg shadow-brand-500/20 shrink-0">
-            <i data-lucide="stethoscope" class="w-5 h-5 text-white"></i>
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div class="brand-logo-pill" onclick="switchTab('daily')" title="The Conceptors for Animal Health">
+            <img src="conceptors_logo.png" alt="Conceptors Animal Health" class="brand-logo-img">
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0 hidden lg:block">
             <div class="flex items-center gap-2">
-              <span class="font-black text-lg tracking-tight bg-gradient-to-r from-sky-400 via-teal-300 to-indigo-300 text-transparent bg-clip-text">CONCEPTORS</span>
-              <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold whitespace-nowrap">MedRep CRM</span>
+              <span class="font-black text-sm tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-300 text-transparent bg-clip-text">THE CONCEPTORS</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold whitespace-nowrap">Animal Health</span>
             </div>
-            <p class="text-[11px] text-slate-400 font-medium truncate hidden sm:block">Field Reporting, Monthly Visit Planning & Order Automation</p>
+            <p class="text-[10px] text-slate-400 font-medium truncate">UAE Medical Rep CRM & Field Reporting</p>
           </div>
         </div>
 
-        <!-- Theme Toggle, User Profile & Actions -->
-        <div class="flex items-center gap-2 sm:gap-3">
-          <!-- Live UAE Time & Timezone Sync Pill -->
-          <div id="uaeTimezonePill" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm" title="Synchronized with UAE Standard Time (GST, UTC+4)">
+        <!-- Header Actions & Controls -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+          <!-- Live UAE Time & Timezone Sync Pill (hidden on small phones) -->
+          <div id="uaeTimezonePill" class="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm" title="Synchronized with UAE Standard Time (GST, UTC+4)">
             <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
             <span id="uaeLiveClock" class="font-mono text-emerald-300">UAE --:-- GST</span>
           </div>
 
-          <!-- Supabase Live Cloud Sync Badge -->
-          <div id="supabaseSyncBadge" class="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0" onclick="syncWithSupabase(true)" title="Supabase Cloud Synchronization (Click to Force Sync)">
-            <span id="supabaseSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-            <span id="supabaseSyncText" class="font-mono text-emerald-300">⚡ Cloud Synced</span>
+          <!-- Cloud Sync Badge (compact on mobile) -->
+          <div id="cloudSyncBadge" class="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0 touch-manipulation" onclick="openCloudSyncModal()" title="Cloud Synchronization Status">
+            <span id="cloudSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            <span id="cloudSyncText" class="font-mono text-emerald-300 text-[10px] sm:text-xs">⚡ Synced</span>
           </div>
 
-          <!-- Theme Toggle Button (Bright / Dark Mode) -->
-          <button id="btnThemeToggle" type="button" onclick="toggleTheme()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all text-xs font-bold flex items-center gap-1.5 shadow-sm" title="Toggle Bright / Dark Screen Mode">
-            <i id="themeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
-            <span id="themeLabel" class="hidden sm:inline">Bright Screen</span>
+          <!-- Central Export Data Button -->
+          <button type="button" onclick="openExportCenterModal()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 hover:text-white text-[11px] sm:text-xs font-bold transition-all shadow-sm touch-manipulation" title="Export Reports, Planning & Orders Data (CSV / Excel)">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span class="hidden md:inline">Export Data</span>
           </button>
 
-          <!-- Authenticated User Profile Badge & Logout -->
-          <div id="userProfileWidget" class="flex items-center gap-2 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1 text-xs shadow-inner">
+          <!-- Theme Toggle Button (Bright / Dark Mode) (Desktop/Tablet) -->
+          <button id="btnThemeToggle" type="button" onclick="toggleTheme()" class="hidden md:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all text-xs font-bold items-center gap-1.5 shadow-sm touch-manipulation" title="Toggle Bright / Dark Screen Mode">
+            <i id="themeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
+            <span id="themeLabel" class="hidden lg:inline">Bright Screen</span>
+          </button>
+
+          <!-- Senior Manager Order Notifications Bell -->
+          <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm touch-manipulation shrink-0" title="Order Notifications & Alerts">
+            <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
+            <span id="notificationBadge" class="absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">2</span>
+          </button>
+
+          <!-- Quick Action: + Unplanned Visit Today -->
+          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-2.5 sm:px-3 py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation" title="Add Unplanned Visit for Today">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i>
+            <span class="hidden sm:inline">⚡ + Unplanned Visit</span>
+            <span class="sm:hidden text-[11px]">⚡ Visit</span>
+          </button>
+
+          <!-- Quick Action: New Field Order -->
+          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-2.5 sm:px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation" title="Book New Field Order">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">New Order</span>
+            <span class="sm:hidden text-[11px]">+ Order</span>
+          </button>
+
+          <!-- Authenticated User Profile Badge & Logout (Desktop/Tablet) -->
+          <div id="userProfileWidget" class="hidden sm:flex items-center gap-2 bg-slate-900 border border-slate-700/80 rounded-xl px-2 py-1 text-xs shadow-inner">
             <div id="userAvatarBadge" class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-xs border border-sky-500/30">SH</div>
-            <div class="hidden md:block text-left">
-              <div id="userNameDisplay" class="font-bold text-white text-[11px] leading-tight truncate max-w-[120px]">Shaimaa</div>
-              <div id="userRolePill" class="text-[9px] text-sky-400 font-bold uppercase">Rep T1 (DXB/AUH)</div>
+            <div class="hidden lg:block text-left">
+              <div id="userNameDisplay" class="font-bold text-white text-[11px] leading-tight truncate max-w-[100px]">Shaimaa</div>
+              <div id="userRolePill" class="text-[9px] text-sky-400 font-bold uppercase">Rep T1</div>
             </div>
             <button type="button" onclick="handleLogout()" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 transition-colors" title="Log Out & Lock CRM">
               <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
             </button>
           </div>
 
-          <!-- Senior Manager Order Notifications Bell -->
-          <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm" title="Senior Manager Live Alerts">
-            <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
-            <span id="notificationBadge" class="absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">2</span>
-          </button>
-
-          <!-- Quick Action: + Unplanned Visit Today -->
-          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-3 py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap" title="Add Unplanned Visit for Today (Beside Planned Ones)">
-            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i>
-            <span class="hidden sm:inline">⚡ + Unplanned Visit</span>
-            <span class="sm:hidden">⚡ Visit</span>
-          </button>
-
-          <!-- Quick Action: New Field Order -->
-          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
-            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-            <span class="hidden sm:inline">New Field Order</span>
-            <span class="sm:hidden">Order</span>
+          <!-- Mobile More Trigger Button (< md) -->
+          <button type="button" onclick="toggleMobileMoreDrawer()" class="md:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all touch-manipulation" aria-label="Open Mobile Menu" title="Menu & Shortcuts">
+            <i data-lucide="more-vertical" class="w-4 h-4"></i>
           </button>
         </div>
       </div>
 
-      <!-- Navigation Tabs Bar -->
-      <nav class="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 border-t border-slate-800/80 no-scrollbar text-xs">
+      <!-- Navigation Tabs Bar (Visible on Tablet & Desktop) -->
+      <nav class="desktop-tab-bar flex space-x-1 sm:space-x-2 overflow-x-auto py-2 border-t border-slate-800/80 no-scrollbar text-xs">
         <button onclick="switchTab('daily')" id="tabBtn-daily" class="nav-tab flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold transition-all bg-brand-600 text-white shadow-md shadow-brand-600/30 whitespace-nowrap">
           <i data-lucide="calendar-check" class="w-4 h-4"></i>
           <span>Daily Visits & Today's Calls</span>
@@ -533,6 +546,11 @@
             </button>
           </div>
 
+          <button type="button" onclick="openExportCenterModal('planning')" class="px-3 py-1.5 rounded-xl bg-sky-950/40 hover:bg-sky-900/60 text-sky-300 font-bold border border-sky-500/30 flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Export monthly plan targets to CSV">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-sky-400"></i>
+            <span class="hidden sm:inline">Export Plan</span>
+          </button>
+
           <div id="plannerActionButtons" class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             <!-- Injected via JS -->
           </div>
@@ -783,6 +801,10 @@
           </div>
 
           <div class="flex items-center gap-2">
+            <button onclick="openExportCenterModal('orders')" class="px-3.5 py-2 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1.5 text-xs transition-colors shadow-sm" title="Export sales orders to CSV">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span class="hidden sm:inline">Export Orders (CSV)</span>
+            </button>
             <button onclick="openOrderModal()" class="px-3.5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition-all">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> Book New Field Order
             </button>
@@ -1105,40 +1127,119 @@
   </main>
 
   <!-- ================= MOBILE BOTTOM FLOATING NAVIGATION DOCK (<768px) ================= -->
-  <nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c1322]/95 backdrop-blur-lg border-t border-slate-800 shadow-2xl px-1.5 py-1 flex items-center justify-around select-none safe-area-bottom">
-    <button type="button" onclick="switchTab('daily')" id="mobileNavBtn-daily" class="mobile-nav-btn active flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-sky-400 font-bold transition-transform active:scale-95 touch-manipulation">
+  <nav id="mobileBottomNav" class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c1322]/95 backdrop-blur-lg border-t border-slate-800 shadow-2xl px-1 py-1 grid grid-cols-5 gap-0.5 select-none safe-area-bottom w-full max-w-full">
+    <button type="button" onclick="switchTab('daily')" id="mobileNavBtn-daily" class="mobile-nav-btn active w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-sky-400 font-bold transition-all active:scale-95">
       <i data-lucide="calendar-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily</span>
     </button>
-    <button type="button" onclick="switchTab('daily-report')" id="mobileNavBtn-daily-report" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+    <button type="button" onclick="switchTab('daily-report')" id="mobileNavBtn-daily-report" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
       <i data-lucide="clipboard-list" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Daily Report</span>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Reports</span>
     </button>
-    <button type="button" onclick="switchTab('planner')" id="mobileNavBtn-planner" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+    <button type="button" onclick="switchTab('planner')" id="mobileNavBtn-planner" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
       <i data-lucide="calendar" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Planner</span>
     </button>
-    <button type="button" onclick="switchTab('reports')" id="mobileNavBtn-reports" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
-      <i data-lucide="file-text" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Reports</span>
-    </button>
-    <button type="button" onclick="switchTab('orders')" id="mobileNavBtn-orders" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
+    <button type="button" onclick="switchTab('orders')" id="mobileNavBtn-orders" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
       <i data-lucide="shopping-cart" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Orders</span>
     </button>
-    <button type="button" onclick="switchTab('accounts')" id="mobileNavBtn-accounts" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
-      <i data-lucide="building-2" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Accounts</span>
-    </button>
-    <button type="button" onclick="switchTab('analytics')" id="mobileNavBtn-analytics" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation">
-      <i data-lucide="bar-chart-3" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Metrics</span>
-    </button>
-    <button type="button" onclick="switchTab('manager')" id="mobileNavBtn-manager" class="mobile-nav-btn flex-1 flex flex-col items-center justify-center py-1.5 px-1 rounded-xl text-slate-400 font-bold transition-transform active:scale-95 touch-manipulation hidden">
-      <i data-lucide="shield-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
-      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Manager</span>
+    <button type="button" onclick="toggleMobileMoreDrawer()" id="mobileNavBtn-more" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
+      <i data-lucide="menu" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">More</span>
     </button>
   </nav>
+
+  <!-- ================= MOBILE MORE ACTION DRAWER / SHEET (<768px) ================= -->
+  <div id="mobileMoreDrawer" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex flex-col justify-end">
+    <!-- Backdrop Tap to Close -->
+    <div class="flex-1" onclick="closeMobileMoreDrawer()"></div>
+    <!-- Drawer Bottom Sheet -->
+    <div id="mobileMoreDrawerContent" class="glass-panel bg-[#0c1322] border-t border-slate-700 rounded-t-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto safe-area-bottom">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="brand-logo-pill py-1 px-2">
+            <img src="conceptors_logo.png" alt="Conceptors" class="h-6 w-auto object-contain">
+          </div>
+          <div>
+            <h3 class="text-sm font-extrabold text-white">Menu & Quick Actions</h3>
+            <p class="text-[10px] text-slate-400">Conceptors Animal Health CRM</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeMobileMoreDrawer()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" aria-label="Close menu">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Quick Action Navigation Grid -->
+      <div class="grid grid-cols-2 gap-2.5 text-xs font-bold">
+        <!-- Central Export Data (Featured) -->
+        <button type="button" onclick="closeMobileMoreDrawer(); openExportCenterModal();" class="col-span-2 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/60 border border-emerald-500/40 text-emerald-300 hover:text-white flex items-center justify-between transition-all active:scale-[0.98] shadow-md">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+              <i data-lucide="download" class="w-5 h-5"></i>
+            </div>
+            <div class="text-left">
+              <div class="font-black text-white text-xs">📊 Export Data Center</div>
+              <div class="text-[10px] text-emerald-300/80 font-normal">Download Reports, Planning & Orders CSVs</div>
+            </div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-400"></i>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); switchTab('accounts');" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="building-2" class="w-5 h-5 text-teal-400"></i>
+          <span>Accounts CRM</span>
+          <span class="text-[10px] text-slate-400 font-normal">260 UAE Clinics</span>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); switchTab('reports');" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="file-text" class="w-5 h-5 text-emerald-400"></i>
+          <span>Field DCR Master</span>
+          <span class="text-[10px] text-slate-400 font-normal">Audit Trail Log</span>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); switchTab('analytics');" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="bar-chart-3" class="w-5 h-5 text-purple-400"></i>
+          <span>Performance</span>
+          <span class="text-[10px] text-slate-400 font-normal">Metrics & KPIs</span>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); switchTab('manager');" id="mobileDrawerBtnManager" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98] hidden">
+          <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+          <span>Manager Hub</span>
+          <span class="text-[10px] text-slate-400 font-normal">Approvals & Settings</span>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); openCloudSyncModal();" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="cloud" class="w-5 h-5 text-sky-400"></i>
+          <span>Cloud & Drive</span>
+          <span class="text-[10px] text-slate-400 font-normal">Sync Configuration</span>
+        </button>
+
+        <button type="button" onclick="toggleTheme()" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="sun" class="w-5 h-5 text-amber-400"></i>
+          <span>Theme Toggle</span>
+          <span class="text-[10px] text-slate-400 font-normal">Bright / Dark</span>
+        </button>
+      </div>
+
+      <!-- Logged-in User & Logout Section -->
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2.5">
+          <div id="mobileDrawerAvatar" class="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-300 font-black flex items-center justify-center border border-sky-500/30">SH</div>
+          <div>
+            <div id="mobileDrawerName" class="font-bold text-white leading-tight">Shaimaa</div>
+            <div id="mobileDrawerRole" class="text-[10px] text-sky-400 font-semibold">Rep T1 (DXB/AUH)</div>
+          </div>
+        </div>
+        <button type="button" onclick="closeMobileMoreDrawer(); handleLogout();" class="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-bold flex items-center gap-1.5 transition-colors">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= MODAL: SUBMIT PLANNED VISIT REPORT ================= -->
   <div id="submitPlannedVisitModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -1840,13 +1941,15 @@
   <!-- ================= LOGIN SCREEN OVERLAY ================= -->
   <div id="loginOverlay" class="fixed inset-0 z-50 bg-[#070d19]/95 backdrop-blur-md hidden flex items-center justify-center p-4">
     <div class="glass-panel bg-[#0c1322] border border-slate-700 rounded-3xl max-w-md w-full p-7 shadow-2xl space-y-6">
-      <div class="text-center space-y-2">
-        <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 via-sky-400 to-emerald-400 flex items-center justify-center shadow-xl shadow-brand-500/30 mx-auto">
-          <i data-lucide="stethoscope" class="w-7 h-7 text-white"></i>
+      <div class="text-center space-y-3">
+        <div class="bg-white p-3.5 rounded-2xl shadow-xl border border-emerald-900/10 inline-block mx-auto max-w-[260px]">
+          <img src="conceptors_logo.png" alt="The Conceptors for Animal Health" class="h-14 sm:h-16 w-auto object-contain mx-auto">
         </div>
-        <h2 class="text-xl font-extrabold text-white tracking-tight">CONCEPTORS</h2>
-        <p class="text-xs font-semibold text-sky-400">Medical Representative CRM & Field System</p>
-        <p class="text-[11px] text-slate-400">Sign in with your representative or management credentials</p>
+        <div>
+          <h2 class="text-lg font-black text-white tracking-tight">THE CONCEPTORS</h2>
+          <p class="text-xs font-bold text-emerald-400">Animal Health - UAE Medical CRM</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">Commercial Detailing, Monthly Planning & Field Sales Orders</p>
+        </div>
       </div>
 
       <div id="loginErrorMessage" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold text-center"></div>
@@ -1898,9 +2001,345 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: GOOGLE DRIVE CLOUD SYNC & MASTER CSV BACKUP ================= -->
+  <div id="cloudSyncModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-emerald-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[92vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <i data-lucide="cloud-cog" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              Google Drive & Cloud Synchronization
+            </h3>
+            <p class="text-[11px] text-slate-400">Sync data between Laptop & Mobile Phone • Auto-save CSVs to Google Drive</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeCloudSyncModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <div class="py-5 space-y-5">
+        <!-- Current Connection Status Card -->
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Current Sync Status</div>
+            <div id="cloudSyncStatusBadge">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold text-xs border border-amber-500/30">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                Operating in Local Storage Mode
+              </span>
+            </div>
+          </div>
+          <button type="button" onclick="syncWithGoogleDrive(true)" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all hover:scale-105 active:scale-95">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-sky-400"></i>
+            <span>Force Refresh Cloud</span>
+          </button>
+        </div>
+
+        <!-- Google Apps Script Web App URL Input -->
+        <div class="space-y-2">
+          <label class="block text-xs font-bold text-slate-200">
+            Google Apps Script Web App URL
+          </label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="gdriveUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="flex-1 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none shadow-inner" />
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="testGoogleDriveConnection()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shrink-0" title="Ping endpoint">
+                <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                <span>Test</span>
+              </button>
+              <button type="button" onclick="saveGoogleDriveSyncConfig()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 shrink-0">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span>Save & Connect</span>
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Paste your deployed Google Apps Script URL here. Once connected, your Laptop and Mobile phone share the exact same data in real time.
+          </p>
+        </div>
+
+        <!-- 60-Second Setup Guide Box -->
+        <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i>
+              60-Second Google Drive Setup (100% Free & Automatic)
+            </span>
+            <button type="button" onclick="copyGoogleAppsScriptCode()" class="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center gap-1 transition-colors">
+              <i data-lucide="copy" class="w-3 h-3"></i>
+              <span>Copy Script Code</span>
+            </button>
+          </div>
+          <ol class="list-decimal list-inside space-y-1.5 text-[11px] text-slate-300 leading-relaxed">
+            <li>Open a new Google Sheet at <a href="https://sheets.new" target="_blank" class="text-emerald-400 underline font-semibold">sheets.new</a> in your Google Drive.</li>
+            <li>In the top menu, click <strong>Extensions ➔ Apps Script</strong>.</li>
+            <li>Click <strong>Copy Script Code</strong> above, paste it into the editor, and click Save.</li>
+            <li>Click <strong>Deploy ➔ New deployment</strong>, choose type <strong>Web app</strong>:
+              <span class="block text-slate-400 ml-4 font-mono text-[10px] mt-0.5">• Execute as: <strong>Me</strong> • Who has access: <strong>Anyone</strong></span>
+            </li>
+            <li>Click <strong>Deploy</strong>, grant permissions, copy the <strong>Web App URL</strong>, and paste it into the input above!</li>
+          </ol>
+          <div class="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-[11px] text-emerald-200">
+            📁 <strong>What Happens Automatically in Your Google Drive:</strong> A folder named <code>Conceptors CRM Data</code> is created containing live auto-updating CSV files (<code>Visits_Master.csv</code>, <code>Orders_Master.csv</code>, <code>Daily_Reports.csv</code>).
+          </div>
+        </div>
+
+        <!-- 1-Click Direct CSV Download Box -->
+        <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+              <i data-lucide="download-cloud" class="w-4 h-4 text-emerald-400"></i>
+              1-Click Direct CSV Download
+            </h4>
+            <p class="text-[11px] text-slate-400 mt-0.5">Download all visits, orders, and clinic directories directly to this device as CSV spreadsheets.</p>
+          </div>
+          <button type="button" onclick="exportAllDataCSVs()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 shrink-0">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span>Download All CSVs</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+        <span class="text-[11px] text-slate-500">Cross-device synchronization for Conceptors Animal Health CRM</span>
+        <button type="button" onclick="closeCloudSyncModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: DATA EXPORT CENTER (REPORTS, PLANNING, ORDERS) ================= -->
+  <div id="exportCenterModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-emerald-500/40 rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col">
+      <!-- Modal Header with Brand Logo -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="brand-logo-pill py-1 px-2.5">
+            <img src="conceptors_logo.png" alt="Conceptors" class="h-7 w-auto object-contain">
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span class="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 inline-flex items-center justify-center">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </span>
+              <span>Data Export Center</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Export Daily Reports, Monthly Planning & Commercial Sales Orders</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeExportCenterModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <!-- Scrollable Cards Body -->
+      <div class="py-4 space-y-4 overflow-y-auto flex-1 pr-1">
+        <!-- 1-Click Master Backup Banner -->
+        <div class="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-teal-950/40 to-slate-900 border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 shrink-0">
+              <i data-lucide="package-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-xs sm:text-sm">Complete CRM Master Backup</div>
+              <div class="text-[11px] text-emerald-300/80">Download all datasets (Visits, Orders, Monthly Plans, Clinics) in one tap.</div>
+            </div>
+          </div>
+          <button type="button" onclick="exportAllDataCSVs()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 shrink-0">
+            <i data-lucide="download" class="w-4 h-4"></i>
+            <span>Download All Data (CSVs)</span>
+          </button>
+        </div>
+
+        <!-- Grid of Specific Export Modules -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          <!-- CARD 1: DAILY VISIT REPORTS -->
+          <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/40 transition-all space-y-3 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-cyan-400 font-extrabold">
+                  <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+                  <span>1. Daily Visit Reports</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">DCR Log</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                Executed calls, doctors met, products pitched, sample drops, sentiments & unplanned visits.
+              </p>
+              <!-- Date Range & Rep Filters -->
+              <div class="space-y-1.5 pt-1">
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Date:</label>
+                  <select id="exportDailyDateRange" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
+                    <option value="today">Today's Visits Only</option>
+                    <option value="selected">Currently Selected Daily Report Date</option>
+                    <option value="month">Current Month (September 2026)</option>
+                    <option value="all">All-Time Historical Visits</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Rep:</label>
+                  <select id="exportDailyRepFilter" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
+                    <option value="ALL">All Representatives (T1 & T2)</option>
+                    <option value="T1">Dr. Shaimaa (Rep T1)</option>
+                    <option value="T2">Dr. Marsel (Rep T2)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="pt-2 flex items-center gap-2 border-t border-slate-800/80">
+              <button type="button" onclick="handleExportDailyReports()" class="flex-1 py-2 px-3 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                <span>Export Visits (CSV)</span>
+              </button>
+              <button type="button" onclick="printDailyReportSummary()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="Print Summary Report">
+                <i data-lucide="printer" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- CARD 2: MONTHLY FIELD PLANNING -->
+          <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/40 transition-all space-y-3 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-sky-400 font-extrabold">
+                  <i data-lucide="calendar" class="w-4 h-4"></i>
+                  <span>2. Monthly Visit Planning</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">Target Quotas</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                Planned clinic schedules, monthly target quotas (100 calls/rep), dates, and manager approvals.
+              </p>
+              <div class="space-y-1.5 pt-1">
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Month:</label>
+                  <select id="exportPlanningMonth" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500">
+                    <option value="2026-09">September 2026</option>
+                    <option value="2026-10">October 2026</option>
+                    <option value="2026-08">August 2026</option>
+                    <option value="ALL">All Planning Cycles</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Rep:</label>
+                  <select id="exportPlanningRep" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500">
+                    <option value="ALL">All Representatives (T1 & T2)</option>
+                    <option value="T1">Dr. Shaimaa (Rep T1)</option>
+                    <option value="T2">Dr. Marsel (Rep T2)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="pt-2 flex items-center gap-2 border-t border-slate-800/80">
+              <button type="button" onclick="handleExportPlanning()" class="w-full py-2 px-3 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                <span>Export Monthly Plan (CSV)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- CARD 3: FIELD SALES ORDERS -->
+          <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-amber-500/40 transition-all space-y-3 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-amber-400 font-extrabold">
+                  <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                  <span>3. Field Commercial Orders</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Commercial</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                Sales orders with invoice refs, clinics, sales qty, bonus FOC (10+1, 13+2, 25+5), and UAE 5% VAT.
+              </p>
+              <div class="space-y-1.5 pt-1">
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Format:</label>
+                  <select id="exportOrdersType" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-amber-500">
+                    <option value="itemized">Itemized Products & FOC Lines (Detailed)</option>
+                    <option value="summary">Order Invoices Totals (Summary)</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Status:</label>
+                  <select id="exportOrdersStatus" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-amber-500">
+                    <option value="ALL">All Orders (Pending + Approved)</option>
+                    <option value="Approved">Approved Orders Only</option>
+                    <option value="Pending">Pending Manager Approval Only</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="pt-2 flex items-center gap-2 border-t border-slate-800/80">
+              <button type="button" onclick="handleExportOrders()" class="w-full py-2 px-3 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                <span>Export Sales Orders (CSV)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- CARD 4: UNVISITED CLINICS & COVERAGE -->
+          <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/40 transition-all space-y-3 shadow-sm flex flex-col justify-between">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-emerald-400 font-extrabold">
+                  <i data-lucide="building-2" class="w-4 h-4"></i>
+                  <span>4. Clinics & Territory Accounts</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Targeting</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                Export clinics that have NOT been visited this month across UAE, or full 260 accounts roster.
+              </p>
+              <div class="space-y-1.5 pt-1">
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Scope:</label>
+                  <select id="exportClinicsScope" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500">
+                    <option value="unvisited">Unvisited Clinics This Month Only</option>
+                    <option value="all">Full UAE Customer Roster (All 260)</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Territory:</label>
+                  <select id="exportClinicsTerritory" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500">
+                    <option value="ALL">All Emirates (T1 + T2)</option>
+                    <option value="T1">Territory 1 (Dubai, Abu Dhabi, Al Ain)</option>
+                    <option value="T2">Territory 2 (Sharjah, Ajman, RAK, Fujairah)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="pt-2 flex items-center gap-2 border-t border-slate-800/80">
+              <button type="button" onclick="handleExportClinics()" class="w-full py-2 px-3 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+                <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                <span>Export Clinics (CSV)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-3.5 border-t border-slate-800 flex items-center justify-between shrink-0">
+        <span class="text-[11px] text-slate-500">Compatible with Microsoft Excel, Google Sheets, Apple Numbers</span>
+        <button type="button" onclick="closeExportCenterModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.0"></script>
-  <script src="./crm_app.js?v=3.0"></script>
+  <script src="./crm_data.js"></script>
+  <script src="./crm_app.js"></script>
 </body>
 </html>

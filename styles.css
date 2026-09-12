@@ -1800,5 +1800,99 @@ html:not(.dark) #tab-reports .bg-gradient-to-r p {
   color: #475569 !important;
 }
 
+/* ==========================================================================
+   BRAND LOGO PILL & RESPONSIVE SIZING
+   ========================================================================== */
+.brand-logo-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(13, 94, 54, 0.2);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  user-select: none;
+}
+.brand-logo-pill:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 16px -2px rgba(13, 94, 54, 0.22);
+}
+.brand-logo-img {
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  object-fit: contain;
+  display: block;
+}
+@media (min-width: 640px) {
+  .brand-logo-img {
+    height: 38px;
+    max-width: 170px;
+  }
+}
+@media (min-width: 1024px) {
+  .brand-logo-img {
+    height: 42px;
+    max-width: 190px;
+  }
+}
 
+html:not(.dark) .brand-logo-pill {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07) !important;
+}
 
+/* ==========================================================================
+   MOBILE & TABLET ERGONOMIC TOUCH & DRAWER STYLES
+   ========================================================================== */
+.touch-btn {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#mobileMoreDrawer {
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+#mobileMoreDrawerContent {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (max-width: 767px) {
+  /* On small phones, hide top redundant tab scrollbar and rely on bottom dock */
+  .desktop-tab-bar {
+    display: none !important;
+  }
+  main {
+    padding-bottom: 5.75rem !important;
+  }
+  .glass-panel, .glass-card {
+    border-radius: 1.25rem !important;
+  }
+}
+
+/* Tablet Optimizations (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .tablet-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .tablet-p-4 {
+    padding: 1rem !important;
+  }
+}
+
+/* Export Center Modal Responsive Styling */
+#exportCenterModal .glass-panel {
+  max-height: 90vh;
+}
+@media (max-width: 640px) {
+  #exportCenterModal .glass-panel {
+    max-height: 94vh;
+    padding: 1rem !important;
+  }
+}

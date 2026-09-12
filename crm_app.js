@@ -6493,3 +6493,335 @@ function downloadCsvFile(filename, csvContent) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+window.downloadCsvFile = downloadCsvFile;
+
+// =========================================================================
+// MOBILE MORE ACTION DRAWER HANDLERS (< 768px)
+// =========================================================================
+
+function toggleMobileMoreDrawer() {
+  const drawer = document.getElementById('mobileMoreDrawer');
+  if (!drawer) return;
+  if (drawer.classList.contains('hidden')) {
+    drawer.classList.remove('hidden');
+    const u = state.currentUser || { name: 'Shaimaa', role: 'rep_t1', territory: 'T1' };
+    const nameEl = document.getElementById('mobileDrawerName');
+    const roleEl = document.getElementById('mobileDrawerRole');
+    const avatarEl = document.getElementById('mobileDrawerAvatar');
+    const mgrBtn = document.getElementById('mobileDrawerBtnManager');
+    if (nameEl) nameEl.textContent = u.name;
+    if (roleEl) roleEl.textContent = u.role === 'manager' ? 'Senior Sales Manager' : `Rep ${u.territory || 'T1'} (${u.territory === 'T2' ? 'Northern Emirates' : 'DXB/AUH'})`;
+    if (avatarEl) avatarEl.textContent = u.avatar || (u.name ? u.name.substring(0, 2).toUpperCase() : 'SH');
+    if (mgrBtn) {
+      if (u.role === 'manager') mgrBtn.classList.remove('hidden');
+      else mgrBtn.classList.add('hidden');
+    }
+  } else {
+    drawer.classList.add('hidden');
+  }
+}
+function closeMobileMoreDrawer() {
+  const drawer = document.getElementById('mobileMoreDrawer');
+  if (drawer) drawer.classList.add('hidden');
+}
+window.toggleMobileMoreDrawer = toggleMobileMoreDrawer;
+window.closeMobileMoreDrawer = closeMobileMoreDrawer;
+
+// =========================================================================
+// DATA EXPORT CENTER CONTROLLER & INDIVIDUAL EXPORTERS
+// =========================================================================
+
+function openExportCenterModal(initialSection = 'all') {
+  const modal = document.getElementById('exportCenterModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  safeLucide();
+}
+function closeExportCenterModal() {
+  const modal = document.getElementById('exportCenterModal');
+  if (modal) modal.classList.add('hidden');
+}
+window.openExportCenterModal = openExportCenterModal;
+window.closeExportCenterModal = closeExportCenterModal;
+
+// 1. Export Daily Visit Reports
+function handleExportDailyReports() {
+  const range = document.getElementById('exportDailyDateRange')?.value || 'today';
+  const rep = document.getElementById('exportDailyRepFilter')?.value || 'ALL';
+  exportDailyReportCSV(range, rep);
+}
+window.handleExportDailyReports = handleExportDailyReports;
+
+function exportDailyReportCSV(rangeMode = 'today', repFilter = 'ALL') {
+  const today = getSyncedTodayDate();
+  let targetDate = state.dailyReportDate || today;
+  let visitsToExport = state.visits || [];
+
+  if (rangeMode === 'today') {
+    visitsToExport = visitsToExport.filter(v => v.date === today);
+  } else if (rangeMode === 'selected') {
+    visitsToExport = visitsToExport.filter(v => v.date === targetDate);
+  } else if (rangeMode === 'month') {
+    const ym = targetDate.substring(0, 7);
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(ym));
+  }
+
+  if (repFilter && repFilter !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+  }
+
+  if (visitsToExport.length === 0) {
+    showToast('No Visits Found', 'No visit records match the selected date and representative filters.', 'warning');
+    return;
+  }
+
+  const visitHeaders = [
+    'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code', 'Clinic Name',
+    'Location', 'Visit Category', 'Status', 'Time Slot', 'Doctor Met',
+    'Doctor Role', 'Doctor Sentiment', 'Products Detailed', 'Samples Dropped',
+    'Sample Product', 'Order Placed', 'Order Ref', 'Order Value AED',
+    'Purpose', 'Unplanned Reason', 'Outcome / Notes', 'Missed Reason', 'Next Follow Up Date'
+  ];
+
+  const visitRows = visitsToExport.map(v => [
+    `"${v.date || ''}"`,
+    `"${v.repId || ''}"`,
+    `"${getRepName(v.repId)}"`,
+    `"${v.territory || v.repId || ''}"`,
+    `"${v.clientCode || ''}"`,
+    `"${(v.clientName || '').replace(/"/g, '""')}"`,
+    `"${v.location || ''}"`,
+    `"${v.visitCategory || 'Planned'}"`,
+    `"${v.status || 'Planned'}"`,
+    `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+    `"${v.doctorSentiment || ''}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    v.samplesDropped || 0,
+    `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+    v.orderPlaced ? 'YES' : 'NO',
+    `"${v.orderRef || ''}"`,
+    v.orderValueAed || 0,
+    `"${(v.purpose || '').replace(/"/g, '""')}"`,
+    `"${(v.unplannedReason || '').replace(/"/g, '""')}"`,
+    `"${(v.outcome || '').replace(/"/g, '""')}"`,
+    `"${(v.missedReason || '').replace(/"/g, '""')}"`,
+    `"${v.nextFollowUp || ''}"`
+  ]);
+
+  const fileLabel = rangeMode === 'today' ? `Today_${today}` : (rangeMode === 'month' ? `Month_${targetDate.substring(0, 7)}` : targetDate);
+  const repLabel = repFilter !== 'ALL' ? `_${repFilter}` : '_AllReps';
+  downloadCsvFile(`Conceptors_Visits_Report_${fileLabel}${repLabel}.csv`, [visitHeaders.join(','), ...visitRows.map(r => r.join(','))].join('\r\n'));
+  showToast('Visits CSV Exported', `Downloaded ${visitsToExport.length} visit record(s).`, 'success');
+}
+window.exportDailyReportCSV = exportDailyReportCSV;
+
+// 2. Export Monthly Planning
+function handleExportPlanning() {
+  const month = document.getElementById('exportPlanningMonth')?.value || '2026-09';
+  const rep = document.getElementById('exportPlanningRep')?.value || 'ALL';
+  exportMonthlyPlanCSV(month, rep);
+}
+window.handleExportPlanning = handleExportPlanning;
+
+function exportMonthlyPlanCSV(monthStr = '2026-09', repFilter = 'ALL') {
+  let visitsToExport = state.visits || [];
+
+  if (monthStr && monthStr !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(monthStr));
+  }
+
+  if (repFilter && repFilter !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+  }
+
+  if (visitsToExport.length === 0) {
+    showToast('No Planned Calls Found', 'No call records match the selected month and rep.', 'warning');
+    return;
+  }
+
+  const headers = [
+    'Month/Year', 'Rep ID', 'Rep Name', 'Territory', 'Scheduled Date',
+    'Clinic Code', 'Clinic Name', 'Location / Emirate', 'Tier', 'Time Slot',
+    'Visit Category', 'Call Status', 'Products Scheduled', 'Doctor Target',
+    'Call Purpose', 'Outcome / Notes'
+  ];
+
+  const rows = visitsToExport.map(v => {
+    const clinic = (state.customers || []).find(c => c.code === v.clientCode) || {};
+    return [
+      `"${monthStr}"`,
+      `"${v.repId || ''}"`,
+      `"${getRepName(v.repId)}"`,
+      `"${v.territory || v.repId || ''}"`,
+      `"${v.date || ''}"`,
+      `"${v.clientCode || ''}"`,
+      `"${(v.clientName || '').replace(/"/g, '""')}"`,
+      `"${v.location || clinic.location || ''}"`,
+      `"${clinic.tier || 'Silver'}"`,
+      `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+      `"${v.visitCategory || 'Planned'}"`,
+      `"${v.status || 'Planned'}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+      `"${(v.doctorName || clinic.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${(v.purpose || '').replace(/"/g, '""')}"`,
+      `"${(v.outcome || '').replace(/"/g, '""')}"`
+    ];
+  });
+
+  const repLabel = repFilter !== 'ALL' ? `_${repFilter}` : '_AllReps';
+  downloadCsvFile(`Conceptors_Monthly_Plan_${monthStr}${repLabel}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+  showToast('Monthly Plan CSV Exported', `Downloaded ${rows.length} scheduled call(s).`, 'success');
+}
+window.exportMonthlyPlanCSV = exportMonthlyPlanCSV;
+
+// 3. Export Field Sales Orders
+function handleExportOrders() {
+  const type = document.getElementById('exportOrdersType')?.value || 'itemized';
+  const status = document.getElementById('exportOrdersStatus')?.value || 'ALL';
+  exportOrdersCSV(type, status, 'ALL');
+}
+window.handleExportOrders = handleExportOrders;
+
+function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'ALL') {
+  let orders = state.orders || [];
+  if (statusFilter && statusFilter !== 'ALL') {
+    orders = orders.filter(o => o.approvalStatus === statusFilter);
+  }
+  if (repFilter && repFilter !== 'ALL') {
+    orders = orders.filter(o => o.repId === repFilter);
+  }
+
+  if (orders.length === 0) {
+    showToast('No Orders Found', 'No orders match the selected filters.', 'warning');
+    return;
+  }
+
+  const dateStr = getSyncedTodayDate();
+
+  if (type === 'summary') {
+    const headers = [
+      'Invoice Number', 'Order Date', 'Rep ID', 'Rep Name', 'Territory',
+      'Clinic Code', 'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency',
+      'Subtotal Exc VAT (AED)', 'VAT 5% (AED)', 'Total Inc VAT (AED)', 'Approval Status', 'Approved By'
+    ];
+    const rows = orders.map(o => [
+      `"${o.invoiceNumber}"`,
+      `"${o.date || ''}"`,
+      `"${o.repId || ''}"`,
+      `"${o.repName || getRepName(o.repId)}"`,
+      `"${o.territory || o.repId || ''}"`,
+      `"${o.clientCode || ''}"`,
+      `"${(o.clientName || '').replace(/"/g, '""')}"`,
+      `"${o.location || ''}"`,
+      `"${o.paymentTerms || ''}"`,
+      `"${o.deliveryUrgency || ''}"`,
+      o.totalExcVat || 0,
+      o.vatAmount || 0,
+      o.totalIncVat || 0,
+      `"${o.approvalStatus || 'Pending'}"`,
+      `"${o.approvedBy || ''}"`
+    ]);
+    downloadCsvFile(`Conceptors_Orders_Summary_${dateStr}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+    showToast('Orders Summary CSV Exported', `Exported ${orders.length} orders.`, 'success');
+  } else {
+    const headers = [
+      'Invoice Number', 'Order Date', 'Rep Name', 'Territory', 'Clinic Code',
+      'Clinic Name', 'Location', 'Product Code', 'Product Name', 'Unit Price (AED)',
+      'Sales Qty', 'Bonus FOC Qty', 'Line Total Exc VAT (AED)', 'Invoice Net (AED)',
+      'VAT 5% (AED)', 'Invoice Total (AED)', 'Payment Terms', 'Approval Status'
+    ];
+    const rows = [];
+    orders.forEach(o => {
+      const items = (o.items && o.items.length > 0) ? o.items : [
+        { productCode: 'GEN', productName: o.itemsSummary || 'Standard Order', unitPrice: o.totalExcVat, salesQty: 1, focQty: 0, total: o.totalExcVat }
+      ];
+      items.forEach(it => {
+        rows.push([
+          `"${o.invoiceNumber}"`,
+          `"${o.date || ''}"`,
+          `"${o.repName || getRepName(o.repId)}"`,
+          `"${o.territory || o.repId || ''}"`,
+          `"${o.clientCode || ''}"`,
+          `"${(o.clientName || '').replace(/"/g, '""')}"`,
+          `"${o.location || ''}"`,
+          `"${it.productCode || ''}"`,
+          `"${(it.productName || '').replace(/"/g, '""')}"`,
+          it.unitPrice || 0,
+          it.salesQty || 0,
+          it.focQty || 0,
+          it.total || 0,
+          o.totalExcVat || 0,
+          o.vatAmount || 0,
+          o.totalIncVat || 0,
+          `"${o.paymentTerms || ''}"`,
+          `"${o.approvalStatus || 'Pending'}"`
+        ]);
+      });
+    });
+    downloadCsvFile(`Conceptors_Orders_Itemized_${dateStr}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+    showToast('Itemized Orders CSV Exported', `Exported ${rows.length} product line items.`, 'success');
+  }
+}
+window.exportOrdersCSV = exportOrdersCSV;
+
+// 4. Export Clinics & Unvisited Coverage
+function handleExportClinics() {
+  const scope = document.getElementById('exportClinicsScope')?.value || 'unvisited';
+  const territory = document.getElementById('exportClinicsTerritory')?.value || 'ALL';
+  exportClinicsCSV(scope, territory);
+}
+window.handleExportClinics = handleExportClinics;
+
+function exportClinicsCSV(scope = 'unvisited', territoryFilter = 'ALL') {
+  let clinics = state.customers || [];
+  if (territoryFilter && territoryFilter !== 'ALL') {
+    clinics = clinics.filter(c => (c.territory || c.repId) === territoryFilter);
+  }
+
+  const currentYM = (getSyncedTodayDate()).substring(0, 7);
+  const visitsThisMonth = (state.visits || []).filter(v => (v.date || '').startsWith(currentYM) && v.status === 'Completed');
+  const visitedCodes = new Set(visitsThisMonth.map(v => v.clientCode));
+
+  if (scope === 'unvisited') {
+    clinics = clinics.filter(c => !visitedCodes.has(c.code));
+  }
+
+  const headers = [
+    'Clinic Code', 'Clinic Name', 'Location / Emirate', 'Territory', 'Assigned Rep',
+    'Tier', 'Contact Person', 'Phone', 'Visited This Month', 'Last Visit Date'
+  ];
+
+  const rows = clinics.map(c => {
+    const isVisited = visitedCodes.has(c.code);
+    const lastVisit = (state.visits || [])
+      .filter(v => v.clientCode === c.code && v.status === 'Completed')
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+
+    return [
+      `"${c.code}"`,
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${c.location || ''}"`,
+      `"${c.territory || c.repId || ''}"`,
+      `"${getRepName(c.repId)}"`,
+      `"${c.tier || 'Silver'}"`,
+      `"${(c.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${c.phone || ''}"`,
+      isVisited ? 'YES' : 'NO',
+      `"${lastVisit ? lastVisit.date : 'Never'}"`
+    ];
+  });
+
+  const label = scope === 'unvisited' ? 'Unvisited_Clinics' : 'Full_Directory';
+  const tLabel = territoryFilter !== 'ALL' ? `_${territoryFilter}` : '';
+  downloadCsvFile(`Conceptors_${label}${tLabel}_${getSyncedTodayDate()}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+  showToast('Clinics CSV Exported', `Exported ${rows.length} clinic account(s).`, 'success');
+}
+window.exportClinicsCSV = exportClinicsCSV;
+
+function printDailyReportSummary() {
+  window.print();
+}
+window.printDailyReportSummary = printDailyReportSummary;
+
