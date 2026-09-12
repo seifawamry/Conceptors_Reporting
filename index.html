@@ -864,19 +864,28 @@
             <p class="text-xs text-slate-400">Master database of veterinary clinics, hospitals, and pharmacies across the UAE</p>
           </div>
 
-          <div class="flex items-center gap-2 w-full sm:w-auto">
-            <div class="relative flex-1 sm:w-64">
+          <div class="flex items-center gap-2 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+            <div class="relative flex-1 sm:w-56 min-w-[170px]">
               <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5"></i>
-              <input type="text" id="accountsSearchInput" oninput="handleAccountsFilter()" placeholder="Search clinic, location or doctor..." class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500">
+              <input type="text" id="accountsSearchInput" oninput="handleAccountsFilter()" placeholder="Search clinic, location, doctor..." class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500">
             </div>
             <select id="accountsTerritoryFilter" onchange="handleAccountsFilter()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none">
               <option value="ALL">All Territories</option>
               <option value="T1">Territory 1 (Dubai / AUH / Al Ain)</option>
               <option value="T2">Territory 2 (Northern Emirates)</option>
             </select>
+            <select id="accountsStatusFilter" onchange="handleAccountsFilter()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none font-semibold">
+              <option value="ALL">All Status (Active & Frozen)</option>
+              <option value="ACTIVE" selected>Active Only</option>
+              <option value="FROZEN">❄️ Frozen Accounts Only</option>
+            </select>
             <select id="accountsMonthFilter" onchange="handleAccountsFilter()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none font-semibold">
               <!-- Dynamically populated via JS -->
             </select>
+            <button type="button" onclick="openAddAccountModal()" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shrink-0 transition-all active:scale-95">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>+ Add Clinic</span>
+            </button>
           </div>
         </div>
 
@@ -911,14 +920,17 @@
         </div>
       </div>
 
-      <!-- Pending Plans & Live Orders Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Pending Plans, Live Orders & Account Activity Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <!-- Monthly Plans Review Queue -->
         <div class="glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
-          <h3 class="font-extrabold text-white text-sm flex items-center gap-2 pb-3 border-b border-slate-800">
-            <i data-lucide="calendar-check-2" class="w-4 h-4 text-sky-400"></i>
-            Monthly Visit Plans Review & Authorization
-          </h3>
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="font-extrabold text-white text-sm flex items-center gap-2">
+              <i data-lucide="calendar-check-2" class="w-4 h-4 text-sky-400"></i>
+              Monthly Visit Plans
+            </h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">Target Quotas</span>
+          </div>
           <div id="managerPlansList" class="space-y-3">
             <!-- Injected via JS -->
           </div>
@@ -926,11 +938,28 @@
 
         <!-- Orders Awaiting Senior Approval -->
         <div class="glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
-          <h3 class="font-extrabold text-white text-sm flex items-center gap-2 pb-3 border-b border-slate-800">
-            <i data-lucide="shopping-bag" class="w-4 h-4 text-emerald-400"></i>
-            Incoming Field Orders Approval Queue
-          </h3>
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="font-extrabold text-white text-sm flex items-center gap-2">
+              <i data-lucide="shopping-bag" class="w-4 h-4 text-emerald-400"></i>
+              Field Sales Orders
+            </h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">Authorizations</span>
+          </div>
           <div id="managerOrdersList" class="space-y-3">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <!-- Clinic Accounts Activity (Additions & Freezes) -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="font-extrabold text-white text-sm flex items-center gap-2">
+              <i data-lucide="building-2" class="w-4 h-4 text-teal-400"></i>
+              Clinic Accounts Activity
+            </h3>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">Rep Updates</span>
+          </div>
+          <div id="managerAccountsAlertsList" class="space-y-3">
             <!-- Injected via JS -->
           </div>
         </div>
@@ -1185,6 +1214,12 @@
             </div>
           </div>
           <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-400"></i>
+        </button>
+
+        <button type="button" onclick="closeMobileMoreDrawer(); openAddAccountModal();" class="p-3 rounded-2xl bg-teal-950/50 hover:bg-teal-900/60 border border-teal-500/40 text-teal-300 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
+          <i data-lucide="plus-circle" class="w-5 h-5 text-teal-400"></i>
+          <span>+ Add Clinic</span>
+          <span class="text-[10px] text-teal-400/80 font-normal">New Partner Account</span>
         </button>
 
         <button type="button" onclick="closeMobileMoreDrawer(); switchTab('accounts');" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 flex flex-col items-start gap-1.5 transition-all active:scale-[0.98]">
@@ -1800,8 +1835,8 @@
             <i data-lucide="bell-ring" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">Senior Manager Order Alerts & Outbox</h3>
-            <p class="text-[11px] text-slate-400">Automated field order notifications dispatched upon submission</p>
+            <h3 class="text-base font-bold text-white">Senior Manager Live Alerts & Outbox</h3>
+            <p class="text-[11px] text-slate-400">Automated alerts for new clinic accounts, frozen clinics, field orders & visit plans</p>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -2113,6 +2148,123 @@
           Close
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ADD VETERINARY ACCOUNT CRM ================= -->
+  <div id="addAccountModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-teal-500/40 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-xl bg-teal-500/20 text-teal-400 border border-teal-500/30">
+            <i data-lucide="building-2" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span>Add Veterinary Account</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 font-bold border border-teal-500/30">New Partner</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Register a clinic, hospital, or pharmacy in your territory</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAddAccountModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="addAccountForm" onsubmit="handleAddAccountSubmit(event)" class="py-4 space-y-3.5 overflow-y-auto flex-1 pr-1">
+        <!-- Clinic Code & Classification -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[11px] text-slate-300 font-bold">Account Code <span class="text-rose-400">*</span></label>
+              <button type="button" onclick="generateClinicCode()" class="text-[10px] text-teal-400 hover:text-teal-300 font-semibold underline">Auto-Generate</button>
+            </div>
+            <input type="text" id="newAccountCode" required placeholder="e.g. DC1050 or AC0600" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 uppercase font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Account Tier / Category <span class="text-rose-400">*</span></label>
+            <select id="newAccountTier" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-semibold">
+              <option value="VIP Platinum">💎 VIP Platinum (High Volume)</option>
+              <option value="VIP Gold">⭐ VIP Gold (Target Account)</option>
+              <option value="Silver" selected>🔹 Silver (Standard Clinic / Pharmacy)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Account Name -->
+        <div>
+          <label class="block text-[11px] text-slate-300 font-bold mb-1">Veterinary Clinic / Hospital Name <span class="text-rose-400">*</span></label>
+          <input type="text" id="newAccountName" required placeholder="e.g. Pet Care Veterinary Specialty Clinic LLC" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-medium">
+        </div>
+
+        <!-- Territory & Emirate Location -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Territory Assignment <span class="text-rose-400">*</span></label>
+            <select id="newAccountTerritory" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-bold">
+              <option value="T1">Territory 1 - Dr. Shaimaa (Dubai / Abu Dhabi / Al Ain)</option>
+              <option value="T2">Territory 2 - Dr. Marsel (Northern Emirates)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Emirate / City <span class="text-rose-400">*</span></label>
+            <select id="newAccountLocation" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-medium">
+              <option value="Dubai" selected>Dubai</option>
+              <option value="Abu Dhabi">Abu Dhabi</option>
+              <option value="Sharjah">Sharjah</option>
+              <option value="Ajman">Ajman</option>
+              <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+              <option value="Fujairah">Fujairah</option>
+              <option value="Umm Al Quwain">Umm Al Quwain</option>
+              <option value="Al Ain">Al Ain</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Doctor / Contact Person & Phone -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Key Doctor / Contact Person</label>
+            <input type="text" id="newAccountDoctor" placeholder="e.g. Dr. Sarah Al Mansoori (Medical Director)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Phone / Mobile Number</label>
+            <input type="text" id="newAccountPhone" placeholder="e.g. +971 4 345 6789 / +971 50 123 4567" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500">
+          </div>
+        </div>
+
+        <!-- Address / Area -->
+        <div>
+          <label class="block text-[11px] text-slate-300 font-bold mb-1">Clinic Address & Area</label>
+          <input type="text" id="newAccountAddress" placeholder="e.g. Jumeirah 1, Al Wasl Road, Villa 12, Dubai" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500">
+        </div>
+
+        <!-- Commercial / Clinical Notes -->
+        <div>
+          <label class="block text-[11px] text-slate-300 font-bold mb-1">Clinical Focus / Commercial Notes</label>
+          <textarea id="newAccountNotes" rows="2" placeholder="e.g. High case load of renal & cardiac canine cases; interested in ASBRIP & RENALOF clinic packs." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 resize-none"></textarea>
+        </div>
+
+        <!-- Manager Notice Info -->
+        <div class="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-start gap-2 text-[11px] text-teal-300">
+          <i data-lucide="bell-ring" class="w-4 h-4 shrink-0 mt-0.5 text-teal-400"></i>
+          <span>An instant notification will be dispatched to <strong>Dr. Sameh Ageez (Senior Sales Manager)</strong> notifying him of this new account in your territory.</span>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeAddAccountModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="btnSaveNewAccount" class="px-5 py-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-teal-600/30 transition-all active:scale-95">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>Register & Notify Senior Manager</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -392,7 +392,26 @@ function mapCustomerFromDb(row) {
     repId: row.rep_id,
     tier: row.tier,
     contactPerson: row.contact_person,
-    phone: row.phone
+    phone: row.phone,
+    address: row.address || '',
+    notes: row.notes || '',
+    isActive: row.is_active !== false
+  };
+}
+
+function mapCustomerToDb(c) {
+  return {
+    code: c.code,
+    name: c.name,
+    location: c.location,
+    territory: c.territory || c.repId,
+    rep_id: c.repId || c.territory,
+    tier: c.tier || 'Silver',
+    contact_person: c.contactPerson || '',
+    phone: c.phone || '',
+    address: c.address || '',
+    notes: c.notes || '',
+    is_active: c.isActive !== false
   };
 }
 
@@ -507,7 +526,18 @@ async function syncWithSupabase(force = false) {
 
     const notifRes = await supabaseRest('notifications?select=*&order=timestamp.desc');
     if (notifRes.data && Array.isArray(notifRes.data) && notifRes.data.length > 0) {
-      state.notifications = notifRes.data.map(mapNotifFromDb);
+      const prevIds = new Set((state.notifications || []).map(n => n.id));
+      const freshNotifs = notifRes.data.map(mapNotifFromDb);
+      const newAlerts = freshNotifs.filter(n => !n.read && !prevIds.has(n.id));
+      state.notifications = freshNotifs;
+
+      // If new unread alerts arrived while Senior Manager is in the app
+      if (newAlerts.length > 0 && state.currentUser && state.currentUser.role === 'manager') {
+        if (state.managerSettings.soundAlert) playNotificationChime();
+        if (state.managerSettings.toastAlert) {
+          showToast(`🚨 ${newAlerts[0].title}`, newAlerts[0].itemsSummary || 'New field alert received.', 'info');
+        }
+      }
     }
 
     const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
@@ -1202,7 +1232,7 @@ window.renderCustomerComboboxList = function(modalKey, query = '') {
   const repId = repSelect ? repSelect.value : '';
 
   const scoped = getScopedCustomers();
-  let list = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  let list = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
 
   const q = (query || '').trim().toLowerCase();
   if (q) {
@@ -3363,7 +3393,7 @@ window.filterUnplannedClinics = function() {
 
   // Use strictly scoped customers
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -4299,7 +4329,7 @@ window.filterPlanClinics = function() {
 
   // Use strictly scoped customers
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -4664,7 +4694,7 @@ window.filterOrderClinics = function() {
   if (!custSelect) return;
 
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -4964,6 +4994,70 @@ function renderManagerNotifications() {
     const isUnread = !n.read;
     const isApproved = n.approvalStatus === 'Approved';
     const dateObj = new Date(n.timestamp);
+    const isAccountEvent = n.type && n.type.startsWith('ACCOUNT_');
+
+    if (isAccountEvent) {
+      const isFrozen = n.type === 'ACCOUNT_FROZEN';
+      const isUnfrozen = n.type === 'ACCOUNT_UNFROZEN';
+      const iconName = isFrozen ? 'snowflake' : (isUnfrozen ? 'flame' : 'building-2');
+      const iconStyle = isFrozen
+        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-teal-500/20 text-teal-300 border-teal-500/40');
+      const badgeStyle = isFrozen
+        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
+      const badgeText = isFrozen ? '❄️ Account Frozen' : (isUnfrozen ? '🔥 Reactivated' : '✨ New Clinic Added');
+
+      return `
+        <div class="glass-card rounded-xl p-4 border ${isUnread ? (isFrozen ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-teal-500/50 bg-teal-950/20') : 'border-slate-800 bg-slate-900/60'} relative transition-all">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl ${iconStyle} flex items-center justify-center shrink-0 border">
+                <i data-lucide="${iconName}" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-white text-xs">${escapeHtml(n.title)}</span>
+                  ${isUnread ? '<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>' : ''}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${n.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${n.repId}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeStyle}">${badgeText}</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5 font-medium">
+                  Field Rep: <strong class="text-white">${escapeHtml(n.repName)}</strong> • Clinic: <span class="text-teal-300 font-bold">${escapeHtml(n.clientName)}</span> (<span class="font-mono">${escapeHtml(n.clientCode || '')}</span> • ${escapeHtml(n.location || 'UAE')})
+                </p>
+                ${n.itemsSummary ? `<p class="text-[10px] text-slate-300 mt-1 bg-slate-950/70 p-2 rounded-lg border border-slate-800">${escapeHtml(n.itemsSummary)}</p>` : ''}
+              </div>
+            </div>
+
+            <div class="text-right shrink-0">
+              <span class="text-[10px] text-slate-400 block">${dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="text-[10px] font-extrabold ${isFrozen ? 'text-cyan-400' : 'text-teal-400'} block mt-1">
+                ${isFrozen ? '❄️ Inactive' : '✓ Active'}
+              </span>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <div class="text-[10px] text-slate-400">
+              <span>Territory: <strong class="text-slate-200">${n.repId}</strong></span>
+              <span class="mx-1">•</span>
+              <span>Clinic Code: <strong class="text-teal-300 font-mono">${escapeHtml(n.clientCode || '')}</strong></span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="goToAccountInCRM('${n.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[11px] font-bold flex items-center gap-1">
+                <i data-lucide="building-2" class="w-3 h-3"></i> View in Accounts CRM
+              </button>
+              ${isUnread ? `
+                <button onclick="markNotificationReadDirect('${n.id}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold">
+                  Acknowledge
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div class="glass-card rounded-xl p-4 border ${isUnread ? 'border-amber-500/50 bg-amber-950/15' : 'border-slate-800 bg-slate-900/60'} relative transition-all">
@@ -5251,6 +5345,7 @@ function renderAccountsGrid() {
 
   const searchQ = (state.filters.accountsSearch || '').toLowerCase();
   const terrFilter = state.filters.accountsTerritory || 'ALL';
+  const statusFilter = state.filters.accountsStatus || 'ACTIVE';
 
   // Initialize and synchronize accountsMonthFilter dropdown
   const monthFilterSelect = document.getElementById('accountsMonthFilter');
@@ -5292,23 +5387,39 @@ function renderAccountsGrid() {
     list = list.filter(c => c.territory === terrFilter || c.repId === terrFilter);
   }
 
+  // Status filter: ACTIVE, FROZEN, ALL
+  if (statusFilter === 'ACTIVE') {
+    list = list.filter(c => c.isActive !== false);
+  } else if (statusFilter === 'FROZEN') {
+    list = list.filter(c => c.isActive === false);
+  }
+
   if (searchQ) {
     list = list.filter(c =>
-      c.name.toLowerCase().includes(searchQ) ||
-      c.code.toLowerCase().includes(searchQ) ||
-      c.location.toLowerCase().includes(searchQ) ||
+      (c.name && c.name.toLowerCase().includes(searchQ)) ||
+      (c.code && c.code.toLowerCase().includes(searchQ)) ||
+      (c.location && c.location.toLowerCase().includes(searchQ)) ||
       (c.contactPerson && c.contactPerson.toLowerCase().includes(searchQ))
     );
   }
 
   if (list.length === 0) {
-    container.innerHTML = '<div class="col-span-full py-12 text-center text-slate-500">No veterinary accounts match current search.</div>';
+    container.innerHTML = `
+      <div class="col-span-full py-12 text-center text-slate-500">
+        <i data-lucide="building-2" class="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-60"></i>
+        <p class="text-xs font-bold text-slate-400">No veterinary accounts match your filter criteria.</p>
+        <p class="text-[11px] text-slate-500 mt-1">Try switching status to "All Status" or resetting search terms.</p>
+      </div>
+    `;
+    safeLucide();
     return;
   }
 
   const allVisits = state.visits || [];
 
   container.innerHTML = list.map(c => {
+    const isFrozen = (c.isActive === false);
+
     // Calculate planned and visited counts for this account in the active month
     const clientVisits = allVisits.filter(v => {
       const isThisAccount = (v.clientCode === c.code || v.customerCode === c.code);
@@ -5327,46 +5438,75 @@ function renderAccountsGrid() {
     else if (c.tier === 'VIP Gold') badgeClass = 'badge-vip-gold';
 
     return `
-      <div class="glass-card rounded-xl p-4 border border-slate-800 hover:border-teal-500/40 transition-all flex flex-col justify-between space-y-3">
+      <div class="glass-card rounded-xl p-4 border ${isFrozen ? 'border-cyan-500/40 bg-cyan-950/20' : 'border-slate-800 hover:border-teal-500/40'} transition-all flex flex-col justify-between space-y-3">
         <div>
           <div class="flex items-start justify-between gap-2">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
+            </div>
+            ${isFrozen ? `
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1 shadow-sm">
+                <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> FROZEN
+              </span>
+            ` : `
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
+            `}
           </div>
           <h4 class="font-bold text-white text-sm mt-2 truncate" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</h4>
-          <p class="text-[11px] text-slate-400">${c.code} • ${c.location}</p>
+          <p class="text-[11px] text-slate-400">${c.code} • ${escapeHtml(c.location || 'UAE')}</p>
 
-          <!-- Monthly Activity: Planned vs Completed Visited Counters -->
-          <div class="account-month-metrics p-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs my-2.5">
-            <div class="flex items-center gap-1.5" title="Visits planned in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
-              <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
-              <span class="text-slate-400 text-[11px] font-medium">Planned:</span>
-              <span class="font-black text-sky-400 text-xs">${plannedCount}</span>
+          ${isFrozen ? `
+            <div class="account-frozen-notice p-2 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-[11px] text-cyan-300 flex items-center justify-between my-2.5">
+              <span class="flex items-center gap-1.5 font-bold"><i data-lucide="snowflake" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i> Account Inactive</span>
+              <span class="text-[10px] text-cyan-400/80 font-medium">Frozen by Field Rep</span>
             </div>
-            <div class="h-3.5 w-px bg-slate-700/80"></div>
-            <div class="flex items-center gap-1.5" title="Completed visits conducted in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-              <span class="text-slate-400 text-[11px] font-medium">Visited:</span>
-              <span class="font-black text-emerald-400 text-xs">${visitedCount}</span>
+          ` : `
+            <!-- Monthly Activity: Planned vs Completed Visited Counters -->
+            <div class="account-month-metrics p-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs my-2.5">
+              <div class="flex items-center gap-1.5" title="Visits planned in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+                <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+                <span class="text-slate-400 text-[11px] font-medium">Planned:</span>
+                <span class="font-black text-sky-400 text-xs">${plannedCount}</span>
+              </div>
+              <div class="h-3.5 w-px bg-slate-700/80"></div>
+              <div class="flex items-center gap-1.5" title="Completed visits conducted in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                <span class="text-slate-400 text-[11px] font-medium">Visited:</span>
+                <span class="font-black text-emerald-400 text-xs">${visitedCount}</span>
+              </div>
+              <div class="h-3.5 w-px bg-slate-700/80"></div>
+              <div class="text-[10px] font-extrabold ${visitedCount > 0 ? 'text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30' : (plannedCount > 0 ? 'text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30' : 'text-slate-500')}">
+                ${visitedCount > 0 ? `${visitedCount} Visited` : (plannedCount > 0 ? `${plannedCount} Planned` : '0 Activity')}
+              </div>
             </div>
-            <div class="h-3.5 w-px bg-slate-700/80"></div>
-            <div class="text-[10px] font-extrabold ${visitedCount > 0 ? 'text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30' : (plannedCount > 0 ? 'text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30' : 'text-slate-500')}">
-              ${visitedCount > 0 ? `${visitedCount} Visited` : (plannedCount > 0 ? `${plannedCount} Planned` : '0 Activity')}
-            </div>
-          </div>
+          `}
 
           <div class="mt-2 text-[11px] text-slate-300">
             <span class="text-slate-500">Contact Doctor:</span> ${escapeHtml(c.contactPerson || 'Lead Vet')}
+            ${c.phone ? `<span class="text-slate-500 ml-2">• Tel:</span> <span class="font-mono text-slate-400">${escapeHtml(c.phone)}</span>` : ''}
           </div>
         </div>
 
         <div class="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-          <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
-            Plan Visit
-          </button>
-          <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors">
-            <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned Visit
-          </button>
+          ${isFrozen ? `
+            <span class="text-[11px] text-slate-500 font-semibold">Reactivate to log visits</span>
+            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
+              <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze Account
+            </button>
+          ` : `
+            <div class="flex items-center gap-1.5">
+              <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
+                Plan Visit
+              </button>
+              <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors">
+                <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned
+              </button>
+            </div>
+            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
+              <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
+            </button>
+          `}
         </div>
       </div>
     `;
@@ -5377,12 +5517,18 @@ window.renderAccountsGrid = renderAccountsGrid;
 window.handleAccountsFilter = function() {
   state.filters.accountsSearch = document.getElementById('accountsSearchInput')?.value || '';
   state.filters.accountsTerritory = document.getElementById('accountsTerritoryFilter')?.value || 'ALL';
+  state.filters.accountsStatus = document.getElementById('accountsStatusFilter')?.value || 'ACTIVE';
   state.filters.accountsMonthFilter = document.getElementById('accountsMonthFilter')?.value || 'CURRENT';
   renderAccountsGrid();
   safeLucide();
 };
 
 window.openPlanVisitModalForClient = function(clientCode, repId) {
+  const cust = (state.customers || []).find(c => c.code === clientCode);
+  if (cust && cust.isActive === false) {
+    showToast('Account Frozen', `${cust.name} is currently frozen. Please unfreeze it first to schedule visits.`, 'warning');
+    return;
+  }
   openPlanVisitModal();
   const repSelect = document.getElementById('planRepSelect');
   if (repSelect && (!state.currentUser || state.currentUser.role === 'manager')) {
@@ -5390,6 +5536,249 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
     filterPlanClinics();
   }
   selectCustomerCombobox('plan', clientCode);
+};
+
+// =========================================================================
+// 14B. ADD ACCOUNT & FREEZE CONTROLS (REP ACTION & MANAGER ALERT DISPATCH)
+// =========================================================================
+
+window.openAddAccountModal = function() {
+  const modal = document.getElementById('addAccountModal');
+  if (!modal) return;
+
+  const form = document.getElementById('addAccountForm');
+  if (form) form.reset();
+
+  const terrSelect = document.getElementById('newAccountTerritory');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : (state.currentUser.role === 'rep_t2' ? 'T2' : 'T1'))) : 'T1';
+
+  if (terrSelect) {
+    if (state.currentUser && state.currentUser.role === 'manager') {
+      terrSelect.disabled = false;
+      terrSelect.value = 'T1';
+    } else {
+      terrSelect.value = userTerritory;
+      terrSelect.disabled = true;
+    }
+  }
+
+  generateClinicCode();
+  modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeAddAccountModal = function() {
+  const modal = document.getElementById('addAccountModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.generateClinicCode = function() {
+  const terrSelect = document.getElementById('newAccountTerritory');
+  const terr = terrSelect ? terrSelect.value : (state.currentUser?.territory || 'T1');
+  const prefix = terr === 'T2' ? 'AC' : 'DC';
+
+  // Find existing max numeric code with prefix
+  let maxNum = 1000;
+  (state.customers || []).forEach(c => {
+    if (c.code && c.code.toUpperCase().startsWith(prefix)) {
+      const num = parseInt(c.code.slice(prefix.length), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+
+  const nextCode = `${prefix}${String(maxNum + 10).padStart(4, '0')}`;
+  const codeInput = document.getElementById('newAccountCode');
+  if (codeInput) codeInput.value = nextCode;
+};
+
+window.handleAddAccountSubmit = async function(e) {
+  e.preventDefault();
+
+  const codeInput = document.getElementById('newAccountCode');
+  const nameInput = document.getElementById('newAccountName');
+  const tierSelect = document.getElementById('newAccountTier');
+  const terrSelect = document.getElementById('newAccountTerritory');
+  const locSelect = document.getElementById('newAccountLocation');
+  const docInput = document.getElementById('newAccountDoctor');
+  const phoneInput = document.getElementById('newAccountPhone');
+  const addrInput = document.getElementById('newAccountAddress');
+  const notesInput = document.getElementById('newAccountNotes');
+
+  const code = (codeInput?.value || '').trim().toUpperCase();
+  const name = (nameInput?.value || '').trim();
+  const tier = tierSelect?.value || 'Silver';
+  const assignedTerritory = terrSelect?.value || (state.currentUser?.territory || 'T1');
+  const location = locSelect?.value || 'Dubai';
+  const contactPerson = (docInput?.value || '').trim();
+  const phone = (phoneInput?.value || '').trim();
+  const address = (addrInput?.value || '').trim();
+  const notes = (notesInput?.value || '').trim();
+
+  if (!code || !name) {
+    showToast('Missing Details', 'Please specify account code and clinic name.', 'warning');
+    return;
+  }
+
+  // Check code uniqueness
+  const existing = (state.customers || []).find(c => c.code.toUpperCase() === code);
+  if (existing) {
+    showToast('Duplicate Code', `Account code "${code}" already belongs to ${existing.name}. Please choose or auto-generate another code.`, 'warning');
+    return;
+  }
+
+  const newCust = {
+    code,
+    name,
+    location,
+    territory: assignedTerritory,
+    repId: assignedTerritory,
+    tier,
+    contactPerson: contactPerson || 'Lead Vet',
+    phone: phone || '',
+    address: address || '',
+    notes: notes || '',
+    isActive: true
+  };
+
+  // Add to local state
+  state.customers.unshift(newCust);
+  persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('customers', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapCustomerToDb(newCust)
+  });
+
+  // Create real-time Senior Manager Alert
+  const repName = state.currentUser ? (state.currentUser.name || (assignedTerritory === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${assignedTerritory}`;
+  const notif = {
+    id: `NOTIF-ACC-${Date.now()}`,
+    type: 'ACCOUNT_ADDED',
+    title: `New Account Added: ${newCust.name}`,
+    orderNumber: newCust.code,
+    repId: assignedTerritory,
+    repName: repName,
+    clientCode: newCust.code,
+    clientName: newCust.name,
+    location: newCust.location,
+    timestamp: new Date().toISOString(),
+    read: false,
+    approvalStatus: 'Active',
+    itemsSummary: `New ${newCust.tier} account added by ${repName} in ${newCust.location}. Dr/Contact: ${newCust.contactPerson}. Phone: ${newCust.phone || 'N/A'}.`
+  };
+
+  state.notifications.unshift(notif);
+  persistData();
+
+  // Cloud write-through notification to Supabase
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
+  if (state.managerSettings.soundAlert) playNotificationChime();
+  showToast(
+    '🎉 Clinic Account Added',
+    `Registered ${newCust.name} (${newCust.code}) in ${assignedTerritory}. Senior Manager Dr. Sameh Ageez alerted.`,
+    'success'
+  );
+
+  closeAddAccountModal();
+  updateNotificationBell();
+  renderAccountsGrid();
+  renderManagerNotifications();
+  renderManagerHub();
+};
+
+window.toggleAccountFreeze = async function(clientCode) {
+  const cust = (state.customers || []).find(c => c.code === clientCode);
+  if (!cust) return;
+
+  const willBeFrozen = (cust.isActive !== false);
+  cust.isActive = !willBeFrozen;
+  persistData();
+
+  // Cloud sync to Supabase customers table
+  supabaseRest(`customers?code=eq.${encodeURIComponent(clientCode)}`, {
+    method: 'PATCH',
+    body: { is_active: cust.isActive }
+  });
+
+  const repName = state.currentUser ? (state.currentUser.name || (cust.repId === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${cust.repId || 'T1'}`;
+  const repId = cust.repId || cust.territory || 'T1';
+
+  // Create real-time Senior Manager Alert
+  const notif = {
+    id: `NOTIF-FRZ-${Date.now()}`,
+    type: willBeFrozen ? 'ACCOUNT_FROZEN' : 'ACCOUNT_UNFROZEN',
+    title: willBeFrozen ? `Account Frozen: ${cust.name}` : `Account Reactivated: ${cust.name}`,
+    orderNumber: cust.code,
+    repId: repId,
+    repName: repName,
+    clientCode: cust.code,
+    clientName: cust.name,
+    location: cust.location,
+    timestamp: new Date().toISOString(),
+    read: false,
+    approvalStatus: willBeFrozen ? 'Frozen' : 'Active',
+    itemsSummary: willBeFrozen
+      ? `Rep ${repName} froze account "${cust.name}" (${cust.code}) in ${cust.location}. Account is marked inactive.`
+      : `Rep ${repName} reactivated account "${cust.name}" (${cust.code}) in ${cust.location}. Account is active for visits and orders.`
+  };
+
+  state.notifications.unshift(notif);
+  persistData();
+
+  // Cloud sync to Supabase notifications table
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
+  if (state.managerSettings.soundAlert) playNotificationChime();
+  showToast(
+    willBeFrozen ? '❄️ Account Frozen' : '🔥 Account Reactivated',
+    `${cust.name} (${cust.code}) is now ${willBeFrozen ? 'frozen (inactive)' : 'reactivated'}. Senior Manager alerted.`,
+    willBeFrozen ? 'warning' : 'success'
+  );
+
+  updateNotificationBell();
+  renderAccountsGrid();
+  renderManagerNotifications();
+  renderManagerHub();
+};
+
+window.goToAccountInCRM = function(clientCode) {
+  closeNotificationsModal();
+  switchTab('accounts');
+  const searchInput = document.getElementById('accountsSearchInput');
+  if (searchInput) {
+    searchInput.value = clientCode;
+  }
+  const statusSelect = document.getElementById('accountsStatusFilter');
+  if (statusSelect) {
+    statusSelect.value = 'ALL';
+  }
+  handleAccountsFilter();
+};
+
+window.markNotificationReadDirect = function(notifId) {
+  const notif = state.notifications.find(n => n.id === notifId);
+  if (notif) {
+    notif.read = true;
+    persistData();
+    supabaseRest(`notifications?id=eq.${encodeURIComponent(notifId)}`, {
+      method: 'PATCH',
+      body: { read: true }
+    });
+    updateNotificationBell();
+    renderManagerNotifications();
+    renderManagerHub();
+  }
 };
 
 // =========================================================================
@@ -6083,6 +6472,37 @@ function renderManagerHub() {
                 Approve
               </button>
             </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  const accountsContainer = document.getElementById('managerAccountsAlertsList');
+  if (accountsContainer) {
+    const accountAlerts = (state.notifications || []).filter(n => n.type && n.type.startsWith('ACCOUNT_'));
+    if (accountAlerts.length === 0) {
+      accountsContainer.innerHTML = '<div class="py-8 text-center text-slate-500 text-xs">No clinic account modifications logged yet.</div>';
+    } else {
+      accountsContainer.innerHTML = accountAlerts.slice(0, 8).map(a => {
+        const isFrozen = a.type === 'ACCOUNT_FROZEN';
+        const isUnfrozen = a.type === 'ACCOUNT_UNFROZEN';
+        const badgeColor = isFrozen ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
+        const badgeLabel = isFrozen ? '❄️ Frozen' : (isUnfrozen ? '🔥 Active' : '✨ Added');
+
+        return `
+          <div class="glass-card rounded-xl p-3 border border-slate-800 flex items-center justify-between">
+            <div class="min-w-0 pr-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-bold text-white truncate max-w-[160px]" title="${escapeHtml(a.clientName)}">${escapeHtml(a.clientName)}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${a.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${a.repId}</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold ${badgeColor}">${badgeLabel}</span>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-0.5 font-mono">${a.clientCode || ''} • ${escapeHtml(a.location || 'UAE')} • By ${escapeHtml(a.repName)}</p>
+            </div>
+            <button onclick="goToAccountInCRM('${a.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[10px] font-bold shrink-0">
+              View
+            </button>
           </div>
         `;
       }).join('');
@@ -6789,7 +7209,7 @@ function exportClinicsCSV(scope = 'unvisited', territoryFilter = 'ALL') {
   }
 
   const headers = [
-    'Clinic Code', 'Clinic Name', 'Location / Emirate', 'Territory', 'Assigned Rep',
+    'Clinic Code', 'Clinic Name', 'Account Status', 'Location / Emirate', 'Territory', 'Assigned Rep',
     'Tier', 'Contact Person', 'Phone', 'Visited This Month', 'Last Visit Date'
   ];
 
@@ -6802,6 +7222,7 @@ function exportClinicsCSV(scope = 'unvisited', territoryFilter = 'ALL') {
     return [
       `"${c.code}"`,
       `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${c.isActive === false ? 'Frozen (Inactive)' : 'Active'}"`,
       `"${c.location || ''}"`,
       `"${c.territory || c.repId || ''}"`,
       `"${getRepName(c.repId)}"`,
