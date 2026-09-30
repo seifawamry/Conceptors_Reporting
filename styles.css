@@ -781,26 +781,34 @@ html:not(.dark) .border-slate-700 {
   border-color: #cbd5e1 !important;
 }
 
-html:not(.dark) .bg-slate-900:not(input):not(select):not(textarea) {
+html:not(.dark) .bg-slate-900:not(input):not(select):not(textarea),
+html:not(.dark) [class*="bg-slate-900"]:not(input):not(select):not(textarea):not(button.bg-brand-600) {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 
-html:not(.dark) .bg-slate-950:not(input) {
+html:not(.dark) .bg-slate-950:not(input),
+html:not(.dark) [class*="bg-slate-950"]:not(input) {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 
-html:not(.dark) .bg-slate-800:not(input):not(select):not(textarea) {
+html:not(.dark) .bg-slate-800:not(input):not(select):not(textarea):not(button),
+html:not(.dark) [class*="bg-slate-800"]:not(input):not(select):not(textarea):not(button) {
   background-color: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 
-html:not(.dark) .bg-\[\#0c1322\] {
+html:not(.dark) .bg-\[\#0c1322\],
+html:not(.dark) [class*="bg-\[\#0c1322\]"] {
   background-color: #ffffff !important;
 }
 
-html:not(.dark) .bg-\[\#070d19\] {
+html:not(.dark) .bg-\[\#070d19\],
+html:not(.dark) [class*="bg-\[\#070d19\]"] {
   background-color: #eaf0f8 !important;
 }
 
@@ -1000,27 +1008,53 @@ html:not(.dark) .fixed button[onclick*="Close"] * {
 html:not(.dark) #managerNotificationsModal .glass-panel {
   background-color: #ffffff !important;
   border: 2px solid #cbd5e1 !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
 }
 
 html:not(.dark) #managerNotificationsModal h3 {
   color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) #managerNotificationsModal p {
+  color: #475569 !important;
+}
+
+html:not(.dark) #managerNotificationsModal .border-b,
+html:not(.dark) #managerNotificationsModal .border-t {
+  border-color: #e2e8f0 !important;
 }
 
 html:not(.dark) #managerNotificationsList .glass-card {
   background-color: #ffffff !important;
   border: 1.5px solid #cbd5e1 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+  color: #0f172a !important;
 }
 
 html:not(.dark) #managerNotificationsList .glass-card.border-amber-500\/50,
-html:not(.dark) #managerNotificationsList .glass-card[class*="bg-amber-950"] {
+html:not(.dark) #managerNotificationsList .glass-card[class*="border-amber"],
+html:not(.dark) #managerNotificationsList .glass-card[class*="bg-amber"] {
   background-color: #fffbeb !important;
   border: 2px solid #f59e0b !important;
 }
 
+html:not(.dark) #managerNotificationsList .glass-card[class*="border-cyan"],
+html:not(.dark) #managerNotificationsList .glass-card[class*="bg-cyan"] {
+  background-color: #f0fdfa !important;
+  border: 2px solid #06b6d4 !important;
+}
+
+html:not(.dark) #managerNotificationsList .glass-card[class*="border-teal"],
+html:not(.dark) #managerNotificationsList .glass-card[class*="bg-teal"] {
+  background-color: #f0fdf4 !important;
+  border: 2px solid #10b981 !important;
+}
+
 html:not(.dark) #managerNotificationsList .glass-card h4,
 html:not(.dark) #managerNotificationsList .glass-card span.font-bold,
-html:not(.dark) #managerNotificationsList .glass-card span.text-white {
+html:not(.dark) #managerNotificationsList .glass-card span.text-white,
+html:not(.dark) #managerNotificationsList .glass-card strong {
   color: #0f172a !important;
 }
 
@@ -1028,14 +1062,17 @@ html:not(.dark) #managerNotificationsList .glass-card p {
   color: #334155 !important;
 }
 
-html:not(.dark) #managerNotificationsList .glass-card p strong {
+/* Itemized order summary inside notifications - crisp light background, dark readable text */
+html:not(.dark) #managerNotificationsList [class*="bg-slate-950"],
+html:not(.dark) #managerNotificationsList [class*="bg-slate-900"] {
+  background-color: #f1f5f9 !important;
+  border: 1.5px solid #cbd5e1 !important;
   color: #0f172a !important;
+  font-weight: 600 !important;
 }
 
-html:not(.dark) #managerNotificationsList .bg-slate-950\/60 {
-  background-color: #ffffff !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #334155 !important;
+html:not(.dark) #managerNotificationsList [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
 }
 
 html:not(.dark) #managerNotificationsList button[onclick*="viewNotificationEmail"] {
@@ -1051,10 +1088,24 @@ html:not(.dark) #managerNotificationsList button[onclick*="viewNotificationEmail
   color: #0284c7 !important;
 }
 
+html:not(.dark) #managerNotificationsList button[onclick*="approveOrderFromNotification"] {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) #managerNotificationsList button[onclick*="markNotificationReadDirect"] {
+  background-color: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
 /* Executive Email Preview Modal in Bright Mode */
 html:not(.dark) #viewEmailModal .glass-panel {
   background-color: #ffffff !important;
   border: 2px solid #cbd5e1 !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
 }
 
 html:not(.dark) #emailPreviewContent {
@@ -1081,11 +1132,194 @@ html:not(.dark) #emailPreviewContent table td {
 html:not(.dark) #managerSettingsModal .glass-panel {
   background-color: #ffffff !important;
   border: 2px solid #cbd5e1 !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
 }
 
 html:not(.dark) #managerSettingsModal h3,
 html:not(.dark) #managerSettingsModal label {
   color: #0f172a !important;
+}
+
+html:not(.dark) #managerSettingsModal p {
+  color: #475569 !important;
+}
+
+html:not(.dark) #managerSettingsModal [class*="bg-slate-900"] {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerSettingsModal [class*="bg-sky-950"] {
+  background-color: #f0f9ff !important;
+  border: 1.5px solid #bae6fd !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerSettingsModal [class*="bg-[#0c1f17]"],
+html:not(.dark) #managerSettingsModal [class*="bg-emerald"] {
+  background-color: #f0fdf4 !important;
+  border: 1.5px solid #bbf7d0 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerSettingsModal [class*="bg-[#0d1728]"],
+html:not(.dark) #managerSettingsModal [class*="bg-indigo"] {
+  background-color: #eef2ff !important;
+  border: 1.5px solid #c7d2fe !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #managerSettingsModal textarea,
+html:not(.dark) #managerSettingsModal input[type="text"],
+html:not(.dark) #managerSettingsModal input[type="tel"] {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Submit & Amend Planned Visit Modals in Bright Mode */
+html:not(.dark) #submitPlannedVisitModal .glass-panel,
+html:not(.dark) #amendPlannedVisitModal .glass-panel,
+html:not(.dark) #iosAlertGuideModal .glass-panel {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #submitPlannedVisitModal h3,
+html:not(.dark) #amendPlannedVisitModal h3,
+html:not(.dark) #iosAlertGuideModal h3,
+html:not(.dark) #submitPlannedVisitModal label,
+html:not(.dark) #amendPlannedVisitModal label {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #submitPlannedVisitModal input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) #submitPlannedVisitModal select,
+html:not(.dark) #submitPlannedVisitModal textarea,
+html:not(.dark) #amendPlannedVisitModal input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) #amendPlannedVisitModal select,
+html:not(.dark) #amendPlannedVisitModal textarea {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #submitPlannedVisitModal .border-b,
+html:not(.dark) #submitPlannedVisitModal .border-t,
+html:not(.dark) #amendPlannedVisitModal .border-b,
+html:not(.dark) #amendPlannedVisitModal .border-t {
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) #submitPlannedVisitModal [class*="bg-slate-900"],
+html:not(.dark) #amendPlannedVisitModal [class*="bg-slate-900"],
+html:not(.dark) #submitPlannedVisitModal [class*="bg-slate-950"],
+html:not(.dark) #amendPlannedVisitModal [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* ================= DAILY WORKSPACE VISIT CARDS IN BRIGHT MODE ================= */
+html:not(.dark) .visit-card-item,
+html:not(.dark) #plannedVisitsContainer .glass-card,
+html:not(.dark) #unplannedVisitsContainer .glass-card {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05) !important;
+}
+
+html:not(.dark) #plannedVisitsContainer .glass-card[class*="border-emerald"],
+html:not(.dark) #plannedVisitsContainer .glass-card[class*="bg-emerald"] {
+  background-color: #f0fdf4 !important;
+  border: 1.5px solid #86efac !important;
+}
+
+html:not(.dark) #unplannedVisitsContainer .glass-card[class*="border-amber"],
+html:not(.dark) #unplannedVisitsContainer .glass-card[class*="bg-amber"] {
+  background-color: #fffbeb !important;
+  border: 1.5px solid #fde68a !important;
+}
+
+html:not(.dark) .visit-card-item h4,
+html:not(.dark) #plannedVisitsContainer h4,
+html:not(.dark) #unplannedVisitsContainer h4 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) .visit-card-item p,
+html:not(.dark) #plannedVisitsContainer p,
+html:not(.dark) #unplannedVisitsContainer p {
+  color: #475569 !important;
+}
+
+/* Visit detail box (Doctor Met & detaling notes) */
+html:not(.dark) .visit-detail-box,
+html:not(.dark) .visit-card-item [class*="bg-slate-950"],
+html:not(.dark) #plannedVisitsContainer [class*="bg-slate-950"],
+html:not(.dark) #unplannedVisitsContainer [class*="bg-slate-950"] {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+html:not(.dark) .visit-detail-box *,
+html:not(.dark) #plannedVisitsContainer .visit-detail-box *,
+html:not(.dark) #unplannedVisitsContainer .visit-detail-box * {
+  color: #1e293b !important;
+}
+
+html:not(.dark) .visit-detail-box span.text-slate-500,
+html:not(.dark) #plannedVisitsContainer span.text-slate-500,
+html:not(.dark) #unplannedVisitsContainer span.text-slate-500 {
+  color: #64748b !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .visit-detail-box .text-emerald-300\/90,
+html:not(.dark) .visit-detail-box [class*="text-emerald"] {
+  color: #047857 !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) .visit-card-item [class*="border-slate-800"],
+html:not(.dark) #plannedVisitsContainer [class*="border-slate-800"],
+html:not(.dark) #unplannedVisitsContainer [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
+}
+
+html:not(.dark) .visit-card-item button[onclick*="openAmendPlannedModal"] {
+  background-color: #e0f2fe !important;
+  border: 1.5px solid #7dd3fc !important;
+  color: #0369a1 !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) .visit-card-item button[onclick*="openAmendPlannedModal"]:hover {
+  background-color: #bae6fd !important;
+  border-color: #0284c7 !important;
+}
+
+html:not(.dark) #plannedVisitsContainer .border-dashed,
+html:not(.dark) #unplannedVisitsContainer .border-dashed {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #plannedVisitsContainer .border-dashed p.text-slate-300,
+html:not(.dark) #unplannedVisitsContainer .border-dashed p.text-amber-300 {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+html:not(.dark) #plannedVisitsContainer .border-dashed p.text-slate-500,
+html:not(.dark) #unplannedVisitsContainer .border-dashed p.text-slate-400 {
+  color: #475569 !important;
+  font-weight: 500 !important;
 }
 
 /* Quick Demo Login Chips in Bright Mode */

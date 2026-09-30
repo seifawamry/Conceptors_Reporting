@@ -45,7 +45,7 @@ window.INITIAL_PRODUCTS = [
 ];
 
 window.INITIAL_SENIOR_MANAGERS = [
-  { id: 'MGR-01', name: 'Dr. Sameh Ageez', role: 'Senior Sales Manager UAE', email: 'sameh.ageez@conceptors.ae', phone: '+971 50 888 9900', active: true },
+  { id: 'MGR-01', name: 'Dr. Sameh Ageez', role: 'Senior Sales Manager UAE', email: 's.ageez@the-conceptors.com', phone: '+971 52 533 3329', active: true },
   { id: 'MGR-02', name: 'Ms. Reem Al-Falasi', role: 'Commercial & Operations Director', email: 'commercial@conceptors.ae', phone: '+971 52 444 3322', active: true }
 ];
 
@@ -105,8 +105,8 @@ window.INITIAL_USERS = [
     title: 'Senior Sales Manager UAE',
     role: 'manager',
     territory: 'ALL',
-    email: 'sameh.ageez@conceptors.ae',
-    phone: '+971 50 888 9900',
+    email: 's.ageez@the-conceptors.com',
+    phone: '+971 52 533 3329',
     avatar: 'SA',
     color: '#10b981'
   },
@@ -117,8 +117,8 @@ window.INITIAL_USERS = [
     title: 'Senior Sales Manager UAE',
     role: 'manager',
     territory: 'ALL',
-    email: 'sameh.ageez@conceptors.ae',
-    phone: '+971 50 888 9900',
+    email: 's.ageez@the-conceptors.com',
+    phone: '+971 52 533 3329',
     avatar: 'SA',
     color: '#10b981'
   }

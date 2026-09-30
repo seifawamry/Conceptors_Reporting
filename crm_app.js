@@ -542,12 +542,21 @@ async function syncWithSupabase(force = false) {
 
     const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
     if (setRes.data && Array.isArray(setRes.data) && setRes.data.length > 0) {
+      let hydratedEmails = setRes.data[0].manager_emails || state.managerSettings.managerEmails;
+      if (hydratedEmails && hydratedEmails.includes('@conceptors.ae')) {
+        hydratedEmails = 's.ageez@the-conceptors.com';
+      }
+      let hydratedPhone = setRes.data[0].whatsapp_phone || state.managerSettings.whatsappPhone;
+      if (!hydratedPhone || hydratedPhone === '+971501234567') {
+        hydratedPhone = '+971 52 533 3329';
+      }
       state.managerSettings = {
         ...state.managerSettings,
-        managerEmails: setRes.data[0].manager_emails || state.managerSettings.managerEmails,
+        managerEmails: hydratedEmails || 's.ageez@the-conceptors.com',
+        managerCcEmails: setRes.data[0].manager_cc_emails || state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com',
         soundAlert: setRes.data[0].sound_alert !== undefined ? Boolean(setRes.data[0].sound_alert) : state.managerSettings.soundAlert,
         toastAlert: setRes.data[0].toast_alert !== undefined ? Boolean(setRes.data[0].toast_alert) : state.managerSettings.toastAlert,
-        whatsappPhone: setRes.data[0].whatsapp_phone || state.managerSettings.whatsappPhone,
+        whatsappPhone: hydratedPhone,
         whatsappApiKey: setRes.data[0].whatsapp_api_key || state.managerSettings.whatsappApiKey,
         ntfyTopic: setRes.data[0].ntfy_topic || state.managerSettings.ntfyTopic,
         webhookUrl: setRes.data[0].webhook_url || state.managerSettings.webhookUrl
@@ -742,10 +751,11 @@ const state = {
   monthlyPlans: [],
   notifications: [],
   managerSettings: {
-    managerEmails: 'sameh.ageez@conceptors.ae, gm@conceptors.ae',
+    managerEmails: 's.ageez@the-conceptors.com',
+    managerCcEmails: 'a.tharayil@the-conceptors.com',
     soundAlert: true,
     toastAlert: true,
-    whatsappPhone: '+971501234567',
+    whatsappPhone: '+971 52 533 3329',
     whatsappApiKey: '',
     ntfyTopic: 'conceptors-orders-sameh',
     webhookUrl: ''
@@ -1677,75 +1687,85 @@ function renderDailyWorkspace() {
         const isCompleted = v.status === 'Completed';
 
         return `
-          <div class="glass-card rounded-xl p-4 border ${isCompleted ? 'border-emerald-500/30 bg-emerald-950/10' : 'border-slate-800 bg-slate-900/80'} transition-all space-y-3">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
-                  <span class="text-[11px] text-sky-400 font-bold">${v.timeSlot || 'Day Round'}</span>
-                  ${isCompleted ? `
-                    <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold flex items-center gap-1">
-                      <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-400"></i> Completed
-                    </span>
-                  ` : `
-                    <span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-extrabold">
-                      Planned
-                    </span>
-                  `}
-                </div>
-                <h4 class="font-bold text-white text-sm mt-1 truncate" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h4>
-                <p class="text-[11px] text-slate-400">${v.clientCode || ''} • ${v.location || 'UAE'}</p>
-              </div>
-
-              <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                ${!isCompleted ? `
-                  <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-1 transition-all active:scale-95 touch-manipulation" title="Freely edit target doctor, time round, or detailing goals">
-                    <i data-lucide="edit-3" class="w-3.5 h-3.5 text-cyan-400"></i>
-                    <span>Edit Plan</span>
-                  </button>
-                  <button onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95">
-                    <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
-                    <span>Check-in & Submit</span>
-                  </button>
+          <div class="glass-card visit-card-item rounded-xl p-4 border ${isCompleted ? 'border-emerald-500/30 bg-emerald-950/10' : 'border-slate-800 bg-slate-900/80'} transition-all space-y-3">
+            <!-- Badges & Time Slot Row -->
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
+                <span class="px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px] font-bold">${v.timeSlot || 'Day Round'}</span>
+                ${isCompleted ? `
+                  <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-extrabold flex items-center gap-1">
+                    <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-400"></i> Completed
+                  </span>
                 ` : `
-                  <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
-                    Edit Report
-                  </button>
+                  <span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-extrabold">
+                    Planned
+                  </span>
                 `}
               </div>
+              <span class="text-[10px] font-mono text-slate-400">${v.clientCode || ''}</span>
             </div>
 
-            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
-              <div class="text-slate-300 font-semibold truncate">
-                <span class="text-slate-500">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Lead Veterinarian')} ${v.doctorRole ? `(${escapeHtml(v.doctorRole)})` : ''}
+            <!-- Clinic Name & Location (Full Width - Zero Collision) -->
+            <div>
+              <h4 class="font-extrabold text-white text-sm leading-snug break-words" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h4>
+              <p class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                <i data-lucide="map-pin" class="w-3 h-3 text-slate-500"></i>
+                <span>${escapeHtml(v.location || 'UAE')}</span>
+              </p>
+            </div>
+
+            <!-- Detail Box (Doctor Met & Detailing Purpose) -->
+            <div class="visit-detail-box bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
+              <div class="text-slate-300 font-semibold">
+                <span class="text-slate-500 font-medium">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Lead Veterinarian')} ${v.doctorRole ? `(${escapeHtml(v.doctorRole)})` : ''}
               </div>
-              <div class="text-slate-400 truncate">
-                <span class="text-slate-500">Goal:</span> ${escapeHtml(v.purpose || 'Clinical Detailing')}
+              <div class="text-slate-400">
+                <span class="text-slate-500 font-medium">Goal:</span> ${escapeHtml(v.purpose || 'Clinical Detailing')}
               </div>
               ${isCompleted && v.outcome ? `
-                <div class="text-emerald-300/90 font-medium pt-1 border-t border-slate-800/80 line-clamp-2">
-                  <span class="text-slate-500">Outcome:</span> ${escapeHtml(v.outcome)}
+                <div class="text-emerald-300/90 font-medium pt-1 border-t border-slate-800/80">
+                  <span class="text-slate-500 font-medium">Outcome:</span> ${escapeHtml(v.outcome)}
                 </div>
               ` : ''}
             </div>
 
-            ${isCompleted ? `
-              <div class="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                <div class="flex items-center gap-2">
+            <!-- Card Footer: Dedicated Action Row -->
+            <div class="pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              ${!isCompleted ? `
+                <div class="flex items-center gap-1.5 text-[11px] text-slate-400">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  <span>Awaiting Check-in</span>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-1 transition-all active:scale-95 touch-manipulation" title="Freely edit target doctor, time round, or detailing goals">
+                    <i data-lucide="edit-3" class="w-3.5 h-3.5 text-cyan-400"></i>
+                    <span>Edit Plan</span>
+                  </button>
+                  <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 touch-manipulation">
+                    <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
+                    <span>Check-in & Submit</span>
+                  </button>
+                </div>
+              ` : `
+                <div class="flex items-center gap-2 flex-wrap">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
                     ${v.doctorSentiment || 'Positive'}
                   </span>
                   ${v.samplesDropped > 0 ? `
                     <span class="text-amber-400 font-semibold">💊 ${v.samplesDropped} Samples</span>
                   ` : ''}
+                  ${v.orderPlaced ? `
+                    <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30 text-[10px]">
+                      🛒 Order: ${formatCurrency(v.orderValueAed)} AED
+                    </span>
+                  ` : '<span class="text-slate-500">No order placed</span>'}
                 </div>
-                ${v.orderPlaced ? `
-                  <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30 text-[10px]">
-                    🛒 Order: ${formatCurrency(v.orderValueAed)} AED
-                  </span>
-                ` : '<span class="text-slate-500">No order placed</span>'}
-              </div>
-            ` : ''}
+                <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold active:scale-95 transition-all">
+                  Edit Report
+                </button>
+              `}
+            </div>
           </div>
         `;
       }).join('');
@@ -1766,52 +1786,57 @@ function renderDailyWorkspace() {
     } else {
       unplannedContainer.innerHTML = unplannedList.map(v => {
         return `
-          <div class="glass-card rounded-xl p-4 border border-amber-500/40 bg-amber-950/15 transition-all space-y-3">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
-                  <span class="px-2.5 py-0.5 rounded-full badge-unplanned text-[10px] font-black inline-flex items-center gap-1">
-                    <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> [⚡ Unplanned]
-                  </span>
-                  <span class="text-[10px] font-bold text-amber-300">${escapeHtml(v.unplannedReason || 'Spontaneous Drop-in')}</span>
-                </div>
-                <h4 class="font-bold text-white text-sm mt-1 truncate" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h4>
-                <p class="text-[11px] text-slate-400">${v.clientCode || ''} • ${v.location || 'UAE'}</p>
+          <div class="glass-card visit-card-item rounded-xl p-4 border border-amber-500/40 bg-amber-950/15 transition-all space-y-3">
+            <!-- Badges & Time Slot Row -->
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${v.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${v.repId}</span>
+                <span class="px-2.5 py-0.5 rounded-full badge-unplanned text-[10px] font-black inline-flex items-center gap-1">
+                  <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> [⚡ Unplanned]
+                </span>
+                <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] font-bold">${escapeHtml(v.unplannedReason || 'Spontaneous Drop-in')}</span>
               </div>
+              <span class="text-[10px] font-mono text-slate-400">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Today'}</span>
+            </div>
 
-              <div class="text-right shrink-0">
-                <span class="text-[10px] text-slate-400 font-mono block">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Today'}</span>
-                ${v.orderPlaced ? `
-                  <span class="mt-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px] inline-block border border-emerald-500/30">
-                    🛒 ${formatCurrency(v.orderValueAed)} AED
-                  </span>
-                ` : ''}
+            <!-- Clinic Name & Location (Full Width) -->
+            <div>
+              <h4 class="font-extrabold text-white text-sm leading-snug break-words" title="${escapeHtml(v.clientName)}">${escapeHtml(v.clientName)}</h4>
+              <p class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1">
+                <i data-lucide="map-pin" class="w-3 h-3 text-slate-500"></i>
+                <span>${v.clientCode || ''} • ${escapeHtml(v.location || 'UAE')}</span>
+              </p>
+            </div>
+
+            <!-- Detail Box -->
+            <div class="visit-detail-box bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
+              <div class="text-slate-300 font-semibold">
+                <span class="text-slate-500 font-medium">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
+              </div>
+              <div class="text-slate-300/90 pt-1 border-t border-slate-800/80">
+                <span class="text-slate-500 font-medium">Outcome:</span> ${escapeHtml(v.outcome || 'Detailed doctor on clinical protocols.')}
               </div>
             </div>
 
-            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
-              <div class="text-slate-300 font-semibold truncate">
-                <span class="text-slate-500">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
-              </div>
-              <div class="text-slate-300/90 pt-1 border-t border-slate-800/80 line-clamp-2">
-                <span class="text-slate-500">Outcome:</span> ${escapeHtml(v.outcome || 'Detailed doctor on clinical protocols.')}
-              </div>
-            </div>
-
-            <div class="pt-2 border-t border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-              <div class="flex items-center gap-2">
+            <!-- Card Footer: Dedicated Action Row -->
+            <div class="pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div class="flex items-center gap-2 flex-wrap">
                 <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
                   ${v.doctorSentiment || 'Positive'}
                 </span>
                 ${v.samplesDropped > 0 ? `
                   <span class="text-amber-400 font-semibold">💊 ${v.samplesDropped} Samples</span>
                 ` : ''}
+                ${v.orderPlaced ? `
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px] inline-block border border-emerald-500/30">
+                    🛒 ${formatCurrency(v.orderValueAed)} AED
+                  </span>
+                ` : ''}
               </div>
 
               <div class="flex items-center gap-1.5">
                 ${!v.orderPlaced ? `
-                  <button onclick="openOrderModal('${v.clientCode}', '${v.repId}')" class="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold flex items-center gap-1">
+                  <button type="button" onclick="openOrderModal('${v.clientCode}', '${v.repId}')" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all">
                     <i data-lucide="plus" class="w-3 h-3"></i> Book Order
                   </button>
                 ` : ''}
@@ -5597,10 +5622,22 @@ window.viewNotificationEmailByOrder = function(orderNum) {
     if (!order) return;
     const html = generateExecutiveEmailHtml(order, order.repName || `Rep ${order.repId}`);
     document.getElementById('emailPreviewContent').innerHTML = html;
-    document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${state.managerSettings.managerEmails}`;
+    const toEmail = state.managerSettings.managerEmails || 's.ageez@the-conceptors.com';
+    const ccEmail = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
+    const ccText = ccEmail ? ` (CC: ${ccEmail})` : '';
+    document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${toEmail}${ccText}`;
     const btnWa = document.getElementById('btnWhatsappShareAction');
     if (btnWa) {
       btnWa.onclick = () => openWhatsappOrderShare(order.invoiceNumber);
+    }
+    const btnResend = document.getElementById('btnResendEmailAction');
+    if (btnResend) {
+      const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName} (${formatCurrency(order.totalIncVat)} AED)`);
+      const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${order.repName || `Rep ${order.repId}`}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName} (${order.location})\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
+      btnResend.onclick = () => {
+        const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
+        window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
+      };
     }
     document.getElementById('viewEmailModal').classList.remove('hidden');
     safeLucide();
@@ -5628,7 +5665,10 @@ window.viewNotificationEmail = function(notifId) {
 
   const html = generateExecutiveEmailHtml(order, notif.repName);
   document.getElementById('emailPreviewContent').innerHTML = html;
-  document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${state.managerSettings.managerEmails}`;
+  const toEmail = state.managerSettings.managerEmails || 's.ageez@the-conceptors.com';
+  const ccEmail = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
+  const ccText = ccEmail ? ` (CC: ${ccEmail})` : '';
+  document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${toEmail}${ccText}`;
 
   const btnWa = document.getElementById('btnWhatsappShareAction');
   if (btnWa) {
@@ -5640,7 +5680,8 @@ window.viewNotificationEmail = function(notifId) {
     const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName} (${formatCurrency(order.totalIncVat)} AED)`);
     const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${notif.repName}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName} (${order.location})\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
     btnResend.onclick = () => {
-      window.open(`mailto:${state.managerSettings.managerEmails}?subject=${subject}&body=${body}`, '_blank');
+      const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
+      window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
     };
   }
 
@@ -6982,8 +7023,16 @@ window.closeIosAlertGuideModal = function() {
 
 window.openManagerSettingsModal = function() {
   const emailsInput = document.getElementById('settingsManagerEmails');
-  if (emailsInput) emailsInput.value = state.managerSettings.managerEmails || 'gm@conceptors.ae, sales.manager@conceptors.ae';
+  let currentEmails = state.managerSettings.managerEmails || 's.ageez@the-conceptors.com';
+  if (currentEmails.includes('@conceptors.ae')) {
+    currentEmails = 's.ageez@the-conceptors.com';
+    state.managerSettings.managerEmails = currentEmails;
+  }
+  if (emailsInput) emailsInput.value = currentEmails;
   
+  const ccEmailsInput = document.getElementById('settingsManagerCcEmails');
+  if (ccEmailsInput) ccEmailsInput.value = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
+
   const soundInput = document.getElementById('settingsSoundAlert');
   if (soundInput) soundInput.checked = state.managerSettings.soundAlert !== false;
 
@@ -6991,7 +7040,7 @@ window.openManagerSettingsModal = function() {
   if (toastInput) toastInput.checked = state.managerSettings.toastAlert !== false;
 
   const whatsappPhoneInput = document.getElementById('settingsWhatsappPhone');
-  if (whatsappPhoneInput) whatsappPhoneInput.value = state.managerSettings.whatsappPhone || '+971501234567';
+  if (whatsappPhoneInput) whatsappPhoneInput.value = state.managerSettings.whatsappPhone || '+971 52 533 3329';
 
   const whatsappApiKeyInput = document.getElementById('settingsWhatsappApiKey');
   if (whatsappApiKeyInput) whatsappApiKeyInput.value = state.managerSettings.whatsappApiKey || '';
@@ -7016,6 +7065,7 @@ window.closeManagerSettingsModal = function() {
 window.handleSaveManagerSettings = function(e) {
   e.preventDefault();
   const emails = document.getElementById('settingsManagerEmails')?.value.trim();
+  const ccEmails = document.getElementById('settingsManagerCcEmails')?.value.trim();
   const sound = document.getElementById('settingsSoundAlert')?.checked;
   const toast = document.getElementById('settingsToastAlert')?.checked;
   const whatsappPhone = document.getElementById('settingsWhatsappPhone')?.value.trim();
@@ -7025,10 +7075,11 @@ window.handleSaveManagerSettings = function(e) {
 
   state.managerSettings = {
     ...state.managerSettings,
-    managerEmails: emails || 'gm@conceptors.ae, sales.manager@conceptors.ae',
+    managerEmails: emails || 's.ageez@the-conceptors.com',
+    managerCcEmails: ccEmails || 'a.tharayil@the-conceptors.com',
     soundAlert: Boolean(sound),
     toastAlert: Boolean(toast),
-    whatsappPhone: whatsappPhone || '+971501234567',
+    whatsappPhone: whatsappPhone || '+971 52 533 3329',
     whatsappApiKey: whatsappApiKey || '',
     ntfyTopic: ntfyTopic || 'conceptors-orders-sameh',
     webhookUrl: webhook || ''
@@ -7043,8 +7094,10 @@ window.handleSaveManagerSettings = function(e) {
     body: {
       id: 'default',
       manager_emails: state.managerSettings.managerEmails,
+      manager_cc_emails: state.managerSettings.managerCcEmails,
       sound_alert: state.managerSettings.soundAlert,
       toast_alert: state.managerSettings.toastAlert,
+      whatsapp_phone: state.managerSettings.whatsappPhone,
       updated_at: new Date().toISOString()
     }
   });
@@ -7098,7 +7151,7 @@ window.openWhatsappOrderShare = function(orderNumber) {
   const items = order?.order_items || order?.items || [];
   const text = formatWhatsappOrderMessage(order || { orderNumber }, items);
   
-  const rawPhone = state.managerSettings?.whatsappPhone || '+971501234567';
+  const rawPhone = state.managerSettings?.whatsappPhone || '+971 52 533 3329';
   const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
   
   const targetUrl = cleanPhone 
@@ -7140,7 +7193,7 @@ window.testWhatsappPhoneAlert = async function() {
   const apiKeyInput = document.getElementById('settingsWhatsappApiKey')?.value.trim() || state.managerSettings?.whatsappApiKey;
 
   if (!phoneInput) {
-    showToast('Phone Number Required', 'Please enter Senior Manager WhatsApp phone number (e.g. +971 50 000 0000) to test.', 'warning');
+    showToast('Phone Number Required', 'Please enter Senior Manager WhatsApp phone number (e.g. +971 52 533 3329) to test.', 'warning');
     document.getElementById('settingsWhatsappPhone')?.focus();
     return;
   }
