@@ -48,6 +48,27 @@
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
+  <!-- ================= RESUME / WAKEUP FLOATING ORDER BANNER ================= -->
+  <div id="wakeupOrderAlertBanner" class="hidden fixed top-3 left-1/2 -translate-x-1/2 z-[70] max-w-md w-[92%] bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-3 sm:p-3.5 rounded-2xl shadow-2xl border border-emerald-400/40 flex items-center justify-between gap-3 shadow-emerald-900/60">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="p-2 bg-white/20 rounded-xl shrink-0">
+        <i data-lucide="shopping-bag" class="w-5 h-5 text-white"></i>
+      </div>
+      <div class="min-w-0">
+        <div class="font-black text-[10px] uppercase tracking-wider text-emerald-200 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span> New Order Received While Away
+        </div>
+        <div id="wakeupOrderBannerText" class="font-bold text-xs truncate text-white mt-0.5">#ORD-XXXX • 0.00 AED</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button type="button" onclick="inspectWakeupOrder()" class="px-2.5 py-1 rounded-lg bg-white text-emerald-900 font-extrabold text-xs active:scale-95 shadow">View</button>
+      <button type="button" onclick="dismissWakeupOrderBanner()" class="p-1 text-white/80 hover:text-white" aria-label="Dismiss banner">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
   <!-- ================= TOP HEADER NAVIGATION ================= -->
   <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-hidden">
     <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -921,6 +942,9 @@
           <div id="mobilePushStatusBadge"></div>
           <button id="enablePushBtn" onclick="requestMobilePushPermissions()" class="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
             <i data-lucide="bell-ring" class="w-4 h-4"></i> Enable Phone Alerts
+          </button>
+          <button type="button" onclick="openIosAlertGuideModal()" class="px-3.5 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-1.5 active:scale-95 touch-manipulation">
+            <i data-lucide="smartphone" class="w-4 h-4 text-indigo-400"></i> iPhone Guide
           </button>
           <button onclick="openManagerSettingsModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors">
             <i data-lucide="settings" class="w-4 h-4 text-sky-400"></i> Notification Settings
@@ -2060,19 +2084,63 @@
         </div>
 
         <!-- Mobile Phone Push Alerts & Vibration Section -->
-        <div class="space-y-2.5 bg-sky-950/20 p-3 rounded-xl border border-sky-500/30">
+        <div class="space-y-2 bg-sky-950/20 p-3 rounded-xl border border-sky-500/30">
           <div class="flex items-center justify-between">
             <span class="font-bold text-sky-200 text-xs flex items-center gap-1.5">
-              <i data-lucide="smartphone" class="w-4 h-4 text-sky-400"></i> Mobile Phone Order Push Alerts
+              <i data-lucide="bell" class="w-4 h-4 text-sky-400"></i> Browser Web Push & Haptics
             </span>
             <div id="managerModalPushStatus"></div>
           </div>
           <p class="text-[11px] text-slate-400 leading-relaxed">
-            Delivers lock-screen alerts & 3-burst haptic vibration directly to your mobile phone when field reps book sales orders.
+            Delivers in-browser alerts & haptic vibration when CRM is in foreground or added to Home Screen.
           </p>
-          <button type="button" onclick="requestMobilePushPermissions()" class="w-full py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
-            <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i> Activate Phone Push & Haptics
-          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="requestMobilePushPermissions()" class="flex-1 py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
+              <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i> Activate Web Push
+            </button>
+            <button type="button" onclick="openIosAlertGuideModal()" class="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center gap-1 border border-slate-700 active:scale-95 touch-manipulation">
+              <i data-lucide="help-circle" class="w-3.5 h-3.5 text-sky-400"></i> iPhone Guide
+            </button>
+          </div>
+        </div>
+
+        <!-- Telegram Instant Mobile Alerts (Guaranteed Lock-Screen Push) -->
+        <div class="space-y-3 bg-[#0d1728] p-3.5 rounded-xl border border-indigo-500/40">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
+              <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i> Telegram Mobile Alerts (Guaranteed Push)
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Rings Locked iPhone
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Because Apple freezes background web pages, Telegram delivers instant native ringtones, vibrations, and order details directly to your iPhone lock screen 24/7.
+          </p>
+          <div class="space-y-2">
+            <div>
+              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Telegram Chat ID / User ID *</label>
+              <input type="text" id="settingsTelegramChatId" placeholder="e.g. 123456789 (from @userinfobot)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-indigo-500 text-xs">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Telegram Bot Token (Optional if using custom bot)</label>
+              <input type="text" id="settingsTelegramBotToken" placeholder="Leave empty for Conceptors Default Bot" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-indigo-500 text-xs font-mono">
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+            <a href="https://t.me/userinfobot" target="_blank" class="text-[10px] text-indigo-400 hover:underline flex items-center gap-1">
+              <i data-lucide="external-link" class="w-3 h-3"></i> Get Chat ID via @userinfobot
+            </a>
+            <button type="button" onclick="testTelegramPhoneAlert()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 active:scale-95 shadow-sm">
+              <i data-lucide="bell" class="w-3 h-3"></i> Test iPhone Alert
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Webhook URL -->
+        <div class="space-y-1.5">
+          <label class="block text-slate-400 font-semibold text-[11px]">Mobile Webhook URL (Optional: Pushover / Slack / Discord / Zapier)</label>
+          <input type="url" id="settingsWebhookUrl" placeholder="https://api.pushover.net/... or https://hooks.slack.com/..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-brand-500 text-xs font-mono">
         </div>
 
         <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
@@ -2080,6 +2148,84 @@
           <button type="submit" class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold">Save Settings</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: IPHONE NOTIFICATION & BACKGROUND SETUP GUIDE ================= -->
+  <div id="iosAlertGuideModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-sky-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-xs my-8 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-sky-500/20 text-sky-400">
+            <i data-lucide="smartphone" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">iPhone (iOS) Push Alerts Guide</h3>
+            <p class="text-[11px] text-sky-300/80">How Apple iOS handles background alerts & how to fix it</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeIosAlertGuideModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close guide modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <div class="mt-4 space-y-4 flex-1 overflow-y-auto pr-1 text-slate-300">
+        <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-1.5">
+          <div class="font-bold text-xs flex items-center gap-1.5 text-amber-300">
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i> Why alerts pause when your iPhone is locked:
+          </div>
+          <p class="text-[11px] text-amber-200/90 leading-relaxed">
+            Apple iOS strictly suspends browser execution and closes database connections when your screen is locked. Websites cannot run in the background on iOS. When you unlock and open the CRM, the connection wakes up and fires the alerts, which is why they only appeared when opening the app.
+          </p>
+        </div>
+
+        <div class="space-y-3">
+          <h4 class="font-black text-white text-xs uppercase tracking-wider text-sky-400">Two Ways to Receive Alerts on Your iPhone:</h4>
+
+          <!-- Method 1: Telegram Bot (Recommended) -->
+          <div class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-white text-xs flex items-center gap-1.5">
+                <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i> Method 1: Telegram Instant Alerts (Recommended)
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">100% Guaranteed</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              Because Telegram is a native iOS app, it rings and vibrates your locked iPhone with high-priority banners the exact second an order is booked — even with your phone locked in your pocket.
+            </p>
+            <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1.5 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <li>Open Telegram on your iPhone and search for <b>@userinfobot</b> (tap Start to get your ID number).</li>
+              <li>Go to <b>Notification Settings</b> in this CRM and paste your ID into <b>Telegram Chat ID</b>.</li>
+              <li>Tap <b>Save Settings</b>. Done! Every field sales order will instantly ping your phone!</li>
+            </ol>
+          </div>
+
+          <!-- Method 2: Install to Home Screen -->
+          <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-white text-xs flex items-center gap-1.5">
+                <i data-lucide="download" class="w-4 h-4 text-sky-400"></i> Method 2: Install as iPhone Web App (PWA)
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">iOS 16.4+</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              Apple requires web apps to be installed to the Home Screen to receive Web Push notifications:
+            </p>
+            <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1.5 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+              <li>In Safari, tap the <b>Share icon (square with arrow up ⬆️)</b> at the bottom.</li>
+              <li>Scroll down and tap <b>"Add to Home Screen"</b>.</li>
+              <li>Open the app from your newly added Home Screen icon.</li>
+              <li>Go to Manager Hub and tap <b>"Enable Phone Alerts"</b>.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-end">
+          <button type="button" onclick="closeIosAlertGuideModal()" class="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs">
+            Got it, Thank You
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2733,7 +2879,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.1.0"></script>
-  <script src="./crm_app.js?v=3.1.0"></script>
+  <script src="./crm_data.js?v=3.2.0"></script>
+  <script src="./crm_app.js?v=3.2.0"></script>
 </body>
 </html>

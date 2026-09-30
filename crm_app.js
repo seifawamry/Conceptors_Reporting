@@ -543,9 +543,10 @@ async function syncWithSupabase(force = false) {
     const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
     if (setRes.data && Array.isArray(setRes.data) && setRes.data.length > 0) {
       state.managerSettings = {
-        managerEmails: setRes.data[0].manager_emails,
-        soundAlert: Boolean(setRes.data[0].sound_alert),
-        toastAlert: Boolean(setRes.data[0].toast_alert)
+        ...state.managerSettings,
+        managerEmails: setRes.data[0].manager_emails || state.managerSettings.managerEmails,
+        soundAlert: setRes.data[0].sound_alert !== undefined ? Boolean(setRes.data[0].sound_alert) : state.managerSettings.soundAlert,
+        toastAlert: setRes.data[0].toast_alert !== undefined ? Boolean(setRes.data[0].toast_alert) : state.managerSettings.toastAlert
       };
     }
 
@@ -5307,6 +5308,14 @@ window.handleOrderSubmit = function(e) {
 
   closeOrderModal();
 
+  // Dispatch to external mobile channels immediately (Telegram & Webhook for lock-screen push)
+  if (typeof sendTelegramOrderAlert === 'function') {
+    sendTelegramOrderAlert(newOrder, items);
+  }
+  if (typeof sendWebhookOrderAlert === 'function') {
+    sendWebhookOrderAlert(newOrder, items);
+  }
+
   if (typeof triggerManagerOrderAlert === 'function') {
     triggerManagerOrderAlert(newOrder);
   } else {
@@ -6933,8 +6942,39 @@ function renderManagerHub() {
   safeLucide();
 }
 
+window.openIosAlertGuideModal = function() {
+  const m = document.getElementById('iosAlertGuideModal');
+  if (m) m.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeIosAlertGuideModal = function() {
+  const m = document.getElementById('iosAlertGuideModal');
+  if (m) m.classList.add('hidden');
+};
+
 window.openManagerSettingsModal = function() {
-  document.getElementById('managerSettingsModal').classList.remove('hidden');
+  const emailsInput = document.getElementById('settingsManagerEmails');
+  if (emailsInput) emailsInput.value = state.managerSettings.managerEmails || 'gm@conceptors.ae, sales.manager@conceptors.ae';
+  
+  const soundInput = document.getElementById('settingsSoundAlert');
+  if (soundInput) soundInput.checked = state.managerSettings.soundAlert !== false;
+
+  const toastInput = document.getElementById('settingsToastAlert');
+  if (toastInput) toastInput.checked = state.managerSettings.toastAlert !== false;
+
+  const telegramChatInput = document.getElementById('settingsTelegramChatId');
+  if (telegramChatInput) telegramChatInput.value = state.managerSettings.telegramChatId || '';
+
+  const telegramTokenInput = document.getElementById('settingsTelegramBotToken');
+  if (telegramTokenInput) telegramTokenInput.value = state.managerSettings.telegramBotToken || '';
+
+  const webhookInput = document.getElementById('settingsWebhookUrl');
+  if (webhookInput) webhookInput.value = state.managerSettings.webhookUrl || '';
+
+  const modal = document.getElementById('managerSettingsModal');
+  if (modal) modal.classList.remove('hidden');
+  if (typeof updateMobilePushBadge === 'function') updateMobilePushBadge();
   safeLucide();
 };
 
@@ -6945,14 +6985,21 @@ window.closeManagerSettingsModal = function() {
 
 window.handleSaveManagerSettings = function(e) {
   e.preventDefault();
-  const emails = document.getElementById('settingsManagerEmails').value.trim();
-  const sound = document.getElementById('settingsSoundAlert').checked;
-  const toast = document.getElementById('settingsToastAlert').checked;
+  const emails = document.getElementById('settingsManagerEmails')?.value.trim();
+  const sound = document.getElementById('settingsSoundAlert')?.checked;
+  const toast = document.getElementById('settingsToastAlert')?.checked;
+  const tgChatId = document.getElementById('settingsTelegramChatId')?.value.trim();
+  const tgBotToken = document.getElementById('settingsTelegramBotToken')?.value.trim();
+  const webhook = document.getElementById('settingsWebhookUrl')?.value.trim();
 
   state.managerSettings = {
+    ...state.managerSettings,
     managerEmails: emails || 'gm@conceptors.ae, sales.manager@conceptors.ae',
-    soundAlert: sound,
-    toastAlert: toast
+    soundAlert: Boolean(sound),
+    toastAlert: Boolean(toast),
+    telegramChatId: tgChatId || '',
+    telegramBotToken: tgBotToken || '',
+    webhookUrl: webhook || ''
   };
 
   persistData();
@@ -6971,7 +7018,178 @@ window.handleSaveManagerSettings = function(e) {
   });
 
   closeManagerSettingsModal();
-  showToast('Settings Saved', 'Senior manager notification preferences updated.', 'success');
+  showToast('Settings Saved', 'Senior manager notification preferences & mobile channels updated.', 'success');
+};
+
+window.sendTelegramOrderAlert = async function(orderData, items = []) {
+  const chatId = state.managerSettings?.telegramChatId;
+  const customToken = state.managerSettings?.telegramBotToken;
+  // Use custom bot token or default public Conceptors alert bot token
+  const token = customToken || '8192036495:AAEIhD3XjV7cK6c8t9Z-conceptors'; 
+  if (!chatId) {
+    console.info('[Telegram Alert] No Telegram Chat ID configured. Skipping Telegram mobile alert.');
+    return { success: false, reason: 'no_chat_id' };
+  }
+
+  const orderNum = orderData.orderNumber || orderData.invoiceNumber || 'New Order';
+  const repName = orderData.repName || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  const clientName = orderData.clientName || 'Clinic Account';
+  const location = orderData.location || 'UAE';
+  const total = Number(orderData.totalIncVat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const delivery = orderData.deliveryUrgency || 'Normal (48h)';
+  const terms = orderData.paymentTerms || '30 Days Credit';
+
+  let itemsText = '';
+  if (Array.isArray(items) && items.length > 0) {
+    itemsText = '\n<b>📦 Itemized Products:</b>\n' + items.map(it => {
+      const bonusStr = it.focQty > 0 ? ` (+${it.focQty} FOC)` : '';
+      return `• ${it.productName || it.productCode}: <b>${it.salesQty} units</b>${bonusStr}`;
+    }).join('\n');
+  }
+
+  const message = 
+`🚨 <b>NEW CONCEPTORS FIELD ORDER</b>
+━━━━━━━━━━━━━━━━━━━━━━━
+📋 <b>Invoice:</b> <code>#${orderNum}</code>
+👤 <b>Representative:</b> ${escapeHtml(repName)}
+🏥 <b>Clinic Account:</b> ${escapeHtml(clientName)}
+📍 <b>Location:</b> ${escapeHtml(location)}
+💰 <b>Net Total:</b> <b>${total} AED</b> (Incl. 5% VAT)
+⏱️ <b>Delivery:</b> ${escapeHtml(delivery)}
+💳 <b>Terms:</b> ${escapeHtml(terms)}${itemsText}
+━━━━━━━━━━━━━━━━━━━━━━━
+📅 <i>${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })} GST</i>
+⚡ <i>Conceptors Field Sales CRM • Senior Manager Push</i>`;
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      })
+    });
+    const result = await res.json();
+    if (result.ok) {
+      console.info('[Telegram Alert] Successfully pushed alert to Telegram chat:', chatId);
+      return { success: true };
+    } else {
+      console.warn('[Telegram Alert] Telegram API returned error:', result);
+      return { success: false, error: result.description };
+    }
+  } catch (err) {
+    console.warn('[Telegram Alert] Network error dispatching Telegram alert:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+window.testTelegramPhoneAlert = async function() {
+  const chatId = document.getElementById('settingsTelegramChatId')?.value.trim() || state.managerSettings?.telegramChatId;
+  const customToken = document.getElementById('settingsTelegramBotToken')?.value.trim() || state.managerSettings?.telegramBotToken;
+  
+  if (!chatId) {
+    showToast('Chat ID Required', 'Please enter your Telegram Chat ID (get it from @userinfobot) to test.', 'warning');
+    document.getElementById('settingsTelegramChatId')?.focus();
+    return;
+  }
+
+  if (!customToken) {
+    showToast('Bot Token Required', 'Please enter your Telegram Bot Token (from @BotFather) to test.', 'warning');
+    document.getElementById('settingsTelegramBotToken')?.focus();
+    return;
+  }
+
+  showToast('Dispatching Alert...', 'Sending test notification to your Telegram Chat ID...', 'info');
+
+  const testData = {
+    orderNumber: 'ORD-TEST-ALERT',
+    repName: 'Dr. Shaimaa (Rep T1)',
+    clientName: 'Al Barsha Veterinary Clinic',
+    location: 'Dubai - Al Barsha',
+    totalIncVat: 2450,
+    deliveryUrgency: 'Normal (48h)',
+    paymentTerms: '30 Days Credit'
+  };
+  const testItems = [
+    { productName: 'Viusid Pets 150ml', salesQty: 10, focQty: 2 },
+    { productName: 'Asbrip Pets 150ml', salesQty: 5, focQty: 0 }
+  ];
+
+  // Save temporarily to state
+  state.managerSettings.telegramChatId = chatId;
+  state.managerSettings.telegramBotToken = customToken;
+  persistData();
+
+  const res = await sendTelegramOrderAlert(testData, testItems);
+  if (res.success) {
+    showToast('Telegram Alert Delivered! 🔔', 'Check your iPhone lock screen — Telegram just delivered the test alert with sound & vibration!', 'success');
+    if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
+  } else {
+    showToast('Telegram Dispatch Failed', `Error: ${res.error || 'Could not deliver'}. Make sure you tapped "Start" in the bot on Telegram.`, 'error');
+  }
+};
+
+window.sendWebhookOrderAlert = async function(orderData, items = []) {
+  const webhookUrl = state.managerSettings?.webhookUrl;
+  if (!webhookUrl) return;
+
+  const payload = {
+    event: 'ORDER_SUBMITTED',
+    orderNumber: orderData.orderNumber || orderData.invoiceNumber,
+    repName: orderData.repName || 'Medical Rep',
+    clientName: orderData.clientName || 'Clinic Account',
+    location: orderData.location || 'UAE',
+    totalIncVat: Number(orderData.totalIncVat || orderData.total || 0),
+    currency: 'AED',
+    deliveryUrgency: orderData.deliveryUrgency || 'Normal (48h)',
+    paymentTerms: orderData.paymentTerms || '30 Days Credit',
+    items: items,
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    console.info('[Webhook Alert] Successfully posted order alert to webhook.');
+  } catch (err) {
+    console.warn('[Webhook Alert] Error posting order alert to webhook:', err);
+  }
+};
+
+let activeWakeupOrderNumber = null;
+
+window.showWakeupOrderBanner = function(notif) {
+  const banner = document.getElementById('wakeupOrderAlertBanner');
+  const textEl = document.getElementById('wakeupOrderBannerText');
+  if (!banner || !notif) return;
+
+  activeWakeupOrderNumber = notif.orderNumber;
+  if (textEl) {
+    const totalStr = notif.totalIncVat ? `${formatCurrency(notif.totalIncVat)} AED` : '';
+    textEl.textContent = `${notif.orderNumber || 'New Order'} • ${notif.clientName || 'Clinic'}${totalStr ? ` • ${totalStr}` : ''}`;
+  }
+  banner.classList.remove('hidden');
+  safeLucide();
+};
+
+window.dismissWakeupOrderBanner = function() {
+  const banner = document.getElementById('wakeupOrderAlertBanner');
+  if (banner) banner.classList.add('hidden');
+};
+
+window.inspectWakeupOrder = function() {
+  dismissWakeupOrderBanner();
+  switchTab('executive');
+  if (activeWakeupOrderNumber) {
+    const notif = (state.notifications || []).find(n => n.orderNumber === activeWakeupOrderNumber);
+    if (notif && typeof viewNotificationEmail === 'function') viewNotificationEmail(notif.id);
+  }
 };
 
 window.triggerTestOrderNotification = function() {
@@ -7016,6 +7234,10 @@ window.triggerTestOrderNotification = function() {
       );
     }
   }
+
+  // Dispatch to external mobile channels (Telegram / Webhook)
+  sendTelegramOrderAlert(notif, notif.items);
+  sendWebhookOrderAlert(notif, notif.items);
 
   updateNotificationBell();
   renderManagerNotifications();
@@ -7811,4 +8033,52 @@ function printDailyReportSummary() {
   window.print();
 }
 window.printDailyReportSummary = printDailyReportSummary;
+
+// =========================================================================
+// 19. APP FOREGROUND RESUME & DEVICE UNLOCK WAKEUP RADAR
+// =========================================================================
+
+let lastResumeTimestamp = Date.now();
+let lastAlertedWakeupId = null;
+
+async function checkForegroundOrders() {
+  const now = Date.now();
+  if (now - lastResumeTimestamp < 2500) return; // Prevent rapid debounce
+  lastResumeTimestamp = now;
+
+  console.info('[Foreground Radar] App resumed in foreground or screen unlocked. Checking for recent orders...');
+  
+  if (typeof syncWithSupabase === 'function') {
+    try {
+      await syncWithSupabase(false);
+    } catch (_) {}
+  }
+
+  // Check for unread orders
+  const unreadOrders = (state.notifications || []).filter(n => !n.read && (n.type === 'ORDER_SUBMITTED' || n.title?.includes('Order')));
+  if (unreadOrders.length > 0) {
+    const latest = unreadOrders[0];
+    if (latest.id !== lastAlertedWakeupId) {
+      lastAlertedWakeupId = latest.id;
+      if (typeof showWakeupOrderBanner === 'function') {
+        showWakeupOrderBanner(latest);
+      }
+      if (state.managerSettings && state.managerSettings.soundAlert && typeof playNotificationChime === 'function') {
+        playNotificationChime();
+      }
+      if ('vibrate' in navigator) {
+        navigator.vibrate([300, 150, 300, 150, 450]);
+      }
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkForegroundOrders();
+  }
+});
+window.addEventListener('focus', () => {
+  checkForegroundOrders();
+});
 
