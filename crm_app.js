@@ -546,7 +546,11 @@ async function syncWithSupabase(force = false) {
         ...state.managerSettings,
         managerEmails: setRes.data[0].manager_emails || state.managerSettings.managerEmails,
         soundAlert: setRes.data[0].sound_alert !== undefined ? Boolean(setRes.data[0].sound_alert) : state.managerSettings.soundAlert,
-        toastAlert: setRes.data[0].toast_alert !== undefined ? Boolean(setRes.data[0].toast_alert) : state.managerSettings.toastAlert
+        toastAlert: setRes.data[0].toast_alert !== undefined ? Boolean(setRes.data[0].toast_alert) : state.managerSettings.toastAlert,
+        whatsappPhone: setRes.data[0].whatsapp_phone || state.managerSettings.whatsappPhone,
+        whatsappApiKey: setRes.data[0].whatsapp_api_key || state.managerSettings.whatsappApiKey,
+        ntfyTopic: setRes.data[0].ntfy_topic || state.managerSettings.ntfyTopic,
+        webhookUrl: setRes.data[0].webhook_url || state.managerSettings.webhookUrl
       };
     }
 
@@ -740,7 +744,11 @@ const state = {
   managerSettings: {
     managerEmails: 'sameh.ageez@conceptors.ae, gm@conceptors.ae',
     soundAlert: true,
-    toastAlert: true
+    toastAlert: true,
+    whatsappPhone: '+971501234567',
+    whatsappApiKey: '',
+    ntfyTopic: 'conceptors-orders-sameh',
+    webhookUrl: ''
   },
   filters: {
     dailyReportRep: 'ALL',
@@ -4997,6 +5005,9 @@ function renderOrdersTable() {
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           <div class="flex items-center justify-center gap-1.5">
+            <button onclick="openWhatsappOrderShare('${o.invoiceNumber}')" class="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95" title="Share Order to WhatsApp">
+              <i data-lucide="message-circle" class="w-3 h-3 text-emerald-400"></i> WA
+            </button>
             <button onclick="viewNotificationEmailByOrder('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[10px] font-bold flex items-center gap-1" title="View Executive Dispatched Email">
               <i data-lucide="mail" class="w-3 h-3"></i> View Email
             </button>
@@ -5308,9 +5319,12 @@ window.handleOrderSubmit = function(e) {
 
   closeOrderModal();
 
-  // Dispatch to external mobile channels immediately (Telegram & Webhook for lock-screen push)
-  if (typeof sendTelegramOrderAlert === 'function') {
-    sendTelegramOrderAlert(newOrder, items);
+  // Dispatch to external mobile channels immediately (WhatsApp, ntfy iOS lock-screen push & Webhook)
+  if (typeof sendWhatsappOrderAlert === 'function') {
+    sendWhatsappOrderAlert(newOrder, items);
+  }
+  if (typeof sendNtfyOrderAlert === 'function') {
+    sendNtfyOrderAlert(newOrder, items);
   }
   if (typeof sendWebhookOrderAlert === 'function') {
     sendWebhookOrderAlert(newOrder, items);
@@ -5324,7 +5338,11 @@ window.handleOrderSubmit = function(e) {
       showToast(
         `🚨 New Order #${orderNumber} Submitted!`,
         `${newOrder.repName} booked an order for ${newOrder.clientName} (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED.`,
-        'success'
+        'success',
+        {
+          label: 'Send to Dr. Sameh on WhatsApp',
+          onClick: `openWhatsappOrderShare('${orderNumber}')`
+        }
       );
     }
   }
@@ -5580,6 +5598,10 @@ window.viewNotificationEmailByOrder = function(orderNum) {
     const html = generateExecutiveEmailHtml(order, order.repName || `Rep ${order.repId}`);
     document.getElementById('emailPreviewContent').innerHTML = html;
     document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${state.managerSettings.managerEmails}`;
+    const btnWa = document.getElementById('btnWhatsappShareAction');
+    if (btnWa) {
+      btnWa.onclick = () => openWhatsappOrderShare(order.invoiceNumber);
+    }
     document.getElementById('viewEmailModal').classList.remove('hidden');
     safeLucide();
   }
@@ -5607,6 +5629,11 @@ window.viewNotificationEmail = function(notifId) {
   const html = generateExecutiveEmailHtml(order, notif.repName);
   document.getElementById('emailPreviewContent').innerHTML = html;
   document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${state.managerSettings.managerEmails}`;
+
+  const btnWa = document.getElementById('btnWhatsappShareAction');
+  if (btnWa) {
+    btnWa.onclick = () => openWhatsappOrderShare(order.invoiceNumber);
+  }
 
   const btnResend = document.getElementById('btnResendEmailAction');
   if (btnResend) {
@@ -6963,11 +6990,14 @@ window.openManagerSettingsModal = function() {
   const toastInput = document.getElementById('settingsToastAlert');
   if (toastInput) toastInput.checked = state.managerSettings.toastAlert !== false;
 
-  const telegramChatInput = document.getElementById('settingsTelegramChatId');
-  if (telegramChatInput) telegramChatInput.value = state.managerSettings.telegramChatId || '';
+  const whatsappPhoneInput = document.getElementById('settingsWhatsappPhone');
+  if (whatsappPhoneInput) whatsappPhoneInput.value = state.managerSettings.whatsappPhone || '+971501234567';
 
-  const telegramTokenInput = document.getElementById('settingsTelegramBotToken');
-  if (telegramTokenInput) telegramTokenInput.value = state.managerSettings.telegramBotToken || '';
+  const whatsappApiKeyInput = document.getElementById('settingsWhatsappApiKey');
+  if (whatsappApiKeyInput) whatsappApiKeyInput.value = state.managerSettings.whatsappApiKey || '';
+
+  const ntfyTopicInput = document.getElementById('settingsNtfyTopic');
+  if (ntfyTopicInput) ntfyTopicInput.value = state.managerSettings.ntfyTopic || 'conceptors-orders-sameh';
 
   const webhookInput = document.getElementById('settingsWebhookUrl');
   if (webhookInput) webhookInput.value = state.managerSettings.webhookUrl || '';
@@ -6988,8 +7018,9 @@ window.handleSaveManagerSettings = function(e) {
   const emails = document.getElementById('settingsManagerEmails')?.value.trim();
   const sound = document.getElementById('settingsSoundAlert')?.checked;
   const toast = document.getElementById('settingsToastAlert')?.checked;
-  const tgChatId = document.getElementById('settingsTelegramChatId')?.value.trim();
-  const tgBotToken = document.getElementById('settingsTelegramBotToken')?.value.trim();
+  const whatsappPhone = document.getElementById('settingsWhatsappPhone')?.value.trim();
+  const whatsappApiKey = document.getElementById('settingsWhatsappApiKey')?.value.trim();
+  const ntfyTopic = document.getElementById('settingsNtfyTopic')?.value.trim();
   const webhook = document.getElementById('settingsWebhookUrl')?.value.trim();
 
   state.managerSettings = {
@@ -6997,8 +7028,9 @@ window.handleSaveManagerSettings = function(e) {
     managerEmails: emails || 'gm@conceptors.ae, sales.manager@conceptors.ae',
     soundAlert: Boolean(sound),
     toastAlert: Boolean(toast),
-    telegramChatId: tgChatId || '',
-    telegramBotToken: tgBotToken || '',
+    whatsappPhone: whatsappPhone || '+971501234567',
+    whatsappApiKey: whatsappApiKey || '',
+    ntfyTopic: ntfyTopic || 'conceptors-orders-sameh',
     webhookUrl: webhook || ''
   };
 
@@ -7021,90 +7053,103 @@ window.handleSaveManagerSettings = function(e) {
   showToast('Settings Saved', 'Senior manager notification preferences & mobile channels updated.', 'success');
 };
 
-window.sendTelegramOrderAlert = async function(orderData, items = []) {
-  const chatId = state.managerSettings?.telegramChatId;
-  const customToken = state.managerSettings?.telegramBotToken;
-  // Use custom bot token or default public Conceptors alert bot token
-  const token = customToken || '8192036495:AAEIhD3XjV7cK6c8t9Z-conceptors'; 
-  if (!chatId) {
-    console.info('[Telegram Alert] No Telegram Chat ID configured. Skipping Telegram mobile alert.');
-    return { success: false, reason: 'no_chat_id' };
-  }
+// =========================================================================
+// 15B. WHATSAPP & NTFY MOBILE PHONE ORDER ALERTS (UAE STANDARD & FREE IOS PUSH)
+// =========================================================================
 
-  const orderNum = orderData.orderNumber || orderData.invoiceNumber || 'New Order';
-  const repName = orderData.repName || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
-  const clientName = orderData.clientName || 'Clinic Account';
+function formatWhatsappOrderMessage(orderData, items = []) {
+  const orderNum = orderData.orderNumber || orderData.order_number || orderData.invoiceNumber || 'New Order';
+  const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
   const location = orderData.location || 'UAE';
-  const total = Number(orderData.totalIncVat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const delivery = orderData.deliveryUrgency || 'Normal (48h)';
-  const terms = orderData.paymentTerms || '30 Days Credit';
+  const total = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const delivery = orderData.deliveryUrgency || orderData.delivery_urgency || 'Normal (48h)';
+  const terms = orderData.paymentTerms || orderData.payment_terms || '30 Days Credit';
 
   let itemsText = '';
   if (Array.isArray(items) && items.length > 0) {
-    itemsText = '\n<b>📦 Itemized Products:</b>\n' + items.map(it => {
-      const bonusStr = it.focQty > 0 ? ` (+${it.focQty} FOC)` : '';
-      return `• ${it.productName || it.productCode}: <b>${it.salesQty} units</b>${bonusStr}`;
+    itemsText = '\n\n*📦 Itemized Products:*\n' + items.map(it => {
+      const bonusStr = (it.focQty > 0 || it.foc_qty > 0) ? ` (+${it.focQty || it.foc_qty} FOC Bonus)` : '';
+      return `• ${it.productName || it.product_name || it.productCode}: *${it.salesQty || it.sales_qty} units*${bonusStr}`;
     }).join('\n');
   }
 
-  const message = 
-`🚨 <b>NEW CONCEPTORS FIELD ORDER</b>
-━━━━━━━━━━━━━━━━━━━━━━━
-📋 <b>Invoice:</b> <code>#${orderNum}</code>
-👤 <b>Representative:</b> ${escapeHtml(repName)}
-🏥 <b>Clinic Account:</b> ${escapeHtml(clientName)}
-📍 <b>Location:</b> ${escapeHtml(location)}
-💰 <b>Net Total:</b> <b>${total} AED</b> (Incl. 5% VAT)
-⏱️ <b>Delivery:</b> ${escapeHtml(delivery)}
-💳 <b>Terms:</b> ${escapeHtml(terms)}${itemsText}
-━━━━━━━━━━━━━━━━━━━━━━━
-📅 <i>${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })} GST</i>
-⚡ <i>Conceptors Field Sales CRM • Senior Manager Push</i>`;
+  const timeStr = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' });
 
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true
-      })
-    });
-    const result = await res.json();
-    if (result.ok) {
-      console.info('[Telegram Alert] Successfully pushed alert to Telegram chat:', chatId);
-      return { success: true };
-    } else {
-      console.warn('[Telegram Alert] Telegram API returned error:', result);
-      return { success: false, error: result.description };
-    }
-  } catch (err) {
-    console.warn('[Telegram Alert] Network error dispatching Telegram alert:', err);
-    return { success: false, error: err.message };
+  return `🚨 *NEW CONCEPTORS FIELD ORDER*
+━━━━━━━━━━━━━━━━━━━━━━━
+📋 *Invoice:* #${orderNum}
+👤 *Representative:* ${repName}
+🏥 *Clinic Account:* ${clientName}
+📍 *Location:* ${location}
+💰 *Net Total:* *${total} AED* (Incl. 5% VAT)
+⏱️ *Delivery Urgency:* ${delivery}
+💳 *Payment Terms:* ${terms}${itemsText}
+━━━━━━━━━━━━━━━━━━━━━━━
+📅 ${timeStr} GST
+⚡ _Conceptors Field Sales CRM • Senior Manager Push_`;
+}
+
+window.openWhatsappOrderShare = function(orderNumber) {
+  let order = (state.orders || []).find(o => (o.orderNumber === orderNumber || o.invoiceNumber === orderNumber));
+  if (!order) {
+    order = (state.notifications || []).find(n => n.orderNumber === orderNumber);
   }
+  const items = order?.order_items || order?.items || [];
+  const text = formatWhatsappOrderMessage(order || { orderNumber }, items);
+  
+  const rawPhone = state.managerSettings?.whatsappPhone || '+971501234567';
+  const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+  
+  const targetUrl = cleanPhone 
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/?text=${encodeURIComponent(text)}`;
+  
+  window.open(targetUrl, '_blank');
 };
 
-window.testTelegramPhoneAlert = async function() {
-  const chatId = document.getElementById('settingsTelegramChatId')?.value.trim() || state.managerSettings?.telegramChatId;
-  const customToken = document.getElementById('settingsTelegramBotToken')?.value.trim() || state.managerSettings?.telegramBotToken;
-  
-  if (!chatId) {
-    showToast('Chat ID Required', 'Please enter your Telegram Chat ID (get it from @userinfobot) to test.', 'warning');
-    document.getElementById('settingsTelegramChatId')?.focus();
+window.sendWhatsappOrderAlert = async function(orderData, items = []) {
+  const phone = state.managerSettings?.whatsappPhone;
+  const apiKey = state.managerSettings?.whatsappApiKey;
+
+  if (!phone) {
+    console.info('[WhatsApp Alert] No Senior Manager WhatsApp phone configured.');
+    return { success: false, reason: 'no_phone' };
+  }
+
+  const cleanPhone = phone.replace(/[^0-9]/g, '');
+  const text = formatWhatsappOrderMessage(orderData, items);
+
+  if (apiKey) {
+    try {
+      const url = `https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(apiKey)}`;
+      await fetch(url, { method: 'GET', mode: 'no-cors' });
+      console.info('[WhatsApp Alert] Dispatched automated WhatsApp alert via CallMeBot gateway to:', cleanPhone);
+      return { success: true };
+    } catch (err) {
+      console.warn('[WhatsApp Alert] Background CallMeBot dispatch error:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  return { success: true, manualRequired: true };
+};
+
+window.testWhatsappPhoneAlert = async function() {
+  const phoneInput = document.getElementById('settingsWhatsappPhone')?.value.trim() || state.managerSettings?.whatsappPhone;
+  const apiKeyInput = document.getElementById('settingsWhatsappApiKey')?.value.trim() || state.managerSettings?.whatsappApiKey;
+
+  if (!phoneInput) {
+    showToast('Phone Number Required', 'Please enter Senior Manager WhatsApp phone number (e.g. +971 50 000 0000) to test.', 'warning');
+    document.getElementById('settingsWhatsappPhone')?.focus();
     return;
   }
 
-  if (!customToken) {
-    showToast('Bot Token Required', 'Please enter your Telegram Bot Token (from @BotFather) to test.', 'warning');
-    document.getElementById('settingsTelegramBotToken')?.focus();
-    return;
-  }
+  state.managerSettings.whatsappPhone = phoneInput;
+  state.managerSettings.whatsappApiKey = apiKeyInput || '';
+  persistData();
 
-  showToast('Dispatching Alert...', 'Sending test notification to your Telegram Chat ID...', 'info');
-
-  const testData = {
+  const testOrder = {
     orderNumber: 'ORD-TEST-ALERT',
     repName: 'Dr. Shaimaa (Rep T1)',
     clientName: 'Al Barsha Veterinary Clinic',
@@ -7118,17 +7163,112 @@ window.testTelegramPhoneAlert = async function() {
     { productName: 'Asbrip Pets 150ml', salesQty: 5, focQty: 0 }
   ];
 
-  // Save temporarily to state
-  state.managerSettings.telegramChatId = chatId;
-  state.managerSettings.telegramBotToken = customToken;
+  const text = formatWhatsappOrderMessage(testOrder, testItems);
+  const cleanPhone = phoneInput.replace(/[^0-9]/g, '');
+
+  if (apiKeyInput) {
+    showToast('Sending WhatsApp Alert...', `Dispatching automated WhatsApp message via CallMeBot to +${cleanPhone}...`, 'info');
+    try {
+      await fetch(`https://api.callmebot.com/whatsapp.php?phone=${cleanPhone}&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(apiKeyInput)}`, {
+        method: 'GET',
+        mode: 'no-cors'
+      });
+      showToast('WhatsApp Alert Dispatched! 📲', `Test message sent to +${cleanPhone}. Check Dr. Sameh's WhatsApp on iPhone!`, 'success');
+      if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
+    } catch (e) {
+      showToast('WhatsApp Error', 'Could not reach WhatsApp gateway: ' + e.message, 'error');
+    }
+  } else {
+    showToast('Opening WhatsApp...', 'Opening WhatsApp chat with test invoice summary for Dr. Sameh...', 'info');
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+    showToast('WhatsApp Ready 📲', 'Tapped directly into WhatsApp with formatted order summary for Senior Manager.', 'success');
+  }
+};
+
+window.sendNtfyOrderAlert = async function(orderData, items = []) {
+  const topic = state.managerSettings?.ntfyTopic || 'conceptors-orders-sameh';
+  if (!topic) {
+    console.info('[ntfy Push] No ntfy topic configured. Skipping.');
+    return { success: false, reason: 'no_topic' };
+  }
+
+  const orderNum = orderData.orderNumber || orderData.order_number || orderData.invoiceNumber || 'New Order';
+  const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
+  const location = orderData.location || 'UAE';
+  const total = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const delivery = orderData.deliveryUrgency || orderData.delivery_urgency || 'Normal (48h)';
+
+  let itemsSummary = '';
+  if (Array.isArray(items) && items.length > 0) {
+    itemsSummary = '\n' + items.slice(0, 3).map(it => `• ${it.productName || it.product_name || it.productCode}: ${it.salesQty || it.sales_qty} units`).join('\n');
+    if (items.length > 3) itemsSummary += `\n...and ${items.length - 3} more items`;
+  }
+
+  const bodyText = `${repName} logged order #${orderNum} for ${clientName} (${location}). Net: ${total} AED (5% VAT incl). Urgency: ${delivery}.${itemsSummary}`;
+
+  try {
+    const res = await fetch('https://ntfy.sh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        topic: topic,
+        title: `🚨 Field Order #${orderNum} (${total} AED)`,
+        message: bodyText,
+        priority: 5,
+        tags: ['rotating_light', 'moneybag', 'hospital'],
+        click: 'https://seifawamry.github.io/Conceptors_Reporting/#orders'
+      })
+    });
+    if (res.ok) {
+      console.info('[ntfy Push] Alert published successfully to topic:', topic);
+      return { success: true };
+    } else {
+      console.warn('[ntfy Push] ntfy server returned status:', res.status);
+      return { success: false, status: res.status };
+    }
+  } catch (err) {
+    console.warn('[ntfy Push] Network error dispatching ntfy alert:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+window.testNtfyPhoneAlert = async function() {
+  const topicInput = document.getElementById('settingsNtfyTopic')?.value.trim() || state.managerSettings?.ntfyTopic || 'conceptors-orders-sameh';
+  
+  if (!topicInput) {
+    showToast('Topic Name Required', 'Please enter a topic name (e.g. conceptors-orders-sameh) to test.', 'warning');
+    document.getElementById('settingsNtfyTopic')?.focus();
+    return;
+  }
+
+  state.managerSettings.ntfyTopic = topicInput;
   persistData();
 
-  const res = await sendTelegramOrderAlert(testData, testItems);
+  showToast('Publishing Push Alert...', `Sending urgent chime to ntfy topic: ${topicInput}...`, 'info');
+
+  const testOrder = {
+    orderNumber: 'ORD-TEST-CHIME',
+    repName: 'Dr. Shaimaa (Rep T1)',
+    clientName: 'Al Barsha Veterinary Clinic',
+    location: 'Dubai - Al Barsha',
+    totalIncVat: 2450,
+    deliveryUrgency: 'Normal (48h)'
+  };
+  const testItems = [
+    { productName: 'Viusid Pets 150ml', salesQty: 10 },
+    { productName: 'Asbrip Pets 150ml', salesQty: 5 }
+  ];
+
+  const res = await sendNtfyOrderAlert(testOrder, testItems);
   if (res.success) {
-    showToast('Telegram Alert Delivered! 🔔', 'Check your iPhone lock screen — Telegram just delivered the test alert with sound & vibration!', 'success');
+    showToast('Push Alert Delivered! 🔔', `Published to topic "${topicInput}". If you subscribed in the free "ntfy" app on your iPhone, your phone just chimed!`, 'success');
     if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
   } else {
-    showToast('Telegram Dispatch Failed', `Error: ${res.error || 'Could not deliver'}. Make sure you tapped "Start" in the bot on Telegram.`, 'error');
+    showToast('Push Delivery Failed', `Error publishing alert: ${res.error || res.status || 'Network error'}`, 'error');
   }
 };
 
@@ -7235,9 +7375,16 @@ window.triggerTestOrderNotification = function() {
     }
   }
 
-  // Dispatch to external mobile channels (Telegram / Webhook)
-  sendTelegramOrderAlert(notif, notif.items);
-  sendWebhookOrderAlert(notif, notif.items);
+  // Dispatch to external mobile channels (WhatsApp / ntfy / Webhook)
+  if (typeof sendWhatsappOrderAlert === 'function') {
+    sendWhatsappOrderAlert(notif, notif.items);
+  }
+  if (typeof sendNtfyOrderAlert === 'function') {
+    sendNtfyOrderAlert(notif, notif.items);
+  }
+  if (typeof sendWebhookOrderAlert === 'function') {
+    sendWebhookOrderAlert(notif, notif.items);
+  }
 
   updateNotificationBell();
   renderManagerNotifications();
@@ -7280,7 +7427,7 @@ window.playNotificationChime = function() {
   }
 };
 
-window.showToast = function(title, message, type = 'info') {
+window.showToast = function(title, message, type = 'info', action = null) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
@@ -7290,6 +7437,17 @@ window.showToast = function(title, message, type = 'info') {
 
   const iconName = type === 'success' ? 'check-circle-2' : (type === 'warning' ? 'alert-triangle' : 'info');
 
+  let actionHtml = '';
+  if (action && action.label && action.onClick) {
+    actionHtml = `
+      <div class="mt-2 pt-2 border-t border-slate-700/60 flex items-center gap-2">
+        <button type="button" onclick="${action.onClick}; this.closest('.toast-item').remove()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> ${escapeHtml(action.label)}
+        </button>
+      </div>
+    `;
+  }
+
   toast.innerHTML = `
     <div class="toast-icon-wrapper p-2 rounded-xl shrink-0 mt-0.5">
       <i data-lucide="${iconName}" class="w-4 h-4"></i>
@@ -7297,6 +7455,7 @@ window.showToast = function(title, message, type = 'info') {
     <div class="flex-1 min-w-0">
       <h5 class="toast-title text-xs font-black leading-tight">${escapeHtml(title)}</h5>
       <p class="toast-message text-[11px] mt-1 font-medium leading-relaxed">${escapeHtml(message)}</p>
+      ${actionHtml}
     </div>
     <button type="button" class="toast-close-btn p-1.5 rounded-lg shrink-0 transition-colors" onclick="this.parentElement.remove()" aria-label="Dismiss notification">
       <i data-lucide="x" class="w-3.5 h-3.5"></i>
@@ -7306,10 +7465,13 @@ window.showToast = function(title, message, type = 'info') {
   container.appendChild(toast);
   safeLucide();
 
+  const dismissDelay = action ? 10000 : 5000;
   setTimeout(() => {
-    toast.classList.add('dismissing');
-    setTimeout(() => { toast.remove(); }, 300);
-  }, 5000);
+    if (toast.parentElement) {
+      toast.classList.add('dismissing');
+      setTimeout(() => { toast.remove(); }, 300);
+    }
+  }, dismissDelay);
 };
 
 // =========================================================================
@@ -7375,7 +7537,11 @@ window.triggerManagerOrderAlert = function(orderData) {
     showToast(
       `🚨 New Order #${orderNumber} Submitted!`,
       `${repName} logged an order with ${clientName}${formattedTotal ? ` totaling ${formattedTotal}` : ''}.`,
-      'success'
+      'success',
+      {
+        label: 'Open in WhatsApp',
+        onClick: `openWhatsappOrderShare('${orderNumber}')`
+      }
     );
   }
 

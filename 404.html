@@ -2037,7 +2037,10 @@
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button id="btnResendEmailAction" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm">
+          <button id="btnWhatsappShareAction" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp
+          </button>
+          <button id="btnResendEmailAction" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
             <i data-lucide="send" class="w-3.5 h-3.5"></i> Open in Mail Client
           </button>
           <button type="button" onclick="closeEmailModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close email modal">
@@ -2104,42 +2107,67 @@
           </div>
         </div>
 
-        <!-- Telegram Instant Mobile Alerts (Guaranteed Lock-Screen Push) -->
-        <div class="space-y-3 bg-[#0d1728] p-3.5 rounded-xl border border-indigo-500/40">
+        <!-- WhatsApp Instant Mobile Order Alerts -->
+        <div class="space-y-3 bg-[#0c1f17] p-3.5 rounded-xl border border-emerald-500/40">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
-              <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i> Telegram Mobile Alerts (Guaranteed Push)
+            <span class="font-bold text-emerald-300 text-xs flex items-center gap-1.5">
+              <i data-lucide="message-circle" class="w-4 h-4 text-emerald-400"></i> WhatsApp Mobile Order Alerts
             </span>
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              Rings Locked iPhone
+              Active in UAE
             </span>
           </div>
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            Because Apple freezes background web pages, Telegram delivers instant native ringtones, vibrations, and order details directly to your iPhone lock screen 24/7.
+            Delivers full itemized order summaries, clinic details, and AED totals directly to the Senior Manager's WhatsApp on iPhone.
           </p>
           <div class="space-y-2">
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Telegram Chat ID / User ID *</label>
-              <input type="text" id="settingsTelegramChatId" placeholder="e.g. 123456789 (from @userinfobot)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-indigo-500 text-xs">
+              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Senior Manager WhatsApp Number (with Country Code) *</label>
+              <input type="tel" id="settingsWhatsappPhone" placeholder="+971 50 000 0000" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-emerald-500 text-xs font-mono">
             </div>
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Telegram Bot Token (Optional if using custom bot)</label>
-              <input type="text" id="settingsTelegramBotToken" placeholder="Leave empty for Conceptors Default Bot" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-indigo-500 text-xs font-mono">
+              <label class="block text-slate-400 mb-1 font-semibold text-[11px]">WhatsApp Bot API Key (Optional for background auto-send)</label>
+              <input type="text" id="settingsWhatsappApiKey" placeholder="CallMeBot API Key (Optional)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-emerald-500 text-xs font-mono">
             </div>
           </div>
           <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
-            <a href="https://t.me/userinfobot" target="_blank" class="text-[10px] text-indigo-400 hover:underline flex items-center gap-1">
-              <i data-lucide="external-link" class="w-3 h-3"></i> Get Chat ID via @userinfobot
+            <span class="text-[10px] text-slate-400">Reps can also dispatch with 1 tap upon order booking</span>
+            <button type="button" onclick="testWhatsappPhoneAlert()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 active:scale-95 shadow-sm">
+              <i data-lucide="send" class="w-3 h-3"></i> Test WhatsApp Alert
+            </button>
+          </div>
+        </div>
+
+        <!-- ntfy Free iOS Push App (Rings iPhone Lock Screen Without Sign-up) -->
+        <div class="space-y-3 bg-[#0d1728] p-3.5 rounded-xl border border-indigo-500/40">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
+              <i data-lucide="bell" class="w-4 h-4 text-indigo-400"></i> Free iPhone Push App (ntfy - No Login Needed)
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Rings Locked Screen
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Free, open-source app on the Apple App Store. Rings and vibrates your locked iPhone with urgent order banners without requiring an account.
+          </p>
+          <div>
+            <label class="block text-slate-400 mb-1 font-semibold text-[11px]">Push Channel / Topic Name</label>
+            <input type="text" id="settingsNtfyTopic" placeholder="conceptors-orders-sameh" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-indigo-500 text-xs font-mono">
+          </div>
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+            <a href="https://apps.apple.com/app/ntfy/id1625396347" target="_blank" class="text-[10px] text-indigo-400 hover:underline flex items-center gap-1">
+              <i data-lucide="external-link" class="w-3 h-3"></i> Get "ntfy" from App Store
             </a>
-            <button type="button" onclick="testTelegramPhoneAlert()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 active:scale-95 shadow-sm">
-              <i data-lucide="bell" class="w-3 h-3"></i> Test iPhone Alert
+            <button type="button" onclick="testNtfyPhoneAlert()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 active:scale-95 shadow-sm">
+              <i data-lucide="volume-2" class="w-3 h-3"></i> Test Lock-Screen Push
             </button>
           </div>
         </div>
 
         <!-- Custom Webhook URL -->
         <div class="space-y-1.5">
-          <label class="block text-slate-400 font-semibold text-[11px]">Mobile Webhook URL (Optional: Pushover / Slack / Discord / Zapier)</label>
+          <label class="block text-slate-400 font-semibold text-[11px]">Mobile Webhook URL (Optional: Pushover / Slack / Teams / Zapier)</label>
           <input type="url" id="settingsWebhookUrl" placeholder="https://api.pushover.net/... or https://hooks.slack.com/..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none focus:border-brand-500 text-xs font-mono">
         </div>
 
@@ -2160,8 +2188,8 @@
             <i data-lucide="smartphone" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">iPhone (iOS) Push Alerts Guide</h3>
-            <p class="text-[11px] text-sky-300/80">How Apple iOS handles background alerts & how to fix it</p>
+            <h3 class="text-base font-bold text-white">iPhone (iOS) Mobile Alerts Guide</h3>
+            <p class="text-[11px] text-sky-300/80">How to receive instant order alerts on your iPhone</p>
           </div>
         </div>
         <button type="button" onclick="closeIosAlertGuideModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close guide modal">
@@ -2172,7 +2200,7 @@
       <div class="mt-4 space-y-4 flex-1 overflow-y-auto pr-1 text-slate-300">
         <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-1.5">
           <div class="font-bold text-xs flex items-center gap-1.5 text-amber-300">
-            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i> Why alerts pause when your iPhone is locked:
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i> Why web alerts pause when your iPhone is locked:
           </div>
           <p class="text-[11px] text-amber-200/90 leading-relaxed">
             Apple iOS strictly suspends browser execution and closes database connections when your screen is locked. Websites cannot run in the background on iOS. When you unlock and open the CRM, the connection wakes up and fires the alerts, which is why they only appeared when opening the app.
@@ -2180,36 +2208,54 @@
         </div>
 
         <div class="space-y-3">
-          <h4 class="font-black text-white text-xs uppercase tracking-wider text-sky-400">Two Ways to Receive Alerts on Your iPhone:</h4>
+          <h4 class="font-black text-white text-xs uppercase tracking-wider text-sky-400">Three Best Ways to Receive Alerts on Your iPhone:</h4>
 
-          <!-- Method 1: Telegram Bot (Recommended) -->
-          <div class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 space-y-2">
+          <!-- Method 1: WhatsApp -->
+          <div class="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
             <div class="flex items-center justify-between">
               <span class="font-black text-white text-xs flex items-center gap-1.5">
-                <i data-lucide="send" class="w-4 h-4 text-indigo-400"></i> Method 1: Telegram Instant Alerts (Recommended)
+                <i data-lucide="message-circle" class="w-4 h-4 text-emerald-400"></i> Method 1: WhatsApp Alerts (No New App Needed)
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">100% Guaranteed</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">UAE Standard</span>
             </div>
             <p class="text-[11px] text-slate-300 leading-relaxed">
-              Because Telegram is a native iOS app, it rings and vibrates your locked iPhone with high-priority banners the exact second an order is booked — even with your phone locked in your pocket.
+              Whenever a representative books an order, they can dispatch the full itemized order invoice directly to Dr. Sameh Ageez on WhatsApp with one tap, or automatically via WhatsApp API.
             </p>
             <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1.5 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
-              <li>Open Telegram on your iPhone and search for <b>@userinfobot</b> (tap Start to get your ID number).</li>
-              <li>Go to <b>Notification Settings</b> in this CRM and paste your ID into <b>Telegram Chat ID</b>.</li>
-              <li>Tap <b>Save Settings</b>. Done! Every field sales order will instantly ping your phone!</li>
+              <li>In <b>Notification Settings</b>, enter Dr. Sameh's WhatsApp number (e.g. <code>+971 50 ...</code>).</li>
+              <li>Tap <b>Save Settings</b>.</li>
+              <li>Every order booked can be dispatched straight to his WhatsApp chat with full items and AED total!</li>
             </ol>
           </div>
 
-          <!-- Method 2: Install to Home Screen -->
+          <!-- Method 2: ntfy App -->
+          <div class="p-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-black text-white text-xs flex items-center gap-1.5">
+                <i data-lucide="bell" class="w-4 h-4 text-indigo-400"></i> Method 2: Free "ntfy" App on App Store (Rings Locked Screen)
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300">Instant Chime</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">
+              If you want a dedicated notification that plays loud alarm chimes and displays lock-screen banners without needing accounts:
+            </p>
+            <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1.5 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+              <li>Download <b>ntfy</b> from the Apple App Store on your iPhone (free, no sign-up).</li>
+              <li>Open ntfy, tap <b>+</b> and subscribe to <code>conceptors-orders</code>.</li>
+              <li>Done! Every order booked immediately chimes and vibrates your iPhone lock screen!</li>
+            </ol>
+          </div>
+
+          <!-- Method 3: Install as iPhone Web App -->
           <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
             <div class="flex items-center justify-between">
               <span class="font-black text-white text-xs flex items-center gap-1.5">
-                <i data-lucide="download" class="w-4 h-4 text-sky-400"></i> Method 2: Install as iPhone Web App (PWA)
+                <i data-lucide="download" class="w-4 h-4 text-sky-400"></i> Method 3: Install as iPhone Web App (PWA)
               </span>
               <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">iOS 16.4+</span>
             </div>
             <p class="text-[11px] text-slate-300 leading-relaxed">
-              Apple requires web apps to be installed to the Home Screen to receive Web Push notifications:
+              Apple requires web apps to be installed to the Home Screen:
             </p>
             <ol class="list-decimal list-inside text-[11px] text-slate-300 space-y-1.5 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
               <li>In Safari, tap the <b>Share icon (square with arrow up ⬆️)</b> at the bottom.</li>
