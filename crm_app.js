@@ -13,6 +13,572 @@ const STORAGE_KEY_ORDERS = 'conceptors_crm_orders';
 const STORAGE_KEY_PLANS = 'conceptors_crm_monthly_plans';
 const STORAGE_KEY_SETTINGS = 'conceptors_crm_manager_settings';
 const STORAGE_KEY_NOTIFS = 'conceptors_crm_notifications';
+const STORAGE_KEY_GDRIVE_URL = 'conceptors_crm_gdrive_url';
+
+// =========================================================================
+// GOOGLE DRIVE & GOOGLE SHEETS CLOUD SYNC ENGINE
+// Keeps Laptop & Mobile Phone 100% In Sync + Auto-Updates Drive CSVs
+// =========================================================================
+
+function getGoogleDriveUrl() {
+  return localStorage.getItem(STORAGE_KEY_GDRIVE_URL) || window.CONCEPTORS_GDRIVE_URL || '';
+}
+window.getGoogleDriveUrl = getGoogleDriveUrl;
+
+function setGoogleDriveUrl(url) {
+  if (url && typeof url === 'string') {
+    localStorage.setItem(STORAGE_KEY_GDRIVE_URL, url.trim());
+  } else {
+    localStorage.removeItem(STORAGE_KEY_GDRIVE_URL);
+  }
+}
+window.setGoogleDriveUrl = setGoogleDriveUrl;
+
+// =========================================================================
+// SUPABASE CLOUD DATABASE CONFIGURATION & REST CLIENT (FALLBACK ENGINE)
+// =========================================================================
+
+const SUPABASE_URL = 'https://pywtpdnhomommitlidqo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5d3RwZG5ob21vbW1pdGxpZHFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MDcyMDMsImV4cCI6MjEwNDQ4MzIwM30.tNq5iHeG4A6clPXW8LqbCl4t1O8RMq8WRG6UkUApxb0';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_yKZHaHtIklq258M-XiPnlQ_Y_GC1HwU';
+
+window.SUPABASE_CONFIG = {
+  url: SUPABASE_URL,
+  anonKey: SUPABASE_ANON_KEY,
+  publishableKey: SUPABASE_PUBLISHABLE_KEY
+};
+
+let supabaseClient = null;
+try {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    window.supabaseClient = supabaseClient;
+  }
+} catch (e) {
+  console.warn('Supabase JS Client SDK init:', e);
+}
+
+async function supabaseRest(endpoint, options = {}) {
+  const url = `${SUPABASE_URL}/rest/v1/${endpoint.replace(/^\//, '')}`;
+  const headers = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    'Prefer': options.prefer || (options.method === 'POST' || options.method === 'PATCH' ? 'return=minimal' : 'return=representation'),
+    ...(options.headers || {})
+  };
+  try {
+    const res = await fetch(url, {
+      method: options.method || 'GET',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (!res.ok) {
+      const errTxt = await res.text();
+      return { data: null, error: { status: res.status, message: errTxt } };
+    }
+    const contentType = res.headers.get('content-type') || '';
+    if (res.status !== 204 && contentType.includes('application/json')) {
+      const json = await res.json();
+      return { data: json, error: null };
+    }
+    return { data: true, error: null };
+  } catch (err) {
+    return { data: null, error: { status: 0, message: err.message } };
+  }
+}
+window.supabaseRest = supabaseRest;
+
+// Unified Cloud & Google Drive UI Connection Indicator
+function updateCloudSyncBadge(status, text) {
+  const badge = document.getElementById('cloudSyncBadge') || document.getElementById('supabaseSyncBadge');
+  const dot = document.getElementById('cloudSyncDot') || document.getElementById('supabaseSyncDot');
+  const label = document.getElementById('cloudSyncText') || document.getElementById('supabaseSyncText');
+  if (!badge || !dot || !label) return;
+
+  if (status === 'connected') {
+    dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shrink-0';
+    label.className = 'font-mono text-emerald-300';
+    label.textContent = text || '🟢 Drive Synced';
+    badge.title = 'Google Drive Cloud Connected (Mobile & Laptop 100% Synced) - Click to Manage';
+  } else if (status === 'syncing') {
+    dot.className = 'w-2 h-2 rounded-full bg-sky-400 shrink-0 animate-ping';
+    label.className = 'font-mono text-sky-300';
+    label.textContent = text || '🔄 Syncing...';
+    badge.title = 'Synchronizing data with Google Drive Cloud';
+  } else if (status === 'supabase') {
+    dot.className = 'w-2 h-2 rounded-full bg-cyan-400 shrink-0';
+    label.className = 'font-mono text-cyan-300';
+    label.textContent = text || '⚡ Supabase Synced';
+    badge.title = 'Supabase Cloud Database Connected';
+  } else if (status === 'offline') {
+    dot.className = 'w-2 h-2 rounded-full bg-amber-400 shrink-0';
+    label.className = 'font-mono text-amber-300';
+    label.textContent = text || '💾 Local Cache';
+    badge.title = 'Offline / Local Cache Mode (Click to Connect Google Drive)';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-slate-400 shrink-0';
+    label.className = 'font-mono text-slate-400';
+    label.textContent = text || '☁️ Cloud Sync';
+    badge.title = 'Click to configure Google Drive Cloud Sync';
+  }
+}
+window.updateCloudSyncBadge = updateCloudSyncBadge;
+window.updateSupabaseSyncBadge = updateCloudSyncBadge; // Backward compatibility
+
+// Asynchronous background push to Google Drive Web App
+async function pushToGoogleDrive(action, payload = {}) {
+  const gdriveUrl = getGoogleDriveUrl();
+  if (!gdriveUrl) return false;
+  try {
+    const bodyObj = {
+      action,
+      user: (state.currentUser && state.currentUser.name) || 'Representative',
+      ...payload
+    };
+    // Send as text/plain to strictly prevent browser CORS preflight OPTIONS requests
+    fetch(gdriveUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(bodyObj),
+      redirect: 'follow'
+    }).then(res => res.json()).then(resJson => {
+      if (resJson && resJson.status === 'success') {
+        updateCloudSyncBadge('connected', '🟢 Drive Synced');
+      }
+    }).catch(err => {
+      console.warn('Background Google Drive sync push warning:', err);
+    });
+    return true;
+  } catch (e) {
+    console.warn('pushToGoogleDrive exception:', e);
+    return false;
+  }
+}
+window.pushToGoogleDrive = pushToGoogleDrive;
+
+// Complete Two-Way Sync with Google Drive
+async function syncWithGoogleDrive(force = false) {
+  const gdriveUrl = getGoogleDriveUrl();
+  if (!gdriveUrl) {
+    // If no Google Drive URL configured, fallback to Supabase check
+    return syncWithSupabase(force);
+  }
+
+  updateCloudSyncBadge('syncing', '🔄 Syncing Drive...');
+  try {
+    const res = await fetch(`${gdriveUrl}?action=GET_ALL&_t=${Date.now()}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (json.status !== 'success' || !json.data) {
+      throw new Error(json.message || 'Invalid response from Google Drive');
+    }
+
+    const cloudData = json.data;
+    let newVisitsMerged = 0;
+    let newOrdersMerged = 0;
+
+    // 1. Two-Way Merge Visits (Never delete any visits!)
+    if (Array.isArray(cloudData.visits)) {
+      const cloudVisitMap = new Map(cloudData.visits.map(v => [v.id, v]));
+      const localVisitMap = new Map((state.visits || []).map(v => [v.id, v]));
+
+      cloudVisitMap.forEach((cv, id) => {
+        if (!localVisitMap.has(id)) {
+          state.visits.unshift(cv);
+          newVisitsMerged++;
+        } else {
+          const lv = localVisitMap.get(id);
+          if (cv.status !== lv.status || cv.outcome !== lv.outcome || cv.doctorSentiment !== lv.doctorSentiment) {
+            Object.assign(lv, cv);
+          }
+        }
+      });
+
+      // Push any locally recorded visits that are not yet in Google Drive
+      const unpushedVisits = (state.visits || []).filter(lv => !cloudVisitMap.has(lv.id));
+      if (unpushedVisits.length > 0) {
+        pushToGoogleDrive('SYNC_ALL', { data: { visits: unpushedVisits } });
+      }
+    }
+
+    // 2. Two-Way Merge Orders
+    if (Array.isArray(cloudData.orders)) {
+      const cloudOrderMap = new Map(cloudData.orders.map(o => [o.invoiceNumber, o]));
+      const localOrderMap = new Map((state.orders || []).map(o => [o.invoiceNumber, o]));
+
+      cloudOrderMap.forEach((co, inv) => {
+        if (!localOrderMap.has(inv)) {
+          state.orders.unshift(co);
+          newOrdersMerged++;
+        } else {
+          const lo = localOrderMap.get(inv);
+          if (co.approvalStatus !== lo.approvalStatus) {
+            lo.approvalStatus = co.approvalStatus;
+            lo.approvedBy = co.approvedBy;
+            lo.approvedAt = co.approvedAt;
+          }
+        }
+      });
+
+      const unpushedOrders = (state.orders || []).filter(lo => !cloudOrderMap.has(lo.invoiceNumber));
+      if (unpushedOrders.length > 0) {
+        pushToGoogleDrive('SYNC_ALL', { data: { orders: unpushedOrders } });
+      }
+    }
+
+    // 3. Merge Monthly Plans
+    if (Array.isArray(cloudData.monthlyPlans) && cloudData.monthlyPlans.length > 0) {
+      state.monthlyPlans = cloudData.monthlyPlans;
+    }
+
+    persistData();
+    renderAll();
+    updateCloudSyncBadge('connected', '🟢 Drive Synced');
+
+    if (force) {
+      showToast('☁️ Google Drive Synchronized', `Connected to Google Drive! Merged ${newVisitsMerged} visits and ${newOrdersMerged} orders across your devices.`, 'success');
+    }
+    return { success: true };
+  } catch (err) {
+    console.warn('Google Drive sync warning (operating in local cache):', err);
+    updateCloudSyncBadge('offline', '💾 Local Mode');
+    if (force) {
+      showToast('Google Drive Sync Notice', 'Could not reach Google Drive script. Operating in local storage mode. Check your Web App URL in settings.', 'warning');
+    }
+    return { success: false, error: err.message };
+  }
+}
+window.syncWithGoogleDrive = syncWithGoogleDrive;
+
+// Data Mappers: Database (snake_case) <-> Frontend State (camelCase)
+function mapVisitFromDb(row) {
+  return {
+    id: row.id,
+    repId: row.rep_id,
+    territory: row.rep_id,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    date: row.date,
+    timeSlot: row.time_slot || 'Morning Round (09:00 - 12:00)',
+    visitCategory: row.visit_category || 'Planned',
+    status: row.status || 'Planned',
+    doctorName: row.doctor_name || '',
+    doctorRole: row.doctor_role || 'Lead Veterinarian',
+    productsDetailed: row.products_detailed || [],
+    doctorSentiment: row.doctor_sentiment || 'Pending',
+    samplesDropped: row.samples_dropped || 0,
+    sampleProduct: row.sample_product || '',
+    orderPlaced: Boolean(row.order_placed),
+    orderRef: row.order_ref || '',
+    orderValueAed: Number(row.order_value_aed) || 0,
+    purpose: row.purpose || '',
+    unplannedReason: row.unplanned_reason || '',
+    outcome: row.outcome || '',
+    missedReason: row.missed_reason || '',
+    nextFollowUp: row.next_follow_up || '',
+    nextFollowUpPurpose: row.next_follow_up_purpose || ''
+  };
+}
+
+function mapVisitToDb(v) {
+  return {
+    id: v.id,
+    rep_id: v.repId || v.territory || 'T1',
+    client_code: v.clientCode,
+    client_name: v.clientName,
+    location: v.location || 'UAE',
+    date: v.date,
+    time_slot: v.timeSlot || 'Morning Round (09:00 - 12:00)',
+    visit_category: v.visitCategory || 'Planned',
+    status: v.status || 'Planned',
+    doctor_name: v.doctorName || '',
+    doctor_role: v.doctorRole || 'Lead Veterinarian',
+    products_detailed: v.productsDetailed || [],
+    doctor_sentiment: v.doctorSentiment || 'Pending',
+    samples_dropped: v.samplesDropped || 0,
+    sample_product: v.sampleProduct || '',
+    order_placed: Boolean(v.orderPlaced),
+    order_ref: v.orderRef || '',
+    order_value_aed: Number(v.orderValueAed) || 0,
+    purpose: v.purpose || '',
+    unplanned_reason: v.unplannedReason || '',
+    outcome: v.outcome || '',
+    missed_reason: v.missedReason || '',
+    next_follow_up: v.nextFollowUp || null,
+    next_follow_up_purpose: v.nextFollowUpPurpose || '',
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapOrderFromDb(row) {
+  const items = (row.order_items || []).map(it => ({
+    productCode: it.product_code,
+    productName: it.product_name,
+    unitPrice: Number(it.unit_price) || 0,
+    salesQty: Number(it.sales_qty) || 0,
+    focQty: Number(it.foc_qty) || 0,
+    total: Number(it.line_total) || 0
+  }));
+  return {
+    invoiceNumber: row.invoice_number,
+    date: row.date,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    territory: row.territory,
+    approvalStatus: row.approval_status || 'Pending',
+    approvedBy: row.approved_by || null,
+    approvedAt: row.approved_at || null,
+    paymentTerms: row.payment_terms || '30 Days Credit',
+    deliveryUrgency: row.delivery_urgency || 'Normal (48h)',
+    items,
+    totalExcVat: Number(row.subtotal_exc_vat) || 0,
+    vatAmount: Number(row.vat_amount) || 0,
+    totalIncVat: Number(row.total_inc_vat) || 0
+  };
+}
+
+function mapOrderToDb(o) {
+  return {
+    invoice_number: o.invoiceNumber,
+    date: o.date,
+    rep_id: o.repId,
+    rep_name: o.repName,
+    client_code: o.clientCode,
+    client_name: o.clientName,
+    location: o.location,
+    territory: o.territory,
+    approval_status: o.approvalStatus || 'Pending',
+    approved_by: o.approvedBy || null,
+    approved_at: o.approvedAt || null,
+    payment_terms: o.paymentTerms || '30 Days Credit',
+    delivery_urgency: o.deliveryUrgency || 'Normal (48h)',
+    subtotal_exc_vat: Number(o.totalExcVat) || 0,
+    vat_amount: Number(o.vatAmount) || 0,
+    total_inc_vat: Number(o.totalIncVat) || 0,
+    updated_at: new Date().toISOString()
+  };
+}
+
+function mapPlanFromDb(row) {
+  return {
+    id: row.id,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    year: row.year,
+    month: row.month,
+    targetVisits: row.target_visits,
+    status: row.status,
+    submittedAt: row.submitted_at,
+    approvedAt: row.approved_at,
+    approvedBy: row.approved_by,
+    managerNotes: row.manager_notes || ''
+  };
+}
+
+function mapCustomerFromDb(row) {
+  return {
+    code: row.code,
+    name: row.name,
+    location: row.location,
+    territory: row.territory,
+    repId: row.rep_id,
+    tier: row.tier,
+    contactPerson: row.contact_person,
+    phone: row.phone,
+    address: row.address || '',
+    notes: row.notes || '',
+    isActive: row.is_active !== false
+  };
+}
+
+function mapCustomerToDb(c) {
+  return {
+    code: c.code,
+    name: c.name,
+    location: c.location,
+    territory: c.territory || c.repId,
+    rep_id: c.repId || c.territory,
+    tier: c.tier || 'Silver',
+    contact_person: c.contactPerson || '',
+    phone: c.phone || '',
+    address: c.address || '',
+    notes: c.notes || '',
+    is_active: c.isActive !== false
+  };
+}
+
+function mapProductFromDb(row) {
+  return {
+    code: row.code,
+    id: row.sku_id || row.code,
+    brand: row.brand,
+    name: row.name,
+    unitPrice: Number(row.unit_price) || 0,
+    currentStock: Number(row.current_stock) || 0,
+    category: row.category
+  };
+}
+
+function mapNotifFromDb(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    orderNumber: row.order_number,
+    repId: row.rep_id,
+    repName: row.rep_name,
+    clientCode: row.client_code,
+    clientName: row.client_name,
+    location: row.location,
+    totalExcVat: Number(row.total_exc_vat) || 0,
+    totalIncVat: Number(row.total_inc_vat) || 0,
+    timestamp: row.timestamp,
+    read: Boolean(row.read),
+    approvalStatus: row.approval_status,
+    itemsSummary: row.items_summary,
+    paymentTerms: row.payment_terms,
+    deliveryUrgency: row.delivery_urgency,
+    items: row.items_json || []
+  };
+}
+
+function mapNotifToDb(n) {
+  return {
+    id: n.id,
+    type: n.type || 'ORDER_SUBMITTED',
+    title: n.title,
+    order_number: n.orderNumber,
+    rep_id: n.repId,
+    rep_name: n.repName,
+    client_code: n.clientCode,
+    client_name: n.clientName,
+    location: n.location,
+    total_exc_vat: Number(n.totalExcVat) || 0,
+    total_inc_vat: Number(n.totalIncVat) || 0,
+    timestamp: n.timestamp || new Date().toISOString(),
+    read: Boolean(n.read),
+    approval_status: n.approvalStatus || 'Pending',
+    items_summary: n.itemsSummary,
+    payment_terms: n.paymentTerms,
+    delivery_urgency: n.deliveryUrgency,
+    items_json: n.items || []
+  };
+}
+
+async function syncWithSupabase(force = false) {
+  updateSupabaseSyncBadge('syncing', 'Syncing Cloud...');
+  try {
+    const visitsRes = await supabaseRest('visits?select=*&order=date.desc');
+    if (visitsRes.error) {
+      if (visitsRes.error.status === 404) {
+        console.info('Supabase: Schema not yet migrated. Operating in local cache mode.');
+        updateSupabaseSyncBadge('offline', '💾 Local Mode (Run SQL)');
+        return;
+      }
+      throw new Error(visitsRes.error.message || 'Visits fetch error');
+    }
+
+    if (visitsRes.data && Array.isArray(visitsRes.data)) {
+      if (visitsRes.data.length > 0) {
+        state.visits = visitsRes.data.map(mapVisitFromDb);
+      }
+    }
+
+    const [ordersRes, itemsRes] = await Promise.all([
+      supabaseRest('orders?select=*&order=date.desc'),
+      supabaseRest('order_items?select=*')
+    ]);
+    if (ordersRes.data && Array.isArray(ordersRes.data) && ordersRes.data.length > 0) {
+      const allItems = (itemsRes && itemsRes.data && Array.isArray(itemsRes.data)) ? itemsRes.data : [];
+      const itemsByOrder = {};
+      allItems.forEach(it => {
+        if (!itemsByOrder[it.order_number]) itemsByOrder[it.order_number] = [];
+        itemsByOrder[it.order_number].push(it);
+      });
+      state.orders = ordersRes.data.map(o => {
+        o.order_items = itemsByOrder[o.invoice_number] || [];
+        return mapOrderFromDb(o);
+      });
+    }
+
+    const plansRes = await supabaseRest('monthly_plans?select=*');
+    if (plansRes.data && Array.isArray(plansRes.data) && plansRes.data.length > 0) {
+      state.monthlyPlans = plansRes.data.map(mapPlanFromDb);
+    }
+
+    const custRes = await supabaseRest('customers?select=*');
+    if (custRes.data && Array.isArray(custRes.data) && custRes.data.length > 0) {
+      state.customers = custRes.data.map(mapCustomerFromDb);
+    }
+
+    const prodRes = await supabaseRest('products?select=*');
+    if (prodRes.data && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
+      state.products = prodRes.data.map(mapProductFromDb);
+    }
+
+    const notifRes = await supabaseRest('notifications?select=*&order=timestamp.desc');
+    if (notifRes.data && Array.isArray(notifRes.data) && notifRes.data.length > 0) {
+      const prevIds = new Set((state.notifications || []).map(n => n.id));
+      const freshNotifs = notifRes.data.map(mapNotifFromDb);
+      const newAlerts = freshNotifs.filter(n => !n.read && !prevIds.has(n.id));
+      state.notifications = freshNotifs;
+
+      // If new unread alerts arrived while Senior Manager is in the app
+      if (newAlerts.length > 0 && state.currentUser && state.currentUser.role === 'manager') {
+        if (state.managerSettings.soundAlert) playNotificationChime();
+        if (state.managerSettings.toastAlert) {
+          showToast(`🚨 ${newAlerts[0].title}`, newAlerts[0].itemsSummary || 'New field alert received.', 'info');
+        }
+      }
+    }
+
+    const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
+    if (setRes.data && Array.isArray(setRes.data) && setRes.data.length > 0) {
+      state.managerSettings = {
+        managerEmails: setRes.data[0].manager_emails,
+        soundAlert: Boolean(setRes.data[0].sound_alert),
+        toastAlert: Boolean(setRes.data[0].toast_alert)
+      };
+    }
+
+    persistData();
+    renderAll();
+    updateSupabaseSyncBadge('connected', '⚡ Cloud Synced');
+    if (force) {
+      showToast('Cloud Synchronized', 'All visits, orders, monthly plans and clinics refreshed from Supabase.', 'success');
+    }
+  } catch (err) {
+    console.warn('Supabase sync warning (using local store):', err);
+    updateSupabaseSyncBadge('offline', '💾 Local Mode');
+  }
+}
+window.syncWithSupabase = syncWithSupabase;
+
+// Field Stock Request Module (Submits to Supabase stock_requests)
+window.submitStockRequest = async function(reqData) {
+  const stockReq = {
+    id: `STK-REQ-${Date.now().toString().slice(-6)}`,
+    rep_id: reqData.repId || state.currentUser?.territory || 'T1',
+    rep_name: reqData.repName || state.currentUser?.name || 'Representative',
+    product_code: reqData.productCode,
+    product_name: reqData.productName,
+    request_type: reqData.requestType || 'Sample Request',
+    quantity: parseInt(reqData.quantity) || 1,
+    status: 'Pending',
+    reason: reqData.reason || '',
+    requested_date: getSyncedTodayDate()
+  };
+  const res = await supabaseRest('stock_requests', { method: 'POST', body: stockReq });
+  return res;
+};
 
 // =========================================================================
 // REAL-TIME TIMEZONE & LIVE DATE ENGINE (UAE GST UTC+4)
@@ -135,6 +701,33 @@ function initCrmApp() {
     renderAll();
     startLiveTimeTicker();
     safeLucide();
+
+    // Automatic Cloud Sync: Prefer Google Drive, fallback to Supabase
+    if (getGoogleDriveUrl()) {
+      syncWithGoogleDrive();
+    } else {
+      syncWithSupabase();
+    }
+
+    // Auto-sync on window focus (so mobile phone and laptop sync automatically when switching tabs or unlocking phone)
+    window.addEventListener('focus', () => {
+      if (getGoogleDriveUrl()) {
+        syncWithGoogleDrive(false);
+      } else {
+        syncWithSupabase(false);
+      }
+    });
+
+    // Periodic background sync every 30s when tab is active
+    setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        if (getGoogleDriveUrl()) {
+          syncWithGoogleDrive(false);
+        } else {
+          syncWithSupabase(false);
+        }
+      }
+    }, 30000);
   } catch (err) {
     console.error('CRITICAL: CRM App Initialization error:', err);
     try { renderAll(); } catch (renderErr) { console.error('Render fallback error:', renderErr); }
@@ -170,14 +763,21 @@ function loadStoredData() {
   }
 
   // AUTOMATIC DEMO ONBOARDING FOR GITHUB PAGES / FRESH BROWSERS:
-  // If no user is stored in localStorage (first visit, incognito, or remote deployment),
-  // automatically default to Senior Sales Manager (Dr. Sameh Ageez) so all data, tabs,
-  // KPIs, daily reports, and monthly planner render immediately without showing a blank page!
-  if (!state.currentUser && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
+  // If no user is stored in localStorage and user hasn't explicitly logged out,
+  // default to Senior Sales Manager (Dr. Sameh Ageez) so data renders immediately.
+  const hasLoggedOut = localStorage.getItem('conceptors_crm_logged_out');
+  if (!state.currentUser && !hasLoggedOut && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
     const defaultUser = window.INITIAL_USERS.find(u => u.username === 'manager') || window.INITIAL_USERS[0];
     state.currentUser = { ...defaultUser };
     state.filters.analyticsRepFilter = 'ALL';
+    state.filters.dailyReportRep = 'ALL';
     try { localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(state.currentUser)); } catch(e) {}
+  } else if (state.currentUser) {
+    if (state.currentUser.role === 'manager') {
+      state.filters.dailyReportRep = 'ALL';
+    } else {
+      state.filters.dailyReportRep = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    }
   }
 
   const storedDate = localStorage.getItem(STORAGE_KEY_DATE);
@@ -211,6 +811,12 @@ function loadStoredData() {
   state.orders = loadedOrders.length > 0 ? loadedOrders : [...(window.INITIAL_ORDERS || [])];
 
   state.dailyReportDate = state.dailyReportDate || getSyncedTodayDate();
+
+  // Ensure daily report date is initialized to UAE live today
+  const todayStr = getSyncedTodayDate();
+  if (!state.dailyReportDate) {
+    state.dailyReportDate = todayStr;
+  }
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
   state.monthlyPlans = storedPlans ? JSON.parse(storedPlans) : [...(window.INITIAL_MONTHLY_PLANS || [])];
@@ -355,16 +961,23 @@ function performLogin(username, password) {
 
   if (errorEl) errorEl.classList.add('hidden');
 
+  localStorage.removeItem('conceptors_crm_logged_out');
   state.currentUser = { ...foundUser };
   if (state.currentUser.role === 'manager') {
     state.filters.analyticsRepFilter = 'ALL';
+    state.filters.dailyReportRep = 'ALL';
   } else {
-    state.filters.analyticsRepFilter = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    const userTerritory = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    state.filters.analyticsRepFilter = userTerritory;
+    state.filters.dailyReportRep = userTerritory;
   }
   persistData();
 
   const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.add('hidden');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.add('hidden');
+  }
 
   showToast(
     `Welcome, ${state.currentUser.name}!`,
@@ -377,18 +990,105 @@ function performLogin(username, password) {
   renderAll();
 }
 
-window.handleLogout = function() {
-  state.currentUser = null;
+window.quickSwitchUser = function(username) {
+  const users = window.INITIAL_USERS || [];
+  const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!foundUser) {
+    showToast('User Not Found', `Profile ${username} not found.`, 'warning');
+    return;
+  }
+
+  localStorage.removeItem('conceptors_crm_logged_out');
+  state.currentUser = { ...foundUser };
+
+  if (state.currentUser.role === 'manager') {
+    state.filters.analyticsRepFilter = 'ALL';
+    state.filters.dailyReportRep = 'ALL';
+  } else {
+    const userTerritory = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    state.filters.analyticsRepFilter = userTerritory;
+    state.filters.dailyReportRep = userTerritory;
+
+    // If currently on manager tab, redirect to daily
+    const currentTabManager = document.getElementById('tab-manager');
+    if (currentTabManager && !currentTabManager.classList.contains('hidden')) {
+      switchTab('daily');
+    }
+  }
+
   persistData();
 
-  document.getElementById('loginPassword').value = '';
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.add('hidden');
+  }
+  closeProfileSwitcherModal();
+  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
+
+  showToast(
+    `Switched to ${state.currentUser.name}`,
+    `Active Profile: ${state.currentUser.title}. Data restricted to ${state.currentUser.territory === 'ALL' ? 'All UAE Territories' : state.currentUser.territory}.`,
+    'success'
+  );
+
+  renderAll();
+};
+
+window.openProfileSwitcherModal = function() {
+  const m = document.getElementById('profileSwitcherModal');
+  if (!m) return;
+  updateProfileSwitcherModalContent();
+  m.style.display = 'flex';
+  m.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeProfileSwitcherModal = function() {
+  const m = document.getElementById('profileSwitcherModal');
+  if (m) {
+    m.style.display = 'none';
+    m.classList.add('hidden');
+  }
+};
+
+function updateProfileSwitcherModalContent() {
+  if (!state.currentUser) return;
+  const avatar = document.getElementById('activeProfileAvatar');
+  const name = document.getElementById('activeProfileName');
+  const role = document.getElementById('activeProfileRole');
+  if (avatar) avatar.textContent = state.currentUser.avatar || 'US';
+  if (name) name.textContent = state.currentUser.name;
+  if (role) role.textContent = `${state.currentUser.title} (${state.currentUser.territory === 'ALL' ? 'All UAE' : state.currentUser.territory})`;
+}
+
+window.handleLogout = function() {
+  state.currentUser = null;
+  localStorage.setItem('conceptors_crm_logged_out', 'true');
+  persistData();
+
+  const pwdInput = document.getElementById('loginPassword');
+  if (pwdInput) pwdInput.value = '';
   const errorEl = document.getElementById('loginErrorMessage');
   if (errorEl) errorEl.classList.add('hidden');
 
+  switchTab('daily');
+
   const overlay = document.getElementById('loginOverlay');
-  if (overlay) overlay.classList.remove('hidden');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+  }
+
+  const switcherModal = document.getElementById('profileSwitcherModal');
+  if (switcherModal) {
+    switcherModal.style.display = 'none';
+    switcherModal.classList.add('hidden');
+  }
+  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
 
   showToast('Logged Out', 'Your session has ended. CRM locked.', 'info');
+  safeLucide();
 };
 
 window.togglePasswordReveal = function() {
@@ -487,10 +1187,10 @@ window.getScopedCustomers = getScopedCustomers;
 
 function getScopedVisits() {
   if (state.currentUser && state.currentUser.role === 'rep_t1') {
-    return state.visits.filter(v => v.repId === 'T1');
+    return (state.visits || []).filter(v => v.repId === 'T1' || v.territory === 'T1');
   }
   if (state.currentUser && state.currentUser.role === 'rep_t2') {
-    return state.visits.filter(v => v.repId === 'T2');
+    return (state.visits || []).filter(v => v.repId === 'T2' || v.territory === 'T2');
   }
   return state.visits || []; // Manager or default sees all
 }
@@ -623,7 +1323,7 @@ window.renderCustomerComboboxList = function(modalKey, query = '') {
   const repId = repSelect ? repSelect.value : '';
 
   const scoped = getScopedCustomers();
-  let list = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  let list = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
 
   const q = (query || '').trim().toLowerCase();
   if (q) {
@@ -751,6 +1451,9 @@ window.switchTab = function(tabId) {
   } else if (tabId === 'accounts') {
     renderAccountsGrid();
   } else if (tabId === 'daily-report') {
+    if (!state.dailyReportDate) {
+      state.dailyReportDate = state.dailyDate || getSyncedTodayDate();
+    }
     renderDailyReport();
   } else if (tabId === 'reports') {
     renderReportsTable();
@@ -1061,7 +1764,13 @@ window.handleDailyReportDateChange = function(newDate) {
 };
 
 window.handleDailyReportRepFilter = function(repId) {
-  state.filters.dailyReportRep = repId || 'ALL';
+  if (state.currentUser && state.currentUser.role === 'rep_t1') {
+    state.filters.dailyReportRep = 'T1';
+  } else if (state.currentUser && state.currentUser.role === 'rep_t2') {
+    state.filters.dailyReportRep = 'T2';
+  } else {
+    state.filters.dailyReportRep = repId || 'ALL';
+  }
   renderDailyReport();
 };
 
@@ -1174,283 +1883,465 @@ function ensureDailyReportDataForDate(dateStr) {
     ['CANIGEN DHPPi', 'VIUSID 30 ml']
   ];
 
-  // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi)
-  if (t1Customers.length >= 3) {
-    const c1 = pick(t1Customers, 1);
-    const c2 = pick(t1Customers, 3);
-    const c3 = pick(t1Customers, 5); // Missed
-    const c4 = pick(t1Customers, 7); // Unplanned
+  const isToday = (dateStr === getSyncedTodayDate());
 
-    // Visit 1: Planned & Visited (With Order)
-    const orderVal1 = 1250 + ((daySeed * 73) % 1800);
-    const orderRef1 = `ORD-${dateStr.replace(/-/g, '')}-T1`;
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
-      repId: 'T1',
-      clientCode: c1.code,
-      clientName: c1.name,
-      location: c1.city || 'Dubai',
-      date: dateStr,
-      timeSlot: 'Morning (09:30 - 11:00)',
-      visitCategory: 'Planned',
-      status: 'Completed',
-      doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
-      doctorRole: pick(doctorRoles, 1),
-      productsDetailed: pick(productsList, 1),
-      doctorSentiment: 'Enthusiastic',
-      samplesDropped: 2,
-      sampleProduct: pick(productsList, 1)[0],
-      orderPlaced: true,
-      orderRef: orderRef1,
-      orderValueAed: orderVal1,
-      purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
-      outcome: `Conducted comprehensive detailing. Doctor confirmed excellent patient recovery and placed stocking order for AED ${formatCurrency(orderVal1)}.`,
-      nextFollowUp: getOffsetDateStr(dateStr, 14),
-      nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
-    });
+  if (isToday) {
+    // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi) - 3 Pending Planned Visits for live field execution
+    if (t1Customers.length >= 3) {
+      const c1 = pick(t1Customers, 1);
+      const c2 = pick(t1Customers, 3);
+      const c3 = pick(t1Customers, 5);
 
-    generatedOrders.push({
-      invoiceNumber: orderRef1,
-      orderNumber: orderRef1,
-      date: dateStr,
-      time: '10:45:00',
-      repId: 'T1',
-      territory: 'T1',
-      clientCode: c1.code,
-      clientName: c1.name,
-      location: c1.city || 'Dubai',
-      items: [
-        { productId: 'P001', productName: pick(productsList, 1)[0], unitPrice: 85, quantity: 12, bonusFoc: 2, lineTotal: 1020 },
-        { productId: 'P002', productName: pick(productsList, 1)[1], unitPrice: 75, quantity: 5, bonusFoc: 0, lineTotal: 375 }
-      ],
-      subtotal: 1395,
-      vatAmount: Math.round(1395 * 0.05 * 100) / 100,
-      totalIncVat: Math.round(1395 * 1.05 * 100) / 100,
-      status: 'Approved',
-      paymentTerms: '30 Days Credit',
-      notes: 'Generated via Field Call Detailing. Standard 10+1 bonus applied.'
-    });
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Dubai',
+        date: dateStr,
+        timeSlot: 'Morning (09:30 - 11:00)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
+        doctorRole: pick(doctorRoles, 1),
+        productsDetailed: pick(productsList, 1),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 14),
+        nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
+      });
 
-    // Visit 2: Planned & Visited (Clinical Discussion, No Order)
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
-      repId: 'T1',
-      clientCode: c2.code,
-      clientName: c2.name,
-      location: c2.city || 'Dubai',
-      date: dateStr,
-      timeSlot: 'Midday (11:30 - 13:00)',
-      visitCategory: 'Planned',
-      status: 'Completed',
-      doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
-      doctorRole: pick(doctorRoles, 2),
-      productsDetailed: pick(productsList, 2),
-      doctorSentiment: 'Positive',
-      samplesDropped: 1,
-      sampleProduct: pick(productsList, 2)[0],
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
-      outcome: 'Shared clinical monographs. Doctor agreed to initiate patient trial on 4 surgical cases before next purchasing cycle.',
-      nextFollowUp: getOffsetDateStr(dateStr, 7),
-      nextFollowUpPurpose: 'Collect patient trial evaluation results'
-    });
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c2.code,
+        clientName: c2.name,
+        location: c2.city || 'Dubai',
+        date: dateStr,
+        timeSlot: 'Midday (11:30 - 13:00)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
+        doctorRole: pick(doctorRoles, 2),
+        productsDetailed: pick(productsList, 2),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 7),
+        nextFollowUpPurpose: 'Collect patient trial evaluation results'
+      });
 
-    // Visit 3: Planned but MISSED / UNVISITED
-    const missedReason1 = pick(missedReasonsT1, 0);
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T1-03-MISSED`,
-      repId: 'T1',
-      clientCode: c3.code,
-      clientName: c3.name,
-      location: c3.city || 'Abu Dhabi',
-      date: dateStr,
-      timeSlot: 'Afternoon (14:30 - 15:30)',
-      visitCategory: 'Planned',
-      status: 'Missed',
-      missedReason: missedReason1,
-      doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
-      doctorRole: pick(doctorRoles, 3),
-      productsDetailed: [],
-      doctorSentiment: 'Neutral',
-      samplesDropped: 0,
-      sampleProduct: '',
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
-      outcome: `Visit could not be completed on this day. Reason: ${missedReason1}`,
-      nextFollowUp: getOffsetDateStr(dateStr, 3),
-      nextFollowUpPurpose: 'Rescheduled appointment follow-up'
-    });
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-03`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c3.code,
+        clientName: c3.name,
+        location: c3.city || 'Abu Dhabi',
+        date: dateStr,
+        timeSlot: 'Afternoon (14:30 - 15:30)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
+        doctorRole: pick(doctorRoles, 3),
+        productsDetailed: pick(productsList, 3),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 3),
+        nextFollowUpPurpose: 'Rescheduled appointment follow-up'
+      });
+    }
 
-    // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
-    const unpReason1 = pick(unplannedReasonsT1, 0);
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T1-04-UNP`,
-      repId: 'T1',
-      clientCode: c4.code,
-      clientName: c4.name,
-      location: c4.city || 'Dubai',
-      date: dateStr,
-      timeSlot: 'Spontaneous Afternoon (16:00 - 17:00)',
-      visitCategory: 'Unplanned',
-      unplannedReason: unpReason1,
-      status: 'Completed',
-      doctorName: `Dr. ${c4.contactPerson || 'Elena Rostova'}`,
-      doctorRole: pick(doctorRoles, 4),
-      productsDetailed: pick(productsList, 3),
-      doctorSentiment: 'Enthusiastic',
-      samplesDropped: 2,
-      sampleProduct: pick(productsList, 3)[0],
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: `Unplanned field call: ${unpReason1}`,
-      outcome: `Dropped in spontaneously while in neighborhood. Met doctor, discussed gastrointestinal emergency protocols, and supplied sample starter packs.`,
-      nextFollowUp: getOffsetDateStr(dateStr, 10),
-      nextFollowUpPurpose: 'Formal procurement proposal review'
-    });
-  }
+    // Territory T2 (Dr. Marsel - Northern Emirates) - 3 Pending Planned Visits for live field execution
+    if (t2Customers.length >= 3) {
+      const c1 = pick(t2Customers, 2);
+      const c2 = pick(t2Customers, 4);
+      const c3 = pick(t2Customers, 6);
 
-  // Territory T2 (Dr. Marsel - Northern Emirates)
-  if (t2Customers.length >= 3) {
-    const c1 = pick(t2Customers, 2);
-    const c2 = pick(t2Customers, 4);
-    const c3 = pick(t2Customers, 6); // Missed
-    const c4 = pick(t2Customers, 8); // Unplanned
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Sharjah',
+        date: dateStr,
+        timeSlot: 'Morning (10:00 - 11:30)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
+        doctorRole: pick(doctorRoles, 0),
+        productsDetailed: pick(productsList, 4),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 14),
+        nextFollowUpPurpose: 'Delivery verification and protocol check'
+      });
 
-    // Visit 1: Planned & Visited
-    const orderVal2 = 950 + ((daySeed * 47) % 1500);
-    const orderRef2 = `ORD-${dateStr.replace(/-/g, '')}-T2`;
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
-      repId: 'T2',
-      clientCode: c1.code,
-      clientName: c1.name,
-      location: c1.city || 'Sharjah',
-      date: dateStr,
-      timeSlot: 'Morning (10:00 - 11:30)',
-      visitCategory: 'Planned',
-      status: 'Completed',
-      doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
-      doctorRole: pick(doctorRoles, 0),
-      productsDetailed: pick(productsList, 4),
-      doctorSentiment: 'Enthusiastic',
-      samplesDropped: 3,
-      sampleProduct: pick(productsList, 4)[0],
-      orderPlaced: true,
-      orderRef: orderRef2,
-      orderValueAed: orderVal2,
-      purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
-      outcome: `Productive session. Doctor approved stocking order for AED ${formatCurrency(orderVal2)} with delivery requested by Thursday.`,
-      nextFollowUp: getOffsetDateStr(dateStr, 14),
-      nextFollowUpPurpose: 'Delivery verification and protocol check'
-    });
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c2.code,
+        clientName: c2.name,
+        location: c2.city || 'Ajman',
+        date: dateStr,
+        timeSlot: 'Midday (12:30 - 14:00)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
+        doctorRole: pick(doctorRoles, 1),
+        productsDetailed: pick(productsList, 5),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Small animal respiratory and viral protection presentation',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 8),
+        nextFollowUpPurpose: 'Assess trial cases outcome'
+      });
 
-    generatedOrders.push({
-      invoiceNumber: orderRef2,
-      orderNumber: orderRef2,
-      date: dateStr,
-      time: '11:15:00',
-      repId: 'T2',
-      territory: 'T2',
-      clientCode: c1.code,
-      clientName: c1.name,
-      location: c1.city || 'Sharjah',
-      items: [
-        { productId: 'P007', productName: pick(productsList, 4)[0], unitPrice: 110, quantity: 10, bonusFoc: 1, lineTotal: 1100 }
-      ],
-      subtotal: 1100,
-      vatAmount: Math.round(1100 * 0.05 * 100) / 100,
-      totalIncVat: Math.round(1100 * 1.05 * 100) / 100,
-      status: 'Approved',
-      paymentTerms: 'Cash On Delivery',
-      notes: 'Territory T2 field booking. Standard 10+1 bonus included.'
-    });
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-03`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c3.code,
+        clientName: c3.name,
+        location: c3.city || 'Ras Al Khaimah',
+        date: dateStr,
+        timeSlot: 'Afternoon (15:00 - 16:00)',
+        visitCategory: 'Planned',
+        status: 'Planned',
+        doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
+        doctorRole: pick(doctorRoles, 2),
+        productsDetailed: pick(productsList, 0),
+        doctorSentiment: 'Pending',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
+        outcome: '',
+        nextFollowUp: getOffsetDateStr(dateStr, 4),
+        nextFollowUpPurpose: 'Rescheduled clinic visit'
+      });
+    }
+  } else {
+    // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi) - Historical Demo Audit with completed calls & orders
+    if (t1Customers.length >= 3) {
+      const c1 = pick(t1Customers, 1);
+      const c2 = pick(t1Customers, 3);
+      const c3 = pick(t1Customers, 5); // Missed
+      const c4 = pick(t1Customers, 7); // Unplanned
 
-    // Visit 2: Planned & Visited
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
-      repId: 'T2',
-      clientCode: c2.code,
-      clientName: c2.name,
-      location: c2.city || 'Ajman',
-      date: dateStr,
-      timeSlot: 'Midday (12:30 - 14:00)',
-      visitCategory: 'Planned',
-      status: 'Completed',
-      doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
-      doctorRole: pick(doctorRoles, 1),
-      productsDetailed: pick(productsList, 5),
-      doctorSentiment: 'Positive',
-      samplesDropped: 1,
-      sampleProduct: pick(productsList, 5)[0],
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: 'Small animal respiratory and viral protection presentation',
-      outcome: 'Presented trial efficacy data on Asbrip and Viusid. Samples handed over for kennel cough trial cases.',
-      nextFollowUp: getOffsetDateStr(dateStr, 8),
-      nextFollowUpPurpose: 'Assess trial cases outcome'
-    });
+      // Visit 1: Planned & Visited (With Order)
+      const orderVal1 = 1250 + ((daySeed * 73) % 1800);
+      const orderRef1 = `ORD-${dateStr.replace(/-/g, '')}-T1`;
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Dubai',
+        date: dateStr,
+        timeSlot: 'Morning (09:30 - 11:00)',
+        visitCategory: 'Planned',
+        status: 'Completed',
+        doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
+        doctorRole: pick(doctorRoles, 1),
+        productsDetailed: pick(productsList, 1),
+        doctorSentiment: 'Enthusiastic',
+        samplesDropped: 2,
+        sampleProduct: pick(productsList, 1)[0],
+        orderPlaced: true,
+        orderRef: orderRef1,
+        orderValueAed: orderVal1,
+        purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
+        outcome: `Conducted comprehensive detailing. Doctor confirmed excellent patient recovery and placed stocking order for AED ${formatCurrency(orderVal1)}.`,
+        nextFollowUp: getOffsetDateStr(dateStr, 14),
+        nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
+      });
 
-    // Visit 3: Planned but MISSED / UNVISITED
-    const missedReason2 = pick(missedReasonsT2, 0);
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T2-03-MISSED`,
-      repId: 'T2',
-      clientCode: c3.code,
-      clientName: c3.name,
-      location: c3.city || 'Ras Al Khaimah',
-      date: dateStr,
-      timeSlot: 'Afternoon (15:00 - 16:00)',
-      visitCategory: 'Planned',
-      status: 'Missed',
-      missedReason: missedReason2,
-      doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
-      doctorRole: pick(doctorRoles, 2),
-      productsDetailed: [],
-      doctorSentiment: 'Neutral',
-      samplesDropped: 0,
-      sampleProduct: '',
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
-      outcome: `Visit could not be performed on this date. Reason: ${missedReason2}`,
-      nextFollowUp: getOffsetDateStr(dateStr, 4),
-      nextFollowUpPurpose: 'Rescheduled clinic visit'
-    });
+      generatedOrders.push({
+        invoiceNumber: orderRef1,
+        orderNumber: orderRef1,
+        date: dateStr,
+        time: '10:45:00',
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Dubai',
+        items: [
+          { productId: 'P001', productName: pick(productsList, 1)[0], unitPrice: 85, quantity: 12, bonusFoc: 2, lineTotal: 1020 },
+          { productId: 'P002', productName: pick(productsList, 1)[1], unitPrice: 75, quantity: 5, bonusFoc: 0, lineTotal: 375 }
+        ],
+        subtotal: 1395,
+        vatAmount: Math.round(1395 * 0.05 * 100) / 100,
+        totalIncVat: Math.round(1395 * 1.05 * 100) / 100,
+        status: 'Approved',
+        paymentTerms: '30 Days Credit',
+        notes: 'Generated via Field Call Detailing. Standard 10+1 bonus applied.'
+      });
 
-    // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
-    const unpReason2 = pick(unplannedReasonsT2, 0);
-    generatedVisits.push({
-      id: `VIS-${dateStr.replace(/-/g, '')}-T2-04-UNP`,
-      repId: 'T2',
-      clientCode: c4.code,
-      clientName: c4.name,
-      location: c4.city || 'Sharjah',
-      date: dateStr,
-      timeSlot: 'Spontaneous Evening (17:00 - 18:00)',
-      visitCategory: 'Unplanned',
-      unplannedReason: unpReason2,
-      status: 'Completed',
-      doctorName: `Dr. ${c4.contactPerson || 'Zaid Al-Balooshi'}`,
-      doctorRole: pick(doctorRoles, 5),
-      productsDetailed: pick(productsList, 0),
-      doctorSentiment: 'Positive',
-      samplesDropped: 2,
-      sampleProduct: pick(productsList, 0)[0],
-      orderPlaced: false,
-      orderRef: '',
-      orderValueAed: 0,
-      purpose: `Unplanned visit: ${unpReason2}`,
-      outcome: 'Walked in spontaneously. Doctor was very receptive and expressed strong interest in seasonal recovery lines.',
-      nextFollowUp: getOffsetDateStr(dateStr, 12),
-      nextFollowUpPurpose: 'Present formal institutional agreement'
-    });
+      // Visit 2: Planned & Visited (Clinical Discussion, No Order)
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c2.code,
+        clientName: c2.name,
+        location: c2.city || 'Dubai',
+        date: dateStr,
+        timeSlot: 'Midday (11:30 - 13:00)',
+        visitCategory: 'Planned',
+        status: 'Completed',
+        doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
+        doctorRole: pick(doctorRoles, 2),
+        productsDetailed: pick(productsList, 2),
+        doctorSentiment: 'Positive',
+        samplesDropped: 1,
+        sampleProduct: pick(productsList, 2)[0],
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
+        outcome: 'Shared clinical monographs. Doctor agreed to initiate patient trial on 4 surgical cases before next purchasing cycle.',
+        nextFollowUp: getOffsetDateStr(dateStr, 7),
+        nextFollowUpPurpose: 'Collect patient trial evaluation results'
+      });
+
+      // Visit 3: Planned but MISSED / UNVISITED
+      const missedReason1 = pick(missedReasonsT1, 0);
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-03-MISSED`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c3.code,
+        clientName: c3.name,
+        location: c3.city || 'Abu Dhabi',
+        date: dateStr,
+        timeSlot: 'Afternoon (14:30 - 15:30)',
+        visitCategory: 'Planned',
+        status: 'Missed',
+        missedReason: missedReason1,
+        doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
+        doctorRole: pick(doctorRoles, 3),
+        productsDetailed: [],
+        doctorSentiment: 'Neutral',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
+        outcome: `Visit could not be completed on this day. Reason: ${missedReason1}`,
+        nextFollowUp: getOffsetDateStr(dateStr, 3),
+        nextFollowUpPurpose: 'Rescheduled appointment follow-up'
+      });
+
+      // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
+      const unpReason1 = pick(unplannedReasonsT1, 0);
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T1-04-UNP`,
+        repId: 'T1',
+        territory: 'T1',
+        clientCode: c4.code,
+        clientName: c4.name,
+        location: c4.city || 'Dubai',
+        date: dateStr,
+        timeSlot: 'Spontaneous Afternoon (16:00 - 17:00)',
+        visitCategory: 'Unplanned',
+        unplannedReason: unpReason1,
+        status: 'Completed',
+        doctorName: `Dr. ${c4.contactPerson || 'Elena Rostova'}`,
+        doctorRole: pick(doctorRoles, 4),
+        productsDetailed: pick(productsList, 3),
+        doctorSentiment: 'Enthusiastic',
+        samplesDropped: 2,
+        sampleProduct: pick(productsList, 3)[0],
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: `Unplanned field call: ${unpReason1}`,
+        outcome: `Dropped in spontaneously while in neighborhood. Met doctor, discussed gastrointestinal emergency protocols, and supplied sample starter packs.`,
+        nextFollowUp: getOffsetDateStr(dateStr, 10),
+        nextFollowUpPurpose: 'Formal procurement proposal review'
+      });
+    }
+
+    // Territory T2 (Dr. Marsel - Northern Emirates) - Historical Demo Audit
+    if (t2Customers.length >= 3) {
+      const c1 = pick(t2Customers, 2);
+      const c2 = pick(t2Customers, 4);
+      const c3 = pick(t2Customers, 6); // Missed
+      const c4 = pick(t2Customers, 8); // Unplanned
+
+      // Visit 1: Planned & Visited
+      const orderVal2 = 950 + ((daySeed * 47) % 1500);
+      const orderRef2 = `ORD-${dateStr.replace(/-/g, '')}-T2`;
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Sharjah',
+        date: dateStr,
+        timeSlot: 'Morning (10:00 - 11:30)',
+        visitCategory: 'Planned',
+        status: 'Completed',
+        doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
+        doctorRole: pick(doctorRoles, 0),
+        productsDetailed: pick(productsList, 4),
+        doctorSentiment: 'Enthusiastic',
+        samplesDropped: 3,
+        sampleProduct: pick(productsList, 4)[0],
+        orderPlaced: true,
+        orderRef: orderRef2,
+        orderValueAed: orderVal2,
+        purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
+        outcome: `Productive session. Doctor approved stocking order for AED ${formatCurrency(orderVal2)} with delivery requested by Thursday.`,
+        nextFollowUp: getOffsetDateStr(dateStr, 14),
+        nextFollowUpPurpose: 'Delivery verification and protocol check'
+      });
+
+      generatedOrders.push({
+        invoiceNumber: orderRef2,
+        orderNumber: orderRef2,
+        date: dateStr,
+        time: '11:15:00',
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c1.code,
+        clientName: c1.name,
+        location: c1.city || 'Sharjah',
+        items: [
+          { productId: 'P007', productName: pick(productsList, 4)[0], unitPrice: 110, quantity: 10, bonusFoc: 1, lineTotal: 1100 }
+        ],
+        subtotal: 1100,
+        vatAmount: Math.round(1100 * 0.05 * 100) / 100,
+        totalIncVat: Math.round(1100 * 1.05 * 100) / 100,
+        status: 'Approved',
+        paymentTerms: 'Cash On Delivery',
+        notes: 'Territory T2 field booking. Standard 10+1 bonus included.'
+      });
+
+      // Visit 2: Planned & Visited
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c2.code,
+        clientName: c2.name,
+        location: c2.city || 'Ajman',
+        date: dateStr,
+        timeSlot: 'Midday (12:30 - 14:00)',
+        visitCategory: 'Planned',
+        status: 'Completed',
+        doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
+        doctorRole: pick(doctorRoles, 1),
+        productsDetailed: pick(productsList, 5),
+        doctorSentiment: 'Positive',
+        samplesDropped: 1,
+        sampleProduct: pick(productsList, 5)[0],
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Small animal respiratory and viral protection presentation',
+        outcome: 'Presented trial efficacy data on Asbrip and Viusid. Samples handed over for kennel cough trial cases.',
+        nextFollowUp: getOffsetDateStr(dateStr, 8),
+        nextFollowUpPurpose: 'Assess trial cases outcome'
+      });
+
+      // Visit 3: Planned but MISSED / UNVISITED
+      const missedReason2 = pick(missedReasonsT2, 0);
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-03-MISSED`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c3.code,
+        clientName: c3.name,
+        location: c3.city || 'Ras Al Khaimah',
+        date: dateStr,
+        timeSlot: 'Afternoon (15:00 - 16:00)',
+        visitCategory: 'Planned',
+        status: 'Missed',
+        missedReason: missedReason2,
+        doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
+        doctorRole: pick(doctorRoles, 2),
+        productsDetailed: [],
+        doctorSentiment: 'Neutral',
+        samplesDropped: 0,
+        sampleProduct: '',
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
+        outcome: `Visit could not be performed on this date. Reason: ${missedReason2}`,
+        nextFollowUp: getOffsetDateStr(dateStr, 4),
+        nextFollowUpPurpose: 'Rescheduled clinic visit'
+      });
+
+      // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
+      const unpReason2 = pick(unplannedReasonsT2, 0);
+      generatedVisits.push({
+        id: `VIS-${dateStr.replace(/-/g, '')}-T2-04-UNP`,
+        repId: 'T2',
+        territory: 'T2',
+        clientCode: c4.code,
+        clientName: c4.name,
+        location: c4.city || 'Sharjah',
+        date: dateStr,
+        timeSlot: 'Spontaneous Evening (17:00 - 18:00)',
+        visitCategory: 'Unplanned',
+        unplannedReason: unpReason2,
+        status: 'Completed',
+        doctorName: `Dr. ${c4.contactPerson || 'Zaid Al-Balooshi'}`,
+        doctorRole: pick(doctorRoles, 5),
+        productsDetailed: pick(productsList, 0),
+        doctorSentiment: 'Positive',
+        samplesDropped: 2,
+        sampleProduct: pick(productsList, 0)[0],
+        orderPlaced: false,
+        orderRef: '',
+        orderValueAed: 0,
+        purpose: `Unplanned visit: ${unpReason2}`,
+        outcome: 'Walked in spontaneously. Doctor was very receptive and expressed strong interest in seasonal recovery lines.',
+        nextFollowUp: getOffsetDateStr(dateStr, 12),
+        nextFollowUpPurpose: 'Present formal institutional agreement'
+      });
+    }
   }
 
   // Push new visits and orders into state
@@ -1526,14 +2417,45 @@ function renderDailyReport() {
     dateInput.value = dateStr;
   }
 
+  // 3. CONFIGURE REP FILTER ACCORDING TO USER ROLE
   const repFilter = document.getElementById('dailyReportRepFilter');
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+
   if (repFilter) {
-    repFilter.value = state.filters.dailyReportRep || 'ALL';
+    if (!isManager) {
+      // Rep is strictly restricted to their own territory; cannot view peer reports
+      state.filters.dailyReportRep = userTerritory;
+      const repObj = (state.reps || []).find(r => r.id === userTerritory);
+      const repLabel = repObj ? `Dr. ${repObj.name} (Territory ${repObj.territory})` : `My Territory (${userTerritory})`;
+      repFilter.innerHTML = `<option value="${userTerritory}">${repLabel}</option>`;
+      repFilter.disabled = true;
+      repFilter.value = userTerritory;
+    } else {
+      // Senior Sales Manager has company-wide visibility across all representatives
+      repFilter.disabled = false;
+      repFilter.innerHTML = `
+        <option value="ALL">👥 All Medical Representatives (Company-wide)</option>
+        <option value="T1">Dr. Shaimaa (Rep T1 - DXB/AUH)</option>
+        <option value="T2">Dr. Marsel (Rep T2 - Northern Emirates)</option>
+      `;
+      repFilter.value = state.filters.dailyReportRep || 'ALL';
+    }
   }
 
-  // Retrieve all visits and orders on this chosen day
-  const dayVisits = (state.visits || []).filter(v => v.date === dateStr);
-  const dayOrders = (state.orders || []).filter(o => o.date === dateStr);
+  // 4. RETRIEVE STRICTLY SCOPED VISITS & ORDERS FOR CURRENT USER
+  const scopedVisits = getScopedVisits();
+  const scopedOrders = getScopedOrders();
+
+  let dayVisits = scopedVisits.filter(v => v.date === dateStr);
+  let dayOrders = scopedOrders.filter(o => o.date === dateStr);
+
+  // If Senior Manager chose a specific representative in the filter, scope accordingly
+  if (isManager && state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
+    dayVisits = dayVisits.filter(v => v.repId === state.filters.dailyReportRep || v.territory === state.filters.dailyReportRep);
+    dayOrders = dayOrders.filter(o => o.repId === state.filters.dailyReportRep || o.territory === state.filters.dailyReportRep);
+  }
+
   const dayOrdersVal = dayOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
 
   // Group Visits by User's Defined Categories:
@@ -1629,9 +2551,23 @@ function renderDailyReportRepsCards(dayVisits, dayOrders) {
   const container = document.getElementById('dailyReportRepsContainer');
   if (!container) return;
 
-  const repsList = state.reps || [];
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+
+  let repsList = state.reps || [];
+  if (!isManager) {
+    // Medical Reps can ONLY see their own territory card; privacy strictly preserved
+    repsList = repsList.filter(r => r.id === userTerritory);
+  }
+
   const repsCountEl = document.getElementById('dailyReportRepsCount');
-  if (repsCountEl) repsCountEl.textContent = `${repsList.length} Active Medical Representatives`;
+  if (repsCountEl) {
+    if (!isManager) {
+      repsCountEl.textContent = '1 Representative (My Territory)';
+    } else {
+      repsCountEl.textContent = `${repsList.length} Active Medical Representatives`;
+    }
+  }
 
   if (repsList.length === 0) {
     container.innerHTML = '<div class="text-slate-400 p-4 text-center">No representative profiles configured.</div>';
@@ -1676,9 +2612,15 @@ function renderDailyReportRepsCards(dayVisits, dayOrders) {
             </div>
           </div>
 
-          <button type="button" onclick="handleDailyReportRepFilter('${isFiltered ? 'ALL' : rep.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${isFiltered ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}">
-            ${isFiltered ? 'Filtered ✓ (Reset)' : 'Filter Rep'}
-          </button>
+          ${isManager ? `
+            <button type="button" onclick="handleDailyReportRepFilter('${isFiltered ? 'ALL' : rep.id}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all ${isFiltered ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'}">
+              ${isFiltered ? 'Filtered ✓ (Reset)' : 'Filter Rep'}
+            </button>
+          ` : `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              My Profile
+            </span>
+          `}
         </div>
 
         <!-- Plan Execution Adherence Progress Bar -->
@@ -1780,7 +2722,10 @@ function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
                   </div>
                 ` : '')}
 
-                <div class="pt-1 flex justify-end">
+                <div class="pt-1 flex items-center justify-between gap-2">
+                  <button type="button" onclick="openSubmitPlannedModal('${u.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all">
+                    <i data-lucide="clipboard-check" class="w-3 h-3"></i> Check-in & Submit
+                  </button>
                   <button type="button" onclick="openDailyReportVisitModal('${u.id}')" class="text-[10px] text-rose-300 hover:text-white font-bold underline">
                     View Record Details →
                   </button>
@@ -1815,11 +2760,17 @@ function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
 
 function renderDailyReportTableAndCards() {
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
-  const dayVisits = (state.visits || []).filter(v => v.date === dateStr);
+  const scopedVisits = getScopedVisits();
+  const dayVisits = scopedVisits.filter(v => v.date === dateStr);
 
-  // Apply Rep Filter
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+
+  // Apply Rep Filter with strict rep isolation
   let filtered = dayVisits;
-  if (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
+  if (!isManager) {
+    filtered = filtered.filter(v => v.repId === userTerritory || v.territory === userTerritory);
+  } else if (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
     filtered = filtered.filter(v => v.repId === state.filters.dailyReportRep || v.territory === state.filters.dailyReportRep);
   }
 
@@ -1895,7 +2846,7 @@ function renderDailyReportTableAndCards() {
         } else {
           categoryBadge = `
             <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 inline-flex items-center gap-1">
-              ⏳ Planned • Unvisited (${escapeHtml(v.status || 'Pending')})
+              ⏳ Planned • Pending (${escapeHtml(v.status || 'Pending')})
             </span>
           `;
         }
@@ -1937,7 +2888,7 @@ function renderDailyReportTableAndCards() {
 
             <!-- Doctor Met -->
             <td class="py-3 px-3">
-              <div class="text-slate-200 font-semibold text-xs leading-tight">${escapeHtml(v.doctorName || 'Veterinarian')}</div>
+              <div class="text-slate-200 font-semibold text-xs leading-tight">${escapeHtml(v.doctorName || (isCompleted ? 'Veterinarian' : 'Doctor Pending'))}</div>
               <div class="text-[10px] text-slate-400">${escapeHtml(v.doctorRole || 'Doctor')}</div>
             </td>
 
@@ -1961,8 +2912,8 @@ function renderDailyReportTableAndCards() {
             <td class="py-3 px-3 max-w-[240px]">
               ${(!isCompleted && !isUnplanned) ? `
                 <div class="text-[11px] text-rose-300 font-semibold leading-snug">
-                  <span class="text-rose-400 font-bold block text-[10px] uppercase">⚠️ Missed / Unvisited:</span>
-                  ${escapeHtml(v.missedReason || v.outcome || 'Appointment could not be completed')}
+                  <span class="text-rose-400 font-bold block text-[10px] uppercase">⏳ Planned Pending Execution:</span>
+                  ${escapeHtml(v.purpose || 'Scheduled field detailing call.')}
                 </div>
               ` : `
                 <div class="text-[11px] text-slate-300 line-clamp-2" title="${escapeHtml(v.outcome || v.purpose || '')}">
@@ -1972,7 +2923,7 @@ function renderDailyReportTableAndCards() {
                   <div class="text-[10px] text-amber-300 mt-1 leading-tight"><span class="text-amber-400 font-bold">⚡ Spontaneous:</span> ${escapeHtml(v.unplannedReason)}</div>
                 ` : ''}
               `}
-              ${v.doctorSentiment ? `
+              ${v.doctorSentiment && v.doctorSentiment !== 'Pending' ? `
                 <div class="mt-1">
                   <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
                     ${v.doctorSentiment}
@@ -1995,9 +2946,16 @@ function renderDailyReportTableAndCards() {
 
             <!-- Action -->
             <td class="py-3 px-3 text-center whitespace-nowrap">
-              <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-bold transition-colors">
-                Details
-              </button>
+              <div class="flex items-center justify-center gap-1.5">
+                ${!isCompleted ? `
+                  <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm active:scale-95 transition-all">
+                    <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Check-in & Submit
+                  </button>
+                ` : ''}
+                <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-[11px] font-bold transition-colors">
+                  Details
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -2030,7 +2988,7 @@ function renderDailyReportTableAndCards() {
         } else if (isCompleted) {
           categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">✓ Visited</span>`;
         } else {
-          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30">⏳ Unvisited</span>`;
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30">⏳ Pending</span>`;
         }
 
         return `
@@ -2054,11 +3012,11 @@ function renderDailyReportTableAndCards() {
             </div>
 
             ${(!isCompleted && !isUnplanned) ? `
-              <div class="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/30 text-[11px] space-y-1">
-                <div class="font-bold text-rose-400 flex items-center gap-1">
-                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Missed Visit Reason:
+              <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] space-y-1">
+                <div class="font-bold text-sky-400 flex items-center gap-1">
+                  <i data-lucide="calendar" class="w-3.5 h-3.5"></i> Scheduled Purpose:
                 </div>
-                <p class="text-rose-200 leading-snug">${escapeHtml(v.missedReason || v.outcome || 'Doctor unavailable at scheduled time.')}</p>
+                <p class="text-slate-300 leading-snug">${escapeHtml(v.purpose || 'Scheduled field detailing call.')}</p>
               </div>
             ` : `
               <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 text-[11px] space-y-1">
@@ -2074,7 +3032,7 @@ function renderDailyReportTableAndCards() {
               </div>
             `}
 
-            <div class="flex items-center justify-between pt-1 text-[11px]">
+            <div class="flex items-center justify-between pt-1 text-[11px] gap-2">
               <div>
                 ${v.orderPlaced ? `
                   <span class="font-extrabold text-emerald-400 font-mono text-xs">🛒 AED ${formatCurrency(v.orderValueAed)}</span>
@@ -2082,9 +3040,16 @@ function renderDailyReportTableAndCards() {
                   <span class="text-slate-500 text-[10px]">No order generated</span>
                 `}
               </div>
-              <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs">
-                View Full Details
-              </button>
+              <div class="flex items-center gap-1.5 shrink-0">
+                ${!isCompleted ? `
+                  <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95">
+                    <i data-lucide="clipboard-check" class="w-3 h-3"></i> Submit
+                  </button>
+                ` : ''}
+                <button type="button" onclick="openDailyReportVisitModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs">
+                  Details
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -2097,7 +3062,15 @@ function renderDailyReportTableAndCards() {
 
 window.exportDailyReportCSV = function() {
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
-  const visits = (state.visits || []).filter(v => v.date === dateStr);
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+
+  let visits = getScopedVisits().filter(v => v.date === dateStr);
+  if (!isManager) {
+    visits = visits.filter(v => v.repId === userTerritory || v.territory === userTerritory);
+  } else if (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
+    visits = visits.filter(v => v.repId === state.filters.dailyReportRep || v.territory === state.filters.dailyReportRep);
+  }
 
   if (visits.length === 0) {
     showToast('No Data to Export', `There are no visit records for date ${dateStr}.`, 'warning');
@@ -2402,9 +3375,26 @@ window.handlePlannedVisitSubmit = function(e) {
   visit.productsDetailed = productsDetailed;
   visit.orderPlaced = orderPlaced;
 
+  // Immediately synchronize with Daily Visit Report
+  state.dailyReportDate = visit.date || state.dailyDate || getSyncedTodayDate();
+  state.filters.dailyReportStatus = 'ALL';
+
   persistData();
   closeSubmitPlannedModal();
   showToast('Planned Visit Report Submitted', `Field call report recorded for ${visit.clientName}.`, 'success');
+
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(visit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase visit update warning:', res.error);
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+  });
 
   if (orderPlaced) {
     setTimeout(() => {
@@ -2494,7 +3484,7 @@ window.filterUnplannedClinics = function() {
 
   // Use strictly scoped customers
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -2543,6 +3533,7 @@ window.handleUnplannedVisitSubmit = function(e) {
   const newUnplannedVisit = {
     id: `VIS-${date.replace(/-/g, '')}-${Date.now().toString().slice(-4)}-UNP`,
     repId,
+    territory: repId,
     clientCode,
     clientName: client ? client.name : clientCode,
     location: client ? client.location : 'UAE',
@@ -2565,9 +3556,26 @@ window.handleUnplannedVisitSubmit = function(e) {
   };
 
   state.visits.unshift(newUnplannedVisit);
+  // Immediately synchronize with Daily Visit Report so newly entered visit appears right away
+  state.dailyReportDate = date;
+  state.filters.dailyReportStatus = 'ALL';
+
   persistData();
   closeUnplannedVisitModal();
   showToast('⚡ Unplanned Visit Recorded', `Spontaneous visit to ${newUnplannedVisit.clientName} added beside planned schedule for ${date}.`, 'success');
+
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit: newUnplannedVisit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(newUnplannedVisit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase unplanned visit insert warning:', res.error);
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+  });
 
   if (orderPlaced) {
     setTimeout(() => {
@@ -3309,6 +4317,21 @@ window.submitPlanToManager = function(planId) {
   state.notifications.unshift(notif);
 
   persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('SAVE_PLAN', { plan, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
+  // Cloud write-through to Supabase
+  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    body: { status: 'Submitted', submitted_at: plan.submittedAt, updated_at: new Date().toISOString() }
+  });
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
   playNotificationChime();
   showToast('Plan Submitted to Senior Management', 'Your monthly plan is now awaiting Senior Manager approval.', 'success');
   renderAll();
@@ -3323,6 +4346,16 @@ window.approveMonthlyPlan = function(planId) {
   plan.approvedBy = 'Dr. Sameh Ageez (Senior Sales Manager)';
 
   persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('SAVE_PLAN', { plan, user: 'Dr. Sameh Ageez (Senior Sales Manager)' });
+
+  // Cloud write-through to Supabase
+  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
+    method: 'PATCH',
+    body: { status: 'Approved', approved_at: plan.approvedAt, approved_by: plan.approvedBy, updated_at: new Date().toISOString() }
+  });
+
   showToast('Monthly Plan Approved!', `Plan for ${plan.repName} approved and released for field execution.`, 'success');
   renderAll();
 };
@@ -3387,7 +4420,7 @@ window.filterPlanClinics = function() {
 
   // Use strictly scoped customers
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -3426,6 +4459,7 @@ window.handlePlanVisitSubmit = function(e) {
   const newPlannedVisit = {
     id: `VIS-${date.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`,
     repId,
+    territory: repId,
     clientCode,
     clientName: client ? client.name : clientCode,
     location: client ? client.location : 'UAE',
@@ -3447,7 +4481,23 @@ window.handlePlanVisitSubmit = function(e) {
   };
 
   state.visits.unshift(newPlannedVisit);
+  state.dailyReportDate = date;
+  state.filters.dailyReportStatus = 'ALL';
   persistData();
+
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_VISIT', { visit: newPlannedVisit, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(newPlannedVisit)
+  }).then(res => {
+    if (res.error) console.warn('Supabase planned visit insert warning:', res.error);
+    else updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+  });
+
   closePlanVisitModal();
   showToast('Target Added to Monthly Plan', `Scheduled planned visit for ${newPlannedVisit.clientName} on ${date}.`, 'success');
   renderAll();
@@ -3735,7 +4785,7 @@ window.filterOrderClinics = function() {
   if (!custSelect) return;
 
   const scoped = getScopedCustomers();
-  const filtered = scoped.filter(c => !repId || c.repId === repId || c.territory === repId);
+  const filtered = scoped.filter(c => (!repId || c.repId === repId || c.territory === repId) && c.isActive !== false);
   custSelect.innerHTML = `<option value="">-- Choose Account (${filtered.length} available) --</option>` +
     filtered.map(c => `<option value="${c.code}">${c.code} - ${escapeHtml(c.name)} (${c.location})</option>`).join('');
 
@@ -3936,6 +4986,43 @@ window.handleOrderSubmit = function(e) {
   state.notifications.unshift(newNotif);
 
   persistData();
+
+  // Cloud write-through to Google Drive & auto-update Drive CSV
+  pushToGoogleDrive('ADD_ORDER', { order: newOrder, user: (state.currentUser && state.currentUser.name) || 'Representative' });
+
+  // Cloud write-through to Supabase for order, line items, and notification
+  (async () => {
+    try {
+      await supabaseRest('orders', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapOrderToDb(newOrder)
+      });
+      for (const it of items) {
+        await supabaseRest('order_items', {
+          method: 'POST',
+          body: {
+            order_number: orderNumber,
+            product_code: it.productCode,
+            product_name: it.productName,
+            unit_price: it.unitPrice,
+            sales_qty: it.salesQty,
+            foc_qty: it.focQty,
+            line_total: it.total
+          }
+        });
+      }
+      await supabaseRest('notifications', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapNotifToDb(newNotif)
+      });
+      updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+    } catch (err) {
+      console.warn('Supabase order write warning:', err);
+    }
+  })();
+
   closeOrderModal();
 
   if (state.managerSettings.soundAlert) playNotificationChime();
@@ -3998,6 +5085,70 @@ function renderManagerNotifications() {
     const isUnread = !n.read;
     const isApproved = n.approvalStatus === 'Approved';
     const dateObj = new Date(n.timestamp);
+    const isAccountEvent = n.type && n.type.startsWith('ACCOUNT_');
+
+    if (isAccountEvent) {
+      const isFrozen = n.type === 'ACCOUNT_FROZEN';
+      const isUnfrozen = n.type === 'ACCOUNT_UNFROZEN';
+      const iconName = isFrozen ? 'snowflake' : (isUnfrozen ? 'flame' : 'building-2');
+      const iconStyle = isFrozen
+        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-teal-500/20 text-teal-300 border-teal-500/40');
+      const badgeStyle = isFrozen
+        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
+      const badgeText = isFrozen ? '❄️ Account Frozen' : (isUnfrozen ? '🔥 Reactivated' : '✨ New Clinic Added');
+
+      return `
+        <div class="glass-card rounded-xl p-4 border ${isUnread ? (isFrozen ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-teal-500/50 bg-teal-950/20') : 'border-slate-800 bg-slate-900/60'} relative transition-all">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl ${iconStyle} flex items-center justify-center shrink-0 border">
+                <i data-lucide="${iconName}" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-white text-xs">${escapeHtml(n.title)}</span>
+                  ${isUnread ? '<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>' : ''}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${n.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${n.repId}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeStyle}">${badgeText}</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5 font-medium">
+                  Field Rep: <strong class="text-white">${escapeHtml(n.repName)}</strong> • Clinic: <span class="text-teal-300 font-bold">${escapeHtml(n.clientName)}</span> (<span class="font-mono">${escapeHtml(n.clientCode || '')}</span> • ${escapeHtml(n.location || 'UAE')})
+                </p>
+                ${n.itemsSummary ? `<p class="text-[10px] text-slate-300 mt-1 bg-slate-950/70 p-2 rounded-lg border border-slate-800">${escapeHtml(n.itemsSummary)}</p>` : ''}
+              </div>
+            </div>
+
+            <div class="text-right shrink-0">
+              <span class="text-[10px] text-slate-400 block">${dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="text-[10px] font-extrabold ${isFrozen ? 'text-cyan-400' : 'text-teal-400'} block mt-1">
+                ${isFrozen ? '❄️ Inactive' : '✓ Active'}
+              </span>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <div class="text-[10px] text-slate-400">
+              <span>Territory: <strong class="text-slate-200">${n.repId}</strong></span>
+              <span class="mx-1">•</span>
+              <span>Clinic Code: <strong class="text-teal-300 font-mono">${escapeHtml(n.clientCode || '')}</strong></span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="goToAccountInCRM('${n.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[11px] font-bold flex items-center gap-1">
+                <i data-lucide="building-2" class="w-3 h-3"></i> View in Accounts CRM
+              </button>
+              ${isUnread ? `
+                <button onclick="markNotificationReadDirect('${n.id}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold">
+                  Acknowledge
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     return `
       <div class="glass-card rounded-xl p-4 border ${isUnread ? 'border-amber-500/50 bg-amber-950/15' : 'border-slate-800 bg-slate-900/60'} relative transition-all">
@@ -4056,6 +5207,13 @@ function renderManagerNotifications() {
 window.markAllNotificationsRead = function() {
   state.notifications.forEach(n => { n.read = true; });
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('notifications?read=eq.false', {
+    method: 'PATCH',
+    body: { read: true }
+  });
+
   updateNotificationBell();
   renderManagerNotifications();
   showToast('Notifications Acknowledged', 'All notifications marked as read.', 'info');
@@ -4086,6 +5244,33 @@ window.approveOrderDirect = function(orderNum) {
   }
 
   persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('UPDATE_ORDER_STATUS', {
+    invoiceNumber: orderNum,
+    status: 'Approved',
+    approvedBy: order ? order.approvedBy : 'Dr. Sameh Ageez (Senior Sales Manager)'
+  });
+
+  // Cloud write-through to Supabase
+  if (order) {
+    supabaseRest(`orders?invoice_number=eq.${encodeURIComponent(orderNum)}`, {
+      method: 'PATCH',
+      body: {
+        approval_status: 'Approved',
+        approved_by: order.approvedBy,
+        approved_at: order.approvedAt,
+        updated_at: new Date().toISOString()
+      }
+    });
+  }
+  if (notif) {
+    supabaseRest(`notifications?order_number=eq.${encodeURIComponent(orderNum)}`, {
+      method: 'PATCH',
+      body: { approval_status: 'Approved', read: true }
+    });
+  }
+
   showToast('Order Approved', `Order #${orderNum} authorized and released for commercial delivery.`, 'success');
   renderAll();
 };
@@ -4251,6 +5436,7 @@ function renderAccountsGrid() {
 
   const searchQ = (state.filters.accountsSearch || '').toLowerCase();
   const terrFilter = state.filters.accountsTerritory || 'ALL';
+  const statusFilter = state.filters.accountsStatus || 'ACTIVE';
 
   // Initialize and synchronize accountsMonthFilter dropdown
   const monthFilterSelect = document.getElementById('accountsMonthFilter');
@@ -4292,23 +5478,39 @@ function renderAccountsGrid() {
     list = list.filter(c => c.territory === terrFilter || c.repId === terrFilter);
   }
 
+  // Status filter: ACTIVE, FROZEN, ALL
+  if (statusFilter === 'ACTIVE') {
+    list = list.filter(c => c.isActive !== false);
+  } else if (statusFilter === 'FROZEN') {
+    list = list.filter(c => c.isActive === false);
+  }
+
   if (searchQ) {
     list = list.filter(c =>
-      c.name.toLowerCase().includes(searchQ) ||
-      c.code.toLowerCase().includes(searchQ) ||
-      c.location.toLowerCase().includes(searchQ) ||
+      (c.name && c.name.toLowerCase().includes(searchQ)) ||
+      (c.code && c.code.toLowerCase().includes(searchQ)) ||
+      (c.location && c.location.toLowerCase().includes(searchQ)) ||
       (c.contactPerson && c.contactPerson.toLowerCase().includes(searchQ))
     );
   }
 
   if (list.length === 0) {
-    container.innerHTML = '<div class="col-span-full py-12 text-center text-slate-500">No veterinary accounts match current search.</div>';
+    container.innerHTML = `
+      <div class="col-span-full py-12 text-center text-slate-500">
+        <i data-lucide="building-2" class="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-60"></i>
+        <p class="text-xs font-bold text-slate-400">No veterinary accounts match your filter criteria.</p>
+        <p class="text-[11px] text-slate-500 mt-1">Try switching status to "All Status" or resetting search terms.</p>
+      </div>
+    `;
+    safeLucide();
     return;
   }
 
   const allVisits = state.visits || [];
 
   container.innerHTML = list.map(c => {
+    const isFrozen = (c.isActive === false);
+
     // Calculate planned and visited counts for this account in the active month
     const clientVisits = allVisits.filter(v => {
       const isThisAccount = (v.clientCode === c.code || v.customerCode === c.code);
@@ -4327,46 +5529,75 @@ function renderAccountsGrid() {
     else if (c.tier === 'VIP Gold') badgeClass = 'badge-vip-gold';
 
     return `
-      <div class="glass-card rounded-xl p-4 border border-slate-800 hover:border-teal-500/40 transition-all flex flex-col justify-between space-y-3">
+      <div class="glass-card rounded-xl p-4 border ${isFrozen ? 'border-cyan-500/40 bg-cyan-950/20' : 'border-slate-800 hover:border-teal-500/40'} transition-all flex flex-col justify-between space-y-3">
         <div>
           <div class="flex items-start justify-between gap-2">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
+            </div>
+            ${isFrozen ? `
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1 shadow-sm">
+                <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> FROZEN
+              </span>
+            ` : `
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Active</span>
+            `}
           </div>
           <h4 class="font-bold text-white text-sm mt-2 truncate" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</h4>
-          <p class="text-[11px] text-slate-400">${c.code} • ${c.location}</p>
+          <p class="text-[11px] text-slate-400">${c.code} • ${escapeHtml(c.location || 'UAE')}</p>
 
-          <!-- Monthly Activity: Planned vs Completed Visited Counters -->
-          <div class="account-month-metrics p-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs my-2.5">
-            <div class="flex items-center gap-1.5" title="Visits planned in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
-              <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
-              <span class="text-slate-400 text-[11px] font-medium">Planned:</span>
-              <span class="font-black text-sky-400 text-xs">${plannedCount}</span>
+          ${isFrozen ? `
+            <div class="account-frozen-notice p-2 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-[11px] text-cyan-300 flex items-center justify-between my-2.5">
+              <span class="flex items-center gap-1.5 font-bold"><i data-lucide="snowflake" class="w-3.5 h-3.5 text-cyan-400 shrink-0"></i> Account Inactive</span>
+              <span class="text-[10px] text-cyan-400/80 font-medium">Frozen by Field Rep</span>
             </div>
-            <div class="h-3.5 w-px bg-slate-700/80"></div>
-            <div class="flex items-center gap-1.5" title="Completed visits conducted in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-              <span class="text-slate-400 text-[11px] font-medium">Visited:</span>
-              <span class="font-black text-emerald-400 text-xs">${visitedCount}</span>
+          ` : `
+            <!-- Monthly Activity: Planned vs Completed Visited Counters -->
+            <div class="account-month-metrics p-2 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs my-2.5">
+              <div class="flex items-center gap-1.5" title="Visits planned in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+                <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+                <span class="text-slate-400 text-[11px] font-medium">Planned:</span>
+                <span class="font-black text-sky-400 text-xs">${plannedCount}</span>
+              </div>
+              <div class="h-3.5 w-px bg-slate-700/80"></div>
+              <div class="flex items-center gap-1.5" title="Completed visits conducted in ${activeMonth === 'ALL' ? 'all months' : activeMonth}">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                <span class="text-slate-400 text-[11px] font-medium">Visited:</span>
+                <span class="font-black text-emerald-400 text-xs">${visitedCount}</span>
+              </div>
+              <div class="h-3.5 w-px bg-slate-700/80"></div>
+              <div class="text-[10px] font-extrabold ${visitedCount > 0 ? 'text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30' : (plannedCount > 0 ? 'text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30' : 'text-slate-500')}">
+                ${visitedCount > 0 ? `${visitedCount} Visited` : (plannedCount > 0 ? `${plannedCount} Planned` : '0 Activity')}
+              </div>
             </div>
-            <div class="h-3.5 w-px bg-slate-700/80"></div>
-            <div class="text-[10px] font-extrabold ${visitedCount > 0 ? 'text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30' : (plannedCount > 0 ? 'text-sky-400 bg-sky-500/15 px-1.5 py-0.5 rounded border border-sky-500/30' : 'text-slate-500')}">
-              ${visitedCount > 0 ? `${visitedCount} Visited` : (plannedCount > 0 ? `${plannedCount} Planned` : '0 Activity')}
-            </div>
-          </div>
+          `}
 
           <div class="mt-2 text-[11px] text-slate-300">
             <span class="text-slate-500">Contact Doctor:</span> ${escapeHtml(c.contactPerson || 'Lead Vet')}
+            ${c.phone ? `<span class="text-slate-500 ml-2">• Tel:</span> <span class="font-mono text-slate-400">${escapeHtml(c.phone)}</span>` : ''}
           </div>
         </div>
 
         <div class="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
-          <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
-            Plan Visit
-          </button>
-          <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors">
-            <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned Visit
-          </button>
+          ${isFrozen ? `
+            <span class="text-[11px] text-slate-500 font-semibold">Reactivate to log visits</span>
+            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
+              <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze Account
+            </button>
+          ` : `
+            <div class="flex items-center gap-1.5">
+              <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
+                Plan Visit
+              </button>
+              <button onclick="openUnplannedVisitModal('${c.repId}', '${c.code}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors">
+                <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned
+              </button>
+            </div>
+            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
+              <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
+            </button>
+          `}
         </div>
       </div>
     `;
@@ -4377,12 +5608,18 @@ window.renderAccountsGrid = renderAccountsGrid;
 window.handleAccountsFilter = function() {
   state.filters.accountsSearch = document.getElementById('accountsSearchInput')?.value || '';
   state.filters.accountsTerritory = document.getElementById('accountsTerritoryFilter')?.value || 'ALL';
+  state.filters.accountsStatus = document.getElementById('accountsStatusFilter')?.value || 'ACTIVE';
   state.filters.accountsMonthFilter = document.getElementById('accountsMonthFilter')?.value || 'CURRENT';
   renderAccountsGrid();
   safeLucide();
 };
 
 window.openPlanVisitModalForClient = function(clientCode, repId) {
+  const cust = (state.customers || []).find(c => c.code === clientCode);
+  if (cust && cust.isActive === false) {
+    showToast('Account Frozen', `${cust.name} is currently frozen. Please unfreeze it first to schedule visits.`, 'warning');
+    return;
+  }
   openPlanVisitModal();
   const repSelect = document.getElementById('planRepSelect');
   if (repSelect && (!state.currentUser || state.currentUser.role === 'manager')) {
@@ -4390,6 +5627,279 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
     filterPlanClinics();
   }
   selectCustomerCombobox('plan', clientCode);
+};
+
+// =========================================================================
+// 14B. ADD ACCOUNT & FREEZE CONTROLS (REP ACTION & MANAGER ALERT DISPATCH)
+// =========================================================================
+
+window.openAddAccountModal = function() {
+  const modal = document.getElementById('addAccountModal');
+  if (!modal) {
+    console.error('addAccountModal not found in DOM');
+    return;
+  }
+
+  const form = document.getElementById('addAccountForm');
+  if (form) form.reset();
+
+  const terrSelect = document.getElementById('newAccountTerritory');
+  let userTerritory = 'T1';
+  if (state.currentUser) {
+    if (state.currentUser.role === 'rep_t1') userTerritory = 'T1';
+    else if (state.currentUser.role === 'rep_t2') userTerritory = 'T2';
+    else userTerritory = state.currentUser.territory || 'T1';
+  }
+  if (userTerritory === 'ALL') userTerritory = 'T1';
+
+  if (terrSelect) {
+    if (state.currentUser && state.currentUser.role === 'manager') {
+      terrSelect.disabled = false;
+      terrSelect.value = 'T1';
+    } else {
+      terrSelect.value = userTerritory;
+      terrSelect.disabled = true;
+    }
+  }
+
+  generateClinicCode();
+  modal.style.display = 'flex';
+  modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeAddAccountModal = function() {
+  const modal = document.getElementById('addAccountModal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+  }
+};
+
+window.generateClinicCode = function() {
+  const terrSelect = document.getElementById('newAccountTerritory');
+  let terr = terrSelect ? terrSelect.value : (state.currentUser?.territory || 'T1');
+  if (!terr || terr === 'ALL') terr = 'T1';
+  const prefix = terr === 'T2' ? 'AC' : 'DC';
+
+  // Find existing max numeric code with prefix
+  let maxNum = 900;
+  (state.customers || []).forEach(c => {
+    if (c && c.code && typeof c.code === 'string' && c.code.toUpperCase().startsWith(prefix)) {
+      const num = parseInt(c.code.slice(prefix.length), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+
+  const nextCode = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+  const codeInput = document.getElementById('newAccountCode');
+  if (codeInput) codeInput.value = nextCode;
+};
+
+window.handleAddAccountSubmit = async function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  try {
+    const codeInput = document.getElementById('newAccountCode');
+    const nameInput = document.getElementById('newAccountName');
+    const tierSelect = document.getElementById('newAccountTier');
+    const terrSelect = document.getElementById('newAccountTerritory');
+    const locSelect = document.getElementById('newAccountLocation');
+    const docInput = document.getElementById('newAccountDoctor');
+    const phoneInput = document.getElementById('newAccountPhone');
+    const addrInput = document.getElementById('newAccountAddress');
+    const notesInput = document.getElementById('newAccountNotes');
+
+    const code = (codeInput?.value || '').trim().toUpperCase();
+    const name = (nameInput?.value || '').trim();
+    const tier = tierSelect?.value || 'Silver';
+    let assignedTerritory = terrSelect?.value || (state.currentUser?.territory || 'T1');
+    if (!assignedTerritory || assignedTerritory === 'ALL') assignedTerritory = 'T1';
+    const location = locSelect?.value || 'Dubai';
+    const contactPerson = (docInput?.value || '').trim();
+    const phone = (phoneInput?.value || '').trim();
+    const address = (addrInput?.value || '').trim();
+    const notes = (notesInput?.value || '').trim();
+
+    if (!code || !name) {
+      showToast('Missing Details', 'Please specify account code and clinic name.', 'warning');
+      return;
+    }
+
+    // Check code uniqueness
+    const existing = (state.customers || []).find(c => c && c.code && c.code.toUpperCase() === code);
+    if (existing) {
+      showToast('Duplicate Code', `Account code "${code}" already belongs to ${existing.name}. Please choose or auto-generate another code.`, 'warning');
+      return;
+    }
+
+    const newCust = {
+      code,
+      name,
+      location,
+      territory: assignedTerritory,
+      repId: assignedTerritory,
+      tier,
+      contactPerson: contactPerson || 'Lead Veterinarian',
+      phone: phone || '',
+      address: address || '',
+      notes: notes || '',
+      isActive: true
+    };
+
+    // Add to local state
+    state.customers.unshift(newCust);
+    persistData();
+
+    // Cloud write-through to Supabase
+    try {
+      supabaseRest('customers', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapCustomerToDb(newCust)
+      });
+    } catch(err) {
+      console.warn('Customer cloud sync skipped:', err);
+    }
+
+    // Create real-time Senior Manager Alert
+    const repName = state.currentUser ? (state.currentUser.name || (assignedTerritory === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${assignedTerritory}`;
+    const notif = {
+      id: `NOTIF-ACC-${Date.now()}`,
+      type: 'ACCOUNT_ADDED',
+      title: `New Account Added: ${newCust.name}`,
+      orderNumber: newCust.code,
+      repId: assignedTerritory,
+      repName: repName,
+      clientCode: newCust.code,
+      clientName: newCust.name,
+      location: newCust.location,
+      timestamp: new Date().toISOString(),
+      read: false,
+      approvalStatus: 'Active',
+      itemsSummary: `New ${newCust.tier} account added by ${repName} in ${newCust.location}. Dr: ${newCust.contactPerson}. Tel: ${newCust.phone || 'N/A'}.`
+    };
+
+    state.notifications.unshift(notif);
+    persistData();
+
+    // Cloud write-through notification to Supabase
+    try {
+      supabaseRest('notifications', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapNotifToDb(notif)
+      });
+    } catch(err) {
+      console.warn('Notification cloud sync skipped:', err);
+    }
+
+    if (state.managerSettings && state.managerSettings.soundAlert && typeof playNotificationChime === 'function') {
+      playNotificationChime();
+    }
+    showToast(
+      '🎉 Clinic Account Added',
+      `Registered ${newCust.name} (${newCust.code}) in ${assignedTerritory}. Senior Manager Dr. Sameh Ageez alerted.`,
+      'success'
+    );
+
+    closeAddAccountModal();
+    updateNotificationBell();
+    renderAccountsGrid();
+    renderManagerNotifications();
+    renderManagerHub();
+  } catch (ex) {
+    console.error('Error submitting add account form:', ex);
+    showToast('Submission Error', ex.message, 'error');
+  }
+};
+
+window.toggleAccountFreeze = async function(clientCode) {
+  const cust = (state.customers || []).find(c => c.code === clientCode);
+  if (!cust) return;
+
+  const willBeFrozen = (cust.isActive !== false);
+  cust.isActive = !willBeFrozen;
+  persistData();
+
+  // Cloud sync to Supabase customers table
+  supabaseRest(`customers?code=eq.${encodeURIComponent(clientCode)}`, {
+    method: 'PATCH',
+    body: { is_active: cust.isActive }
+  });
+
+  const repName = state.currentUser ? (state.currentUser.name || (cust.repId === 'T1' ? 'Dr. Shaimaa (Rep T1)' : 'Dr. Marsel (Rep T2)')) : `Rep ${cust.repId || 'T1'}`;
+  const repId = cust.repId || cust.territory || 'T1';
+
+  // Create real-time Senior Manager Alert
+  const notif = {
+    id: `NOTIF-FRZ-${Date.now()}`,
+    type: willBeFrozen ? 'ACCOUNT_FROZEN' : 'ACCOUNT_UNFROZEN',
+    title: willBeFrozen ? `Account Frozen: ${cust.name}` : `Account Reactivated: ${cust.name}`,
+    orderNumber: cust.code,
+    repId: repId,
+    repName: repName,
+    clientCode: cust.code,
+    clientName: cust.name,
+    location: cust.location,
+    timestamp: new Date().toISOString(),
+    read: false,
+    approvalStatus: willBeFrozen ? 'Frozen' : 'Active',
+    itemsSummary: willBeFrozen
+      ? `Rep ${repName} froze account "${cust.name}" (${cust.code}) in ${cust.location}. Account is marked inactive.`
+      : `Rep ${repName} reactivated account "${cust.name}" (${cust.code}) in ${cust.location}. Account is active for visits and orders.`
+  };
+
+  state.notifications.unshift(notif);
+  persistData();
+
+  // Cloud sync to Supabase notifications table
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
+  if (state.managerSettings.soundAlert) playNotificationChime();
+  showToast(
+    willBeFrozen ? '❄️ Account Frozen' : '🔥 Account Reactivated',
+    `${cust.name} (${cust.code}) is now ${willBeFrozen ? 'frozen (inactive)' : 'reactivated'}. Senior Manager alerted.`,
+    willBeFrozen ? 'warning' : 'success'
+  );
+
+  updateNotificationBell();
+  renderAccountsGrid();
+  renderManagerNotifications();
+  renderManagerHub();
+};
+
+window.goToAccountInCRM = function(clientCode) {
+  closeNotificationsModal();
+  switchTab('accounts');
+  const searchInput = document.getElementById('accountsSearchInput');
+  if (searchInput) {
+    searchInput.value = clientCode;
+  }
+  const statusSelect = document.getElementById('accountsStatusFilter');
+  if (statusSelect) {
+    statusSelect.value = 'ALL';
+  }
+  handleAccountsFilter();
+};
+
+window.markNotificationReadDirect = function(notifId) {
+  const notif = state.notifications.find(n => n.id === notifId);
+  if (notif) {
+    notif.read = true;
+    persistData();
+    supabaseRest(`notifications?id=eq.${encodeURIComponent(notifId)}`, {
+      method: 'PATCH',
+      body: { read: true }
+    });
+    updateNotificationBell();
+    renderManagerNotifications();
+    renderManagerHub();
+  }
 };
 
 // =========================================================================
@@ -5089,6 +6599,37 @@ function renderManagerHub() {
     }
   }
 
+  const accountsContainer = document.getElementById('managerAccountsAlertsList');
+  if (accountsContainer) {
+    const accountAlerts = (state.notifications || []).filter(n => n.type && n.type.startsWith('ACCOUNT_'));
+    if (accountAlerts.length === 0) {
+      accountsContainer.innerHTML = '<div class="py-8 text-center text-slate-500 text-xs">No clinic account modifications logged yet.</div>';
+    } else {
+      accountsContainer.innerHTML = accountAlerts.slice(0, 8).map(a => {
+        const isFrozen = a.type === 'ACCOUNT_FROZEN';
+        const isUnfrozen = a.type === 'ACCOUNT_UNFROZEN';
+        const badgeColor = isFrozen ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
+        const badgeLabel = isFrozen ? '❄️ Frozen' : (isUnfrozen ? '🔥 Active' : '✨ Added');
+
+        return `
+          <div class="glass-card rounded-xl p-3 border border-slate-800 flex items-center justify-between">
+            <div class="min-w-0 pr-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-xs font-bold text-white truncate max-w-[160px]" title="${escapeHtml(a.clientName)}">${escapeHtml(a.clientName)}</span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${a.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${a.repId}</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold ${badgeColor}">${badgeLabel}</span>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-0.5 font-mono">${a.clientCode || ''} • ${escapeHtml(a.location || 'UAE')} • By ${escapeHtml(a.repName)}</p>
+            </div>
+            <button onclick="goToAccountInCRM('${a.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[10px] font-bold shrink-0">
+              View
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
   safeLucide();
 }
 
@@ -5115,6 +6656,20 @@ window.handleSaveManagerSettings = function(e) {
   };
 
   persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('manager_settings', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: {
+      id: 'default',
+      manager_emails: state.managerSettings.managerEmails,
+      sound_alert: state.managerSettings.soundAlert,
+      toast_alert: state.managerSettings.toastAlert,
+      updated_at: new Date().toISOString()
+    }
+  });
+
   closeManagerSettingsModal();
   showToast('Settings Saved', 'Senior manager notification preferences updated.', 'success');
 };
@@ -5257,3 +6812,558 @@ function formatDisplayDate(dateStr) {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
+
+// =========================================================================
+// 18. GOOGLE DRIVE CLOUD SYNC UI CONTROLLERS & MASTER CSV EXPORTERS
+// =========================================================================
+
+window.openCloudSyncModal = function() {
+  const modal = document.getElementById('cloudSyncModal');
+  if (!modal) return;
+
+  const input = document.getElementById('gdriveUrlInput');
+  if (input) {
+    input.value = getGoogleDriveUrl();
+  }
+
+  const statusEl = document.getElementById('cloudSyncStatusBadge');
+  if (statusEl) {
+    const url = getGoogleDriveUrl();
+    if (url) {
+      statusEl.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-xs border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+          Connected & Synced with Google Drive
+        </span>
+      `;
+    } else {
+      statusEl.innerHTML = `
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold text-xs border border-amber-500/30">
+          <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+          Operating in Local Device Storage Mode
+        </span>
+      `;
+    }
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  safeLucide();
+};
+
+window.closeCloudSyncModal = function() {
+  const modal = document.getElementById('cloudSyncModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+};
+
+window.saveGoogleDriveSyncConfig = async function() {
+  const input = document.getElementById('gdriveUrlInput');
+  const url = input ? input.value.trim() : '';
+
+  if (url) {
+    if (!url.startsWith('http') || !url.includes('script.google.com')) {
+      showToast('Invalid URL', 'Please enter a valid Google Apps Script Web App URL ending with /exec', 'warning');
+      return;
+    }
+    setGoogleDriveUrl(url);
+    showToast('Connecting to Google Drive...', 'Verifying cloud sync endpoint...', 'info');
+    const res = await syncWithGoogleDrive(true);
+    if (res && res.success) {
+      closeCloudSyncModal();
+    }
+  } else {
+    setGoogleDriveUrl('');
+    updateCloudSyncBadge('offline', '💾 Local Mode');
+    showToast('Sync URL Cleared', 'Operating in local offline storage mode.', 'info');
+    closeCloudSyncModal();
+  }
+};
+
+window.testGoogleDriveConnection = async function() {
+  const input = document.getElementById('gdriveUrlInput');
+  const url = input ? input.value.trim() : '';
+  if (!url) {
+    showToast('Missing Web App URL', 'Please paste your Google Apps Script Web App URL first.', 'warning');
+    return;
+  }
+
+  showToast('Testing Connection...', 'Pinging your Google Drive Apps Script endpoint...', 'info');
+  try {
+    const res = await fetch(`${url}?action=PING&_t=${Date.now()}`, {
+      method: 'GET',
+      redirect: 'follow'
+    });
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    const json = await res.json();
+    if (json.status === 'success') {
+      setGoogleDriveUrl(url);
+      updateCloudSyncBadge('connected', '🟢 Drive Synced');
+      showToast('⚡ Google Drive Connected!', 'Your Google Drive & Sheets CRM endpoint is active and ready for cross-device sync.', 'success');
+      const statusEl = document.getElementById('cloudSyncStatusBadge');
+      if (statusEl) {
+        statusEl.innerHTML = `
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-xs border border-emerald-500/30">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            Connected & Synced with Google Drive
+          </span>
+        `;
+      }
+    } else {
+      throw new Error(json.message || 'Invalid endpoint response');
+    }
+  } catch (err) {
+    showToast('Connection Failed', `Could not reach script: ${err.message}. Make sure your deployment access is set to 'Anyone'.`, 'error');
+  }
+};
+
+window.copyGoogleAppsScriptCode = async function() {
+  try {
+    // Try fetching the local file
+    const res = await fetch('./google_drive_sync.gs');
+    if (res.ok) {
+      const code = await res.text();
+      await navigator.clipboard.writeText(code);
+      showToast('📋 Script Copied!', 'Full Google Apps Script sync code copied to your clipboard. Paste into your Google Sheet script editor!', 'success');
+      return;
+    }
+  } catch(e) {}
+
+  // Fallback direct copy instruction
+  showToast('📋 Google Apps Script', 'Open google_drive_sync.gs from the project folder and paste into Extensions -> Apps Script.', 'info');
+};
+
+// 1-Click Complete CRM CSV Data Downloader
+window.exportAllDataCSVs = function() {
+  const dateStr = getSyncedTodayDate();
+  showToast('Exporting All CRM CSVs', 'Generating master CSV spreadsheets for Visits, Orders, Clinics, and Planning Targets...', 'info');
+
+  // 1. Visits Master CSV
+  const visitHeaders = [
+    'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code', 'Clinic Name',
+    'Location', 'Visit Category', 'Status', 'Time Slot', 'Doctor Met',
+    'Doctor Role', 'Doctor Sentiment', 'Products Detailed', 'Samples Dropped',
+    'Sample Product', 'Order Placed', 'Order Ref', 'Order Value AED',
+    'Purpose', 'Unplanned Reason', 'Outcome / Notes', 'Missed Reason', 'Next Follow Up Date'
+  ];
+  const visitRows = (state.visits || []).map(v => [
+    `"${v.date || ''}"`,
+    `"${v.repId || ''}"`,
+    `"${getRepName(v.repId)}"`,
+    `"${v.territory || v.repId || ''}"`,
+    `"${v.clientCode || ''}"`,
+    `"${(v.clientName || '').replace(/"/g, '""')}"`,
+    `"${v.location || ''}"`,
+    `"${v.visitCategory || 'Planned'}"`,
+    `"${v.status || 'Planned'}"`,
+    `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+    `"${v.doctorSentiment || ''}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    v.samplesDropped || 0,
+    `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+    v.orderPlaced ? 'YES' : 'NO',
+    `"${v.orderRef || ''}"`,
+    v.orderValueAed || 0,
+    `"${(v.purpose || '').replace(/"/g, '""')}"`,
+    `"${(v.unplannedReason || '').replace(/"/g, '""')}"`,
+    `"${(v.outcome || '').replace(/"/g, '""')}"`,
+    `"${(v.missedReason || '').replace(/"/g, '""')}"`,
+    `"${v.nextFollowUp || ''}"`
+  ]);
+  downloadCsvFile(`Conceptors_Visits_Master_${dateStr}.csv`, [visitHeaders.join(','), ...visitRows.map(r => r.join(','))].join('\r\n'));
+
+  // 2. Orders Master CSV
+  setTimeout(() => {
+    const orderHeaders = [
+      'Invoice Number', 'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code',
+      'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency', 'Subtotal Exc VAT (AED)',
+      'VAT 5% (AED)', 'Total Inc VAT (AED)', 'Approval Status', 'Approved By', 'Items Summary'
+    ];
+    const orderRows = (state.orders || []).map(o => [
+      `"${o.invoiceNumber}"`,
+      `"${o.date || ''}"`,
+      `"${o.repId || ''}"`,
+      `"${o.repName || getRepName(o.repId)}"`,
+      `"${o.territory || o.repId || ''}"`,
+      `"${o.clientCode || ''}"`,
+      `"${(o.clientName || '').replace(/"/g, '""')}"`,
+      `"${o.location || ''}"`,
+      `"${o.paymentTerms || ''}"`,
+      `"${o.deliveryUrgency || ''}"`,
+      o.totalExcVat || 0,
+      o.vatAmount || 0,
+      o.totalIncVat || 0,
+      `"${o.approvalStatus || 'Pending'}"`,
+      `"${o.approvedBy || ''}"`,
+      `"${(o.itemsSummary || (o.items || []).map(i => `${i.productName} (${i.salesQty}x)`).join('; ')).replace(/"/g, '""')}"`
+    ]);
+    downloadCsvFile(`Conceptors_Orders_Master_${dateStr}.csv`, [orderHeaders.join(','), ...orderRows.map(r => r.join(','))].join('\r\n'));
+  }, 350);
+
+  // 3. Clinics Directory CSV
+  setTimeout(() => {
+    const clinicHeaders = ['Clinic Code', 'Clinic Name', 'Location / Emirate', 'Territory', 'Assigned Rep', 'Tier', 'Contact Person', 'Phone'];
+    const clinicRows = (state.customers || []).map(c => [
+      `"${c.code}"`,
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${c.location || ''}"`,
+      `"${c.territory || c.repId || ''}"`,
+      `"${getRepName(c.repId)}"`,
+      `"${c.tier || 'Tier 1'}"`,
+      `"${(c.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${c.phone || ''}"`
+    ]);
+    downloadCsvFile(`Conceptors_Clinics_Directory_${dateStr}.csv`, [clinicHeaders.join(','), ...clinicRows.map(r => r.join(','))].join('\r\n'));
+  }, 700);
+
+  showToast('📥 Master CSVs Generated', `Visits, Orders, and Clinic spreadsheets saved to your device.`, 'success');
+};
+
+function downloadCsvFile(filename, csvContent) {
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+window.downloadCsvFile = downloadCsvFile;
+
+// =========================================================================
+// MOBILE MORE ACTION DRAWER HANDLERS (< 768px)
+// =========================================================================
+
+function toggleMobileMoreDrawer() {
+  const drawer = document.getElementById('mobileMoreDrawer');
+  if (!drawer) return;
+  if (drawer.classList.contains('hidden')) {
+    drawer.classList.remove('hidden');
+    const u = state.currentUser || { name: 'Shaimaa', role: 'rep_t1', territory: 'T1' };
+    const nameEl = document.getElementById('mobileDrawerName');
+    const roleEl = document.getElementById('mobileDrawerRole');
+    const avatarEl = document.getElementById('mobileDrawerAvatar');
+    const mgrBtn = document.getElementById('mobileDrawerBtnManager');
+    if (nameEl) nameEl.textContent = u.name;
+    if (roleEl) roleEl.textContent = u.role === 'manager' ? 'Senior Sales Manager' : `Rep ${u.territory || 'T1'} (${u.territory === 'T2' ? 'Northern Emirates' : 'DXB/AUH'})`;
+    if (avatarEl) avatarEl.textContent = u.avatar || (u.name ? u.name.substring(0, 2).toUpperCase() : 'SH');
+    if (mgrBtn) {
+      if (u.role === 'manager') mgrBtn.classList.remove('hidden');
+      else mgrBtn.classList.add('hidden');
+    }
+  } else {
+    drawer.classList.add('hidden');
+  }
+}
+function closeMobileMoreDrawer() {
+  const drawer = document.getElementById('mobileMoreDrawer');
+  if (drawer) drawer.classList.add('hidden');
+}
+window.toggleMobileMoreDrawer = toggleMobileMoreDrawer;
+window.closeMobileMoreDrawer = closeMobileMoreDrawer;
+
+// =========================================================================
+// DATA EXPORT CENTER CONTROLLER & INDIVIDUAL EXPORTERS
+// =========================================================================
+
+function openExportCenterModal(initialSection = 'all') {
+  const modal = document.getElementById('exportCenterModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  safeLucide();
+}
+function closeExportCenterModal() {
+  const modal = document.getElementById('exportCenterModal');
+  if (modal) modal.classList.add('hidden');
+}
+window.openExportCenterModal = openExportCenterModal;
+window.closeExportCenterModal = closeExportCenterModal;
+
+// 1. Export Daily Visit Reports
+function handleExportDailyReports() {
+  const range = document.getElementById('exportDailyDateRange')?.value || 'today';
+  const rep = document.getElementById('exportDailyRepFilter')?.value || 'ALL';
+  exportDailyReportCSV(range, rep);
+}
+window.handleExportDailyReports = handleExportDailyReports;
+
+function exportDailyReportCSV(rangeMode = 'today', repFilter = 'ALL') {
+  const today = getSyncedTodayDate();
+  let targetDate = state.dailyReportDate || today;
+  let visitsToExport = state.visits || [];
+
+  if (rangeMode === 'today') {
+    visitsToExport = visitsToExport.filter(v => v.date === today);
+  } else if (rangeMode === 'selected') {
+    visitsToExport = visitsToExport.filter(v => v.date === targetDate);
+  } else if (rangeMode === 'month') {
+    const ym = targetDate.substring(0, 7);
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(ym));
+  }
+
+  if (repFilter && repFilter !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+  }
+
+  if (visitsToExport.length === 0) {
+    showToast('No Visits Found', 'No visit records match the selected date and representative filters.', 'warning');
+    return;
+  }
+
+  const visitHeaders = [
+    'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code', 'Clinic Name',
+    'Location', 'Visit Category', 'Status', 'Time Slot', 'Doctor Met',
+    'Doctor Role', 'Doctor Sentiment', 'Products Detailed', 'Samples Dropped',
+    'Sample Product', 'Order Placed', 'Order Ref', 'Order Value AED',
+    'Purpose', 'Unplanned Reason', 'Outcome / Notes', 'Missed Reason', 'Next Follow Up Date'
+  ];
+
+  const visitRows = visitsToExport.map(v => [
+    `"${v.date || ''}"`,
+    `"${v.repId || ''}"`,
+    `"${getRepName(v.repId)}"`,
+    `"${v.territory || v.repId || ''}"`,
+    `"${v.clientCode || ''}"`,
+    `"${(v.clientName || '').replace(/"/g, '""')}"`,
+    `"${v.location || ''}"`,
+    `"${v.visitCategory || 'Planned'}"`,
+    `"${v.status || 'Planned'}"`,
+    `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+    `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+    `"${v.doctorSentiment || ''}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    v.samplesDropped || 0,
+    `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+    v.orderPlaced ? 'YES' : 'NO',
+    `"${v.orderRef || ''}"`,
+    v.orderValueAed || 0,
+    `"${(v.purpose || '').replace(/"/g, '""')}"`,
+    `"${(v.unplannedReason || '').replace(/"/g, '""')}"`,
+    `"${(v.outcome || '').replace(/"/g, '""')}"`,
+    `"${(v.missedReason || '').replace(/"/g, '""')}"`,
+    `"${v.nextFollowUp || ''}"`
+  ]);
+
+  const fileLabel = rangeMode === 'today' ? `Today_${today}` : (rangeMode === 'month' ? `Month_${targetDate.substring(0, 7)}` : targetDate);
+  const repLabel = repFilter !== 'ALL' ? `_${repFilter}` : '_AllReps';
+  downloadCsvFile(`Conceptors_Visits_Report_${fileLabel}${repLabel}.csv`, [visitHeaders.join(','), ...visitRows.map(r => r.join(','))].join('\r\n'));
+  showToast('Visits CSV Exported', `Downloaded ${visitsToExport.length} visit record(s).`, 'success');
+}
+window.exportDailyReportCSV = exportDailyReportCSV;
+
+// 2. Export Monthly Planning
+function handleExportPlanning() {
+  const month = document.getElementById('exportPlanningMonth')?.value || '2026-09';
+  const rep = document.getElementById('exportPlanningRep')?.value || 'ALL';
+  exportMonthlyPlanCSV(month, rep);
+}
+window.handleExportPlanning = handleExportPlanning;
+
+function exportMonthlyPlanCSV(monthStr = '2026-09', repFilter = 'ALL') {
+  let visitsToExport = state.visits || [];
+
+  if (monthStr && monthStr !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(monthStr));
+  }
+
+  if (repFilter && repFilter !== 'ALL') {
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+  }
+
+  if (visitsToExport.length === 0) {
+    showToast('No Planned Calls Found', 'No call records match the selected month and rep.', 'warning');
+    return;
+  }
+
+  const headers = [
+    'Month/Year', 'Rep ID', 'Rep Name', 'Territory', 'Scheduled Date',
+    'Clinic Code', 'Clinic Name', 'Location / Emirate', 'Tier', 'Time Slot',
+    'Visit Category', 'Call Status', 'Products Scheduled', 'Doctor Target',
+    'Call Purpose', 'Outcome / Notes'
+  ];
+
+  const rows = visitsToExport.map(v => {
+    const clinic = (state.customers || []).find(c => c.code === v.clientCode) || {};
+    return [
+      `"${monthStr}"`,
+      `"${v.repId || ''}"`,
+      `"${getRepName(v.repId)}"`,
+      `"${v.territory || v.repId || ''}"`,
+      `"${v.date || ''}"`,
+      `"${v.clientCode || ''}"`,
+      `"${(v.clientName || '').replace(/"/g, '""')}"`,
+      `"${v.location || clinic.location || ''}"`,
+      `"${clinic.tier || 'Silver'}"`,
+      `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+      `"${v.visitCategory || 'Planned'}"`,
+      `"${v.status || 'Planned'}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+      `"${(v.doctorName || clinic.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${(v.purpose || '').replace(/"/g, '""')}"`,
+      `"${(v.outcome || '').replace(/"/g, '""')}"`
+    ];
+  });
+
+  const repLabel = repFilter !== 'ALL' ? `_${repFilter}` : '_AllReps';
+  downloadCsvFile(`Conceptors_Monthly_Plan_${monthStr}${repLabel}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+  showToast('Monthly Plan CSV Exported', `Downloaded ${rows.length} scheduled call(s).`, 'success');
+}
+window.exportMonthlyPlanCSV = exportMonthlyPlanCSV;
+
+// 3. Export Field Sales Orders
+function handleExportOrders() {
+  const type = document.getElementById('exportOrdersType')?.value || 'itemized';
+  const status = document.getElementById('exportOrdersStatus')?.value || 'ALL';
+  exportOrdersCSV(type, status, 'ALL');
+}
+window.handleExportOrders = handleExportOrders;
+
+function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'ALL') {
+  let orders = state.orders || [];
+  if (statusFilter && statusFilter !== 'ALL') {
+    orders = orders.filter(o => o.approvalStatus === statusFilter);
+  }
+  if (repFilter && repFilter !== 'ALL') {
+    orders = orders.filter(o => o.repId === repFilter);
+  }
+
+  if (orders.length === 0) {
+    showToast('No Orders Found', 'No orders match the selected filters.', 'warning');
+    return;
+  }
+
+  const dateStr = getSyncedTodayDate();
+
+  if (type === 'summary') {
+    const headers = [
+      'Invoice Number', 'Order Date', 'Rep ID', 'Rep Name', 'Territory',
+      'Clinic Code', 'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency',
+      'Subtotal Exc VAT (AED)', 'VAT 5% (AED)', 'Total Inc VAT (AED)', 'Approval Status', 'Approved By'
+    ];
+    const rows = orders.map(o => [
+      `"${o.invoiceNumber}"`,
+      `"${o.date || ''}"`,
+      `"${o.repId || ''}"`,
+      `"${o.repName || getRepName(o.repId)}"`,
+      `"${o.territory || o.repId || ''}"`,
+      `"${o.clientCode || ''}"`,
+      `"${(o.clientName || '').replace(/"/g, '""')}"`,
+      `"${o.location || ''}"`,
+      `"${o.paymentTerms || ''}"`,
+      `"${o.deliveryUrgency || ''}"`,
+      o.totalExcVat || 0,
+      o.vatAmount || 0,
+      o.totalIncVat || 0,
+      `"${o.approvalStatus || 'Pending'}"`,
+      `"${o.approvedBy || ''}"`
+    ]);
+    downloadCsvFile(`Conceptors_Orders_Summary_${dateStr}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+    showToast('Orders Summary CSV Exported', `Exported ${orders.length} orders.`, 'success');
+  } else {
+    const headers = [
+      'Invoice Number', 'Order Date', 'Rep Name', 'Territory', 'Clinic Code',
+      'Clinic Name', 'Location', 'Product Code', 'Product Name', 'Unit Price (AED)',
+      'Sales Qty', 'Bonus FOC Qty', 'Line Total Exc VAT (AED)', 'Invoice Net (AED)',
+      'VAT 5% (AED)', 'Invoice Total (AED)', 'Payment Terms', 'Approval Status'
+    ];
+    const rows = [];
+    orders.forEach(o => {
+      const items = (o.items && o.items.length > 0) ? o.items : [
+        { productCode: 'GEN', productName: o.itemsSummary || 'Standard Order', unitPrice: o.totalExcVat, salesQty: 1, focQty: 0, total: o.totalExcVat }
+      ];
+      items.forEach(it => {
+        rows.push([
+          `"${o.invoiceNumber}"`,
+          `"${o.date || ''}"`,
+          `"${o.repName || getRepName(o.repId)}"`,
+          `"${o.territory || o.repId || ''}"`,
+          `"${o.clientCode || ''}"`,
+          `"${(o.clientName || '').replace(/"/g, '""')}"`,
+          `"${o.location || ''}"`,
+          `"${it.productCode || ''}"`,
+          `"${(it.productName || '').replace(/"/g, '""')}"`,
+          it.unitPrice || 0,
+          it.salesQty || 0,
+          it.focQty || 0,
+          it.total || 0,
+          o.totalExcVat || 0,
+          o.vatAmount || 0,
+          o.totalIncVat || 0,
+          `"${o.paymentTerms || ''}"`,
+          `"${o.approvalStatus || 'Pending'}"`
+        ]);
+      });
+    });
+    downloadCsvFile(`Conceptors_Orders_Itemized_${dateStr}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+    showToast('Itemized Orders CSV Exported', `Exported ${rows.length} product line items.`, 'success');
+  }
+}
+window.exportOrdersCSV = exportOrdersCSV;
+
+// 4. Export Clinics & Unvisited Coverage
+function handleExportClinics() {
+  const scope = document.getElementById('exportClinicsScope')?.value || 'unvisited';
+  const territory = document.getElementById('exportClinicsTerritory')?.value || 'ALL';
+  exportClinicsCSV(scope, territory);
+}
+window.handleExportClinics = handleExportClinics;
+
+function exportClinicsCSV(scope = 'unvisited', territoryFilter = 'ALL') {
+  let clinics = state.customers || [];
+  if (territoryFilter && territoryFilter !== 'ALL') {
+    clinics = clinics.filter(c => (c.territory || c.repId) === territoryFilter);
+  }
+
+  const currentYM = (getSyncedTodayDate()).substring(0, 7);
+  const visitsThisMonth = (state.visits || []).filter(v => (v.date || '').startsWith(currentYM) && v.status === 'Completed');
+  const visitedCodes = new Set(visitsThisMonth.map(v => v.clientCode));
+
+  if (scope === 'unvisited') {
+    clinics = clinics.filter(c => !visitedCodes.has(c.code));
+  }
+
+  const headers = [
+    'Clinic Code', 'Clinic Name', 'Account Status', 'Location / Emirate', 'Territory', 'Assigned Rep',
+    'Tier', 'Contact Person', 'Phone', 'Visited This Month', 'Last Visit Date'
+  ];
+
+  const rows = clinics.map(c => {
+    const isVisited = visitedCodes.has(c.code);
+    const lastVisit = (state.visits || [])
+      .filter(v => v.clientCode === c.code && v.status === 'Completed')
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+
+    return [
+      `"${c.code}"`,
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${c.isActive === false ? 'Frozen (Inactive)' : 'Active'}"`,
+      `"${c.location || ''}"`,
+      `"${c.territory || c.repId || ''}"`,
+      `"${getRepName(c.repId)}"`,
+      `"${c.tier || 'Silver'}"`,
+      `"${(c.contactPerson || '').replace(/"/g, '""')}"`,
+      `"${c.phone || ''}"`,
+      isVisited ? 'YES' : 'NO',
+      `"${lastVisit ? lastVisit.date : 'Never'}"`
+    ];
+  });
+
+  const label = scope === 'unvisited' ? 'Unvisited_Clinics' : 'Full_Directory';
+  const tLabel = territoryFilter !== 'ALL' ? `_${territoryFilter}` : '';
+  downloadCsvFile(`Conceptors_${label}${tLabel}_${getSyncedTodayDate()}.csv`, [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n'));
+  showToast('Clinics CSV Exported', `Exported ${rows.length} clinic account(s).`, 'success');
+}
+window.exportClinicsCSV = exportClinicsCSV;
+
+function printDailyReportSummary() {
+  window.print();
+}
+window.printDailyReportSummary = printDailyReportSummary;
+
