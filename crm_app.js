@@ -562,6 +562,60 @@ async function syncWithSupabase(force = false) {
 }
 window.syncWithSupabase = syncWithSupabase;
 
+// =========================================================================
+// SUPABASE REALTIME WEBSOCKET SUBSCRIPTION (INSTANT CROSS-DEVICE SYNC)
+// =========================================================================
+
+let realtimeChannel = null;
+let realtimeDebounceTimer = null;
+
+function initSupabaseRealtime() {
+  if (!supabaseClient) {
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabaseClient = supabaseClient;
+      } catch (e) {
+        console.warn('Realtime init: supabase client create failed:', e);
+        return;
+      }
+    } else {
+      return;
+    }
+  }
+
+  try {
+    if (realtimeChannel) {
+      try { supabaseClient.removeChannel(realtimeChannel); } catch (_) {}
+    }
+
+    realtimeChannel = supabaseClient
+      .channel('conceptors-crm-live-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public' },
+        (payload) => {
+          console.info('[Supabase Realtime] Event detected:', payload.table, payload.eventType);
+          if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+          realtimeDebounceTimer = setTimeout(() => {
+            syncWithSupabase(false);
+          }, 350);
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.info('[Supabase Realtime] Connected to live PostgreSQL database stream.');
+          updateSupabaseSyncBadge('connected', '⚡ Live Connected');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('[Supabase Realtime] Channel subscription error:', err);
+        }
+      });
+  } catch (err) {
+    console.warn('[Supabase Realtime] Setup exception:', err);
+  }
+}
+window.initSupabaseRealtime = initSupabaseRealtime;
+
 // Field Stock Request Module (Submits to Supabase stock_requests)
 window.submitStockRequest = async function(reqData) {
   const stockReq = {
@@ -702,29 +756,29 @@ function initCrmApp() {
     startLiveTimeTicker();
     safeLucide();
 
-    // Automatic Cloud Sync: Prefer Google Drive, fallback to Supabase
+    // 1. Supabase Cloud Database: Primary real-time multi-device sync
+    syncWithSupabase();
+    initSupabaseRealtime();
+
+    // 2. Google Drive: Secondary optional cloud sync if configured
     if (getGoogleDriveUrl()) {
-      syncWithGoogleDrive();
-    } else {
-      syncWithSupabase();
+      syncWithGoogleDrive(false);
     }
 
     // Auto-sync on window focus (so mobile phone and laptop sync automatically when switching tabs or unlocking phone)
     window.addEventListener('focus', () => {
+      syncWithSupabase(false);
       if (getGoogleDriveUrl()) {
         syncWithGoogleDrive(false);
-      } else {
-        syncWithSupabase(false);
       }
     });
 
-    // Periodic background sync every 30s when tab is active
+    // Periodic background sync every 30s when tab is active (heartbeat fallback)
     setInterval(() => {
       if (document.visibilityState === 'visible') {
+        syncWithSupabase(false);
         if (getGoogleDriveUrl()) {
           syncWithGoogleDrive(false);
-        } else {
-          syncWithSupabase(false);
         }
       }
     }, 30000);
@@ -6838,9 +6892,9 @@ window.openCloudSyncModal = function() {
       `;
     } else {
       statusEl.innerHTML = `
-        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-semibold text-xs border border-amber-500/30">
-          <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
-          Operating in Local Device Storage Mode
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold text-xs border border-cyan-500/30">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 shrink-0"></span>
+          Connected & Synced with Supabase Cloud (Live)
         </span>
       `;
     }
@@ -6876,8 +6930,8 @@ window.saveGoogleDriveSyncConfig = async function() {
     }
   } else {
     setGoogleDriveUrl('');
-    updateCloudSyncBadge('offline', '💾 Local Mode');
-    showToast('Sync URL Cleared', 'Operating in local offline storage mode.', 'info');
+    syncWithSupabase(true);
+    showToast('Switched to Supabase', 'Operating with Supabase Live Cloud Database.', 'info');
     closeCloudSyncModal();
   }
 };
