@@ -596,6 +596,17 @@ function initSupabaseRealtime() {
         { event: '*', schema: 'public' },
         (payload) => {
           console.info('[Supabase Realtime] Event detected:', payload.table, payload.eventType);
+          if (payload.table === 'orders' && payload.eventType === 'INSERT') {
+            if (typeof triggerManagerOrderAlert === 'function') {
+              triggerManagerOrderAlert(payload.new || {});
+            }
+          } else if (payload.table === 'notifications' && payload.eventType === 'INSERT') {
+            if (payload.new && payload.new.type === 'ORDER_SUBMITTED') {
+              if (typeof triggerManagerOrderAlert === 'function') {
+                triggerManagerOrderAlert(payload.new || {});
+              }
+            }
+          }
           if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
           realtimeDebounceTimer = setTimeout(() => {
             syncWithSupabase(false);
@@ -687,11 +698,20 @@ function getSyncedTimeStr(tz = 'Asia/Dubai') {
 window.getSyncedTimeStr = getSyncedTimeStr;
 
 function startLiveTimeTicker() {
+  let lastKnownDate = getSyncedTodayDate();
   function tick() {
     const clockEl = document.getElementById('uaeLiveClock');
     if (clockEl) {
       const time = getSyncedTimeStr(state.timeZone || 'Asia/Dubai');
       clockEl.textContent = `UAE ${time} GST`;
+    }
+    const currentLiveDate = getSyncedTodayDate();
+    if (currentLiveDate !== lastKnownDate) {
+      lastKnownDate = currentLiveDate;
+      state.dailyDate = currentLiveDate;
+      state.dailyReportDate = currentLiveDate;
+      localStorage.setItem(STORAGE_KEY_DATE, currentLiveDate);
+      renderAll();
     }
   }
   tick();
@@ -759,6 +779,16 @@ function initCrmApp() {
     // 1. Supabase Cloud Database: Primary real-time multi-device sync
     syncWithSupabase();
     initSupabaseRealtime();
+
+    // Register Service Worker for mobile push and lockscreen alerts
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => {
+        console.warn('Service worker registration note:', err);
+      });
+    }
+    if (typeof updateMobilePushBadge === 'function') {
+      updateMobilePushBadge();
+    }
 
     // 2. Google Drive: Secondary optional cloud sync if configured
     if (getGoogleDriveUrl()) {
@@ -834,9 +864,17 @@ function loadStoredData() {
     }
   }
 
+  const todayStr = getSyncedTodayDate();
   const storedDate = localStorage.getItem(STORAGE_KEY_DATE);
-  state.dailyDate = storedDate || getSyncedTodayDate();
-  const dateParts = (state.dailyDate || getSyncedTodayDate()).split('-');
+  // Default strictly to live today if stored date is outdated from previous sessions/days
+  if (!storedDate || storedDate !== todayStr) {
+    state.dailyDate = todayStr;
+    localStorage.setItem(STORAGE_KEY_DATE, todayStr);
+  } else {
+    state.dailyDate = storedDate;
+  }
+  state.dailyReportDate = todayStr;
+  const dateParts = state.dailyDate.split('-');
   state.plannerCalendarYear = parseInt(dateParts[0], 10);
   state.plannerCalendarMonth = parseInt(dateParts[1], 10);
 
@@ -863,14 +901,6 @@ function loadStoredData() {
     });
   }
   state.orders = loadedOrders.length > 0 ? loadedOrders : [...(window.INITIAL_ORDERS || [])];
-
-  state.dailyReportDate = state.dailyReportDate || getSyncedTodayDate();
-
-  // Ensure daily report date is initialized to UAE live today
-  const todayStr = getSyncedTodayDate();
-  if (!state.dailyReportDate) {
-    state.dailyReportDate = todayStr;
-  }
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
   state.monthlyPlans = storedPlans ? JSON.parse(storedPlans) : [...(window.INITIAL_MONTHLY_PLANS || [])];
@@ -1222,6 +1252,27 @@ function updateUserProfileDisplay() {
   if (dateSubtitle) {
     dateSubtitle.textContent = `Itinerary & Execution for ${formattedDate}`;
   }
+
+  // Restrict Add Account options strictly to Senior Sales Manager
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const addAccountHeaderBtn = document.getElementById('addAccountBtnHeader');
+  if (addAccountHeaderBtn) {
+    if (isManager) addAccountHeaderBtn.classList.remove('hidden');
+    else addAccountHeaderBtn.classList.add('hidden');
+  }
+  const mobileDrawerAddAccountBtn = document.getElementById('mobileDrawerAddAccountBtn');
+  if (mobileDrawerAddAccountBtn) {
+    if (isManager) mobileDrawerAddAccountBtn.classList.remove('hidden');
+    else mobileDrawerAddAccountBtn.classList.add('hidden');
+  }
+  const repHubAddClinicBtn = document.getElementById('repHubAddClinicBtn');
+  if (repHubAddClinicBtn) {
+    if (isManager) repHubAddClinicBtn.classList.remove('hidden');
+    else repHubAddClinicBtn.classList.add('hidden');
+  }
+  if (typeof updateMobilePushBadge === 'function') {
+    updateMobilePushBadge();
+  }
 }
 
 // =========================================================================
@@ -1271,19 +1322,19 @@ function getScopedPlans() {
 }
 
 // =========================================================================
-// 5B. 3-DAY ADVANCE PLANNING UTILITY & INTERACTIVE CUSTOMER COMBOBOX ENGINE
+// 5B. 1-DAY (24-HOUR) ADVANCE PLANNING UTILITY & INTERACTIVE CUSTOMER COMBOBOX ENGINE
 // =========================================================================
 
 /**
  * Calculates the earliest allowed date for a planned visit.
- * Under Conceptors policy, planned visits can NEVER be entered for past dates/times,
- * and must be scheduled at least 3 days in advance (plannedDate >= today + 3 days).
+ * Under Conceptors SOP, planned visits must be scheduled at least 1 day
+ * in advance (24 hours prior: plannedDate >= today + 1 day).
  */
 function getMinPlannedDate(baseDateStr = null) {
   const base = baseDateStr || state.dailyDate || getSyncedTodayDate();
   const parts = base.split('-').map(Number);
   const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  d.setUTCDate(d.getUTCDate() + 3);
+  d.setUTCDate(d.getUTCDate() + 1); // 1-day advance planning rule (tomorrow / >= 24h prior)
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
@@ -3460,6 +3511,144 @@ window.handlePlannedVisitSubmit = function(e) {
 };
 
 // =========================================================================
+// 8B. AMEND PLANNED VISITS (24-HOUR ADVANCE NOTICE RULE)
+// =========================================================================
+
+window.openAmendPlannedModal = function(visitId) {
+  const visit = (state.visits || []).find(v => v.id === visitId);
+  if (!visit) {
+    showToast('Visit Not Found', 'Could not locate the planned visit details.', 'error');
+    return;
+  }
+
+  if (visit.status === 'Completed') {
+    showToast('Already Completed', 'This visit report has already been executed and completed.', 'info');
+    return;
+  }
+
+  const todayStr = getSyncedTodayDate();
+  if (visit.date <= todayStr) {
+    showToast(
+      '24-Hour Notice Required',
+      `Cannot amend planned visit scheduled for today (${visit.date}). Under Conceptors SOP, planned visits can only be amended at least 24 hours prior. For today's activities, execute the planned call or log an Unplanned Visit.`,
+      'warning'
+    );
+    return;
+  }
+
+  const modal = document.getElementById('amendPlannedVisitModal');
+  if (!modal) {
+    console.error('amendPlannedVisitModal not found in DOM');
+    return;
+  }
+
+  document.getElementById('amendVisitId').value = visit.id;
+  const clinicEl = document.getElementById('amendClinicName');
+  if (clinicEl) clinicEl.textContent = `${visit.clientName} (${visit.clientCode})`;
+  const repEl = document.getElementById('amendRepTerritory');
+  if (repEl) repEl.textContent = `Rep ${visit.repId || 'T1'} • ${visit.location || 'UAE'}`;
+
+  const minAllowed = getMinPlannedDate(todayStr); // Tomorrow (>= 24h prior)
+  const dateInput = document.getElementById('amendDate');
+  if (dateInput) {
+    dateInput.min = minAllowed;
+    dateInput.value = visit.date >= minAllowed ? visit.date : minAllowed;
+  }
+  const noticeEl = document.getElementById('amendEarliestNotice');
+  if (noticeEl) {
+    noticeEl.textContent = `${minAllowed} (>= 24h advance)`;
+  }
+
+  const slotInput = document.getElementById('amendTimeSlot');
+  if (slotInput) slotInput.value = visit.timeSlot || 'Morning Round (09:00 - 12:00)';
+  const docInput = document.getElementById('amendDoctorName');
+  if (docInput) docInput.value = visit.doctorName || '';
+  const purpInput = document.getElementById('amendPurpose');
+  if (purpInput) purpInput.value = visit.purpose || '';
+  const reasonInput = document.getElementById('amendReason');
+  if (reasonInput) reasonInput.value = '';
+
+  modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeAmendPlannedModal = function() {
+  const modal = document.getElementById('amendPlannedVisitModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.handleAmendPlannedVisitSubmit = async function(e) {
+  e.preventDefault();
+  const visitId = document.getElementById('amendVisitId').value;
+  const visit = (state.visits || []).find(v => v.id === visitId);
+  if (!visit) return;
+
+  const todayStr = getSyncedTodayDate();
+  const newDate = document.getElementById('amendDate').value;
+  const minAllowed = getMinPlannedDate(todayStr);
+
+  if (newDate < minAllowed) {
+    showToast('Invalid Date', `The rescheduled date must be at least 24 hours in advance (earliest allowed: ${minAllowed}).`, 'error');
+    return;
+  }
+
+  const oldDate = visit.date;
+  const oldTimeSlot = visit.timeSlot;
+  const newTimeSlot = document.getElementById('amendTimeSlot').value;
+  const newDoctor = document.getElementById('amendDoctorName').value.trim();
+  const newPurpose = document.getElementById('amendPurpose').value.trim();
+  const reason = document.getElementById('amendReason').value.trim();
+
+  // Update in-memory visit
+  visit.date = newDate;
+  visit.timeSlot = newTimeSlot;
+  if (newDoctor) visit.doctorName = newDoctor;
+  if (newPurpose) visit.purpose = newPurpose;
+  visit.amendedAt = new Date().toISOString();
+  visit.amendedBy = state.currentUser ? state.currentUser.name : 'Representative';
+  visit.amendmentReason = reason;
+
+  persistData();
+
+  // Cloud write-through to Supabase
+  supabaseRest('visits', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapVisitToDb(visit)
+  });
+
+  // Notification for Senior Manager
+  const repName = state.currentUser ? state.currentUser.name : `Rep ${visit.repId}`;
+  const notif = {
+    id: `NOTIF-AMEND-${Date.now()}`,
+    type: 'PLAN_AMENDED',
+    title: `Planned Visit Rescheduled: ${visit.clientName}`,
+    orderNumber: visit.clientCode,
+    repId: visit.repId,
+    repName: repName,
+    clientCode: visit.clientCode,
+    clientName: visit.clientName,
+    location: visit.location,
+    timestamp: new Date().toISOString(),
+    read: false,
+    approvalStatus: 'Rescheduled',
+    itemsSummary: `${repName} rescheduled planned call to ${visit.clientName} from ${oldDate} (${oldTimeSlot}) to ${newDate} (${newTimeSlot}). Reason: ${reason}`
+  };
+  state.notifications.unshift(notif);
+  persistData();
+
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  });
+
+  closeAmendPlannedModal();
+  renderAll();
+  showToast('Planned Visit Amended', `Visit for ${visit.clientName} successfully rescheduled to ${newDate} (${newTimeSlot}).`, 'success');
+};
+
+// =========================================================================
 // 9. ADD UNPLANNED VISIT FOR TODAY (BESIDE PLANNED SCHEDULE)
 // =========================================================================
 
@@ -3563,7 +3752,7 @@ window.handleUnplannedVisitSubmit = function(e) {
   if (date !== state.dailyDate) {
     showToast(
       'Submission Day Policy',
-      `Unplanned visits can ONLY be logged for the active day of execution (${state.dailyDate}). You cannot plan an unplanned visit for future dates. Future visits must be scheduled at least 3 days in advance via the Monthly Planner.`,
+      `Unplanned visits can ONLY be logged for the active day of execution (${state.dailyDate}). You cannot plan an unplanned visit for future dates. Future visits must be scheduled at least 24 hours (1 day) in advance via the Monthly Planner.`,
       'error'
     );
     return;
@@ -3848,7 +4037,7 @@ window.renderPlannerCalendar = function() {
       <div 
         onclick="selectPlannerCalendarDay('${dateStr}')" 
         class="calendar-day-cell min-h-[52px] sm:min-h-[110px] p-1 sm:p-2 rounded-xl border ${cellBorderClass} transition-all flex flex-col justify-between cursor-pointer relative group touch-manipulation"
-        title="Date: ${dateStr}${isEligibleToPlan ? ' • Click to view or plan target' : ' • Notice: 3-day advance rule applies'}"
+        title="Date: ${dateStr}${isEligibleToPlan ? ' • Click to view or plan target' : ' • Notice: 24h advance rule applies'}"
       >
         <div class="flex items-center justify-between">
           <span class="text-xs font-black ${isToday ? 'w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center text-[10px] shadow' : (isEligibleToPlan ? 'text-slate-200' : 'text-slate-500')}">
@@ -4009,7 +4198,7 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
           <div class="flex flex-wrap items-center gap-2">
             <h4 class="text-sm font-extrabold text-white">Schedule for ${formatDisplayDate(dateStr)}</h4>
             ${isToday ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">Today</span>' : ''}
-            ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 3 Days)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Under 3-Day Window</span>'}
+            ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 24 Hours / 1 Day)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Under 24h Window</span>'}
           </div>
           <p class="text-xs text-slate-400">${plannedVisits.length} planned target${plannedVisits.length === 1 ? '' : 's'} scheduled for this date</p>
         </div>
@@ -4026,7 +4215,7 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
           </button>
         ` : `
           <span class="text-xs text-amber-400 font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex-1 sm:flex-initial text-center sm:text-left">
-            Cannot schedule (&lt; 3-day notice rule).
+            Cannot schedule (&lt; 24-hour notice rule).
           </span>
         `)}
         <button type="button" onclick="state.plannerSelectedDay = null; renderPlannerCalendar();" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation shrink-0" title="Close drawer">
@@ -4066,9 +4255,16 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
             <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
               <span class="text-[10px] text-slate-400 font-mono">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Day'}</span>
               ${v.status !== 'Completed' ? `
-                <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
-                  <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
-                </button>
+                <div class="flex items-center gap-1.5">
+                  ${v.date > getSyncedTodayDate() ? `
+                    <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Reschedule planned call (allowed 24h prior)">
+                      <i data-lucide="calendar-clock" class="w-3 h-3 text-cyan-400"></i> Amend
+                    </button>
+                  ` : ''}
+                  <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
+                    <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
+                  </button>
+                </div>
               ` : '<span class="text-[10px] text-emerald-400 font-bold">Executed</span>'}
             </div>
           </div>
@@ -4185,6 +4381,11 @@ window.renderPlannerAgenda = function() {
                         <i data-lucide="check" class="w-3 h-3"></i> Completed
                       </span>
                     ` : `
+                      ${v.date > getSyncedTodayDate() ? `
+                        <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1 transition-all" title="Reschedule planned visit (allowed 24h prior)">
+                          <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-cyan-400"></i> Amend
+                        </button>
+                      ` : ''}
                       <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95 touch-manipulation">
                         <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
                       </button>
@@ -4206,7 +4407,7 @@ window.renderPlannerAgenda = function() {
           <i data-lucide="calendar-plus" class="w-6 h-6"></i>
         </div>
         <h4 class="font-bold text-white text-sm">No Planned Visits in ${monthNames[month - 1]} ${year}</h4>
-        <p class="text-xs text-slate-400 max-w-sm mx-auto">Start scheduling target accounts for this month (3-day advance notice applies).</p>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto">Start scheduling target accounts for this month (24-hour advance notice applies).</p>
         <button type="button" onclick="openPlanVisitModal()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-md active:scale-95 touch-manipulation">
           <i data-lucide="plus" class="w-3.5 h-3.5"></i> Schedule First Target
         </button>
@@ -4270,6 +4471,13 @@ window.renderPlannerTable = function() {
           </div>
           <div class="pt-1 flex items-center justify-end gap-2">
             ${!isCompleted ? `
+              ${v.date > getSyncedTodayDate() ? `
+                <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors" title="Reschedule planned call (allowed 24h prior)">
+                  <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-cyan-400"></i> Amend
+                </button>
+              ` : `
+                <span class="text-[10px] text-slate-500 font-semibold" title="Under SOP, planned visits cannot be amended on the day of the visit (24h rule)">Same-Day Locked</span>
+              `}
               <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 touch-manipulation">
                 <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
               </button>
@@ -4319,9 +4527,18 @@ window.renderPlannerTable = function() {
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           ${!isCompleted ? `
-            <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 mx-auto active:scale-95 touch-manipulation">
-              <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
-            </button>
+            <div class="flex items-center justify-center gap-1.5">
+              ${v.date > getSyncedTodayDate() ? `
+                <button onclick="openAmendPlannedModal('${v.id}')" class="px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Reschedule planned call (allowed 24h prior)">
+                  <i data-lucide="calendar-clock" class="w-3 h-3 text-cyan-400"></i> Amend
+                </button>
+              ` : `
+                <span class="text-[9px] text-slate-500 font-semibold" title="Cannot amend on same day (24h rule applies)">Locked</span>
+              `}
+              <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
+                <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
+              </button>
+            </div>
           ` : `
             <span class="text-xs text-slate-500 font-bold">Executed</span>
           `}
@@ -4431,7 +4648,7 @@ window.openPlanVisitModal = function(preferredDate = null) {
   filterPlanClinics();
   clearCustomerCombobox('plan');
 
-  // Enforce 3-day advance planning rule
+  // Enforce 1-day (24h) advance planning rule
   const minDateStr = getMinPlannedDate(state.dailyDate);
   const planDateInput = document.getElementById('planDate');
   if (planDateInput) {
@@ -4442,8 +4659,8 @@ window.openPlanVisitModal = function(preferredDate = null) {
       planDateInput.value = minDateStr;
       if (preferredDate && preferredDate < minDateStr) {
         showToast(
-          '3-Day Advance Notice Required',
-          `The selected date (${preferredDate}) does not meet the 3-day advance planning rule. Adjusted to earliest allowed date (${minDateStr}).`,
+          '24-Hour Advance Notice Required',
+          `The selected date (${preferredDate}) does not meet the 24-hour advance planning rule. Adjusted to earliest allowed date (${minDateStr}).`,
           'warning'
         );
       }
@@ -4451,7 +4668,7 @@ window.openPlanVisitModal = function(preferredDate = null) {
   }
   const noticeEl = document.getElementById('planEarliestNotice');
   if (noticeEl) {
-    noticeEl.textContent = `${minDateStr} (+3 days in advance)`;
+    noticeEl.textContent = `${minDateStr} (+1 day / 24h advance)`;
   }
 
   document.getElementById('planDoctorName').value = '';
@@ -4498,8 +4715,8 @@ window.handlePlanVisitSubmit = function(e) {
   const minDateStr = getMinPlannedDate(state.dailyDate);
   if (date < minDateStr) {
     showToast(
-      '3-Day Advance Rule Violation',
-      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 3 days in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
+      '24-Hour Advance Rule Violation',
+      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 24 hours (1 day) in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
       'error'
     );
     return;
@@ -5079,13 +5296,17 @@ window.handleOrderSubmit = function(e) {
 
   closeOrderModal();
 
-  if (state.managerSettings.soundAlert) playNotificationChime();
-  if (state.managerSettings.toastAlert) {
-    showToast(
-      `🚨 New Order #${orderNumber} Submitted!`,
-      `${newOrder.repName} booked an order for ${newOrder.clientName} (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED. Automated executive email dispatched to Senior Managers.`,
-      'success'
-    );
+  if (typeof triggerManagerOrderAlert === 'function') {
+    triggerManagerOrderAlert(newOrder);
+  } else {
+    if (state.managerSettings.soundAlert) playNotificationChime();
+    if (state.managerSettings.toastAlert) {
+      showToast(
+        `🚨 New Order #${orderNumber} Submitted!`,
+        `${newOrder.repName} booked an order for ${newOrder.clientName} (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED.`,
+        'success'
+      );
+    }
   }
 
   renderAll();
@@ -5635,10 +5856,12 @@ function renderAccountsGrid() {
 
         <div class="pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
           ${isFrozen ? `
-            <span class="text-[11px] text-slate-500 font-semibold">Reactivate to log visits</span>
-            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
-              <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze Account
-            </button>
+            <span class="text-[11px] text-slate-500 font-semibold">Account Inactive (Frozen)</span>
+            ${state.currentUser && state.currentUser.role === 'manager' ? `
+              <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
+                <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze Account
+              </button>
+            ` : '<span class="text-[10px] text-cyan-400 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/60">Manager Controlled</span>'}
           ` : `
             <div class="flex items-center gap-1.5">
               <button onclick="openPlanVisitModalForClient('${c.code}', '${c.repId}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold transition-colors">
@@ -5648,9 +5871,11 @@ function renderAccountsGrid() {
                 <i data-lucide="zap" class="w-3 h-3 text-yellow-300"></i> + Unplanned
               </button>
             </div>
-            <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
-              <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
-            </button>
+            ${state.currentUser && state.currentUser.role === 'manager' ? `
+              <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
+                <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
+              </button>
+            ` : ''}
           `}
         </div>
       </div>
@@ -5688,6 +5913,11 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
 // =========================================================================
 
 window.openAddAccountModal = function() {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to add new clinic accounts.', 'error');
+    return;
+  }
+
   const modal = document.getElementById('addAccountModal');
   if (!modal) {
     console.error('addAccountModal not found in DOM');
@@ -5869,6 +6099,11 @@ window.handleAddAccountSubmit = async function(e) {
 };
 
 window.toggleAccountFreeze = async function(clientCode) {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to freeze or reactivate clinic accounts.', 'error');
+    return;
+  }
+
   const cust = (state.customers || []).find(c => c.code === clientCode);
   if (!cust) return;
 
@@ -6758,13 +6993,17 @@ window.triggerTestOrderNotification = function() {
   state.notifications.unshift(notif);
   persistData();
 
-  if (state.managerSettings.soundAlert) playNotificationChime();
-  if (state.managerSettings.toastAlert) {
-    showToast(
-      `🚨 TEST Order Alert #${testOrderNum}`,
-      `Automated alert dispatched to Senior Managers (${state.managerSettings.managerEmails}) for 1,953.00 AED order.`,
-      'success'
-    );
+  if (typeof triggerManagerOrderAlert === 'function') {
+    triggerManagerOrderAlert(notif);
+  } else {
+    if (state.managerSettings.soundAlert) playNotificationChime();
+    if (state.managerSettings.toastAlert) {
+      showToast(
+        `🚨 TEST Order Alert #${testOrderNum}`,
+        `Automated alert dispatched to Senior Managers (${state.managerSettings.managerEmails}) for 1,953.00 AED order.`,
+        'success'
+      );
+    }
   }
 
   updateNotificationBell();
@@ -6838,6 +7077,147 @@ window.showToast = function(title, message, type = 'info') {
     toast.classList.add('dismissing');
     setTimeout(() => { toast.remove(); }, 300);
   }, 5000);
+};
+
+// =========================================================================
+// 16B. MANAGER MOBILE PHONE ORDER ALERTS & WEB PUSH NOTIFICATION ENGINE
+// =========================================================================
+
+window.triggerManagerOrderAlert = function(orderData) {
+  if (!orderData) return;
+
+  const orderNumber = orderData.orderNumber || orderData.order_number || 'New Order';
+  const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
+  const totalIncVat = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0);
+  const formattedTotal = totalIncVat > 0 ? `${totalIncVat.toLocaleString()} AED` : '';
+
+  // 1. Mobile Phone Haptic Vibration (distinct 3-burst pulse: 300ms on, 150ms off, 300ms on, 150ms off, 450ms on)
+  try {
+    if ('vibrate' in navigator) {
+      navigator.vibrate([300, 150, 300, 150, 450]);
+    }
+  } catch (e) {
+    console.warn('Vibration API error:', e);
+  }
+
+  // 2. Audio Chime (if enabled in manager settings)
+  if (!state.managerSettings || state.managerSettings.soundAlert !== false) {
+    if (typeof playNotificationChime === 'function') {
+      playNotificationChime();
+    }
+  }
+
+  // 3. Web & Mobile Phone Lock-Screen Push Notification
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const notifTitle = `🚨 New Field Order: #${orderNumber}`;
+      const notifBody = `${repName} closed order for ${clientName}${formattedTotal ? ` • ${formattedTotal}` : ''}. Tap to inspect.`;
+      const notifOptions = {
+        body: notifBody,
+        icon: './conceptors_logo.png',
+        badge: './conceptors_logo.png',
+        tag: `order-${orderNumber}`,
+        renotify: true,
+        vibrate: [300, 150, 300, 150, 450],
+        data: { url: window.location.href, orderNumber }
+      };
+
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(notifTitle, notifOptions);
+        }).catch(() => {
+          new Notification(notifTitle, notifOptions);
+        });
+      } else {
+        new Notification(notifTitle, notifOptions);
+      }
+    } catch (err) {
+      console.warn('Web notification dispatch error:', err);
+    }
+  }
+
+  // 4. In-App Banner Toast
+  if (typeof showToast === 'function') {
+    showToast(
+      `🚨 New Order #${orderNumber} Submitted!`,
+      `${repName} logged an order with ${clientName}${formattedTotal ? ` totaling ${formattedTotal}` : ''}.`,
+      'success'
+    );
+  }
+
+  // 5. Update UI bell badge and executive notification list
+  if (typeof updateNotificationBell === 'function') updateNotificationBell();
+  if (typeof renderManagerNotifications === 'function') renderManagerNotifications();
+};
+
+window.requestMobilePushPermissions = async function() {
+  if (!('Notification' in window)) {
+    if (typeof showToast === 'function') {
+      showToast('Notifications Unsupported', 'Your browser does not support web notifications. If using iOS Safari, tap Share > Add to Home Screen first.', 'warning');
+    }
+    return false;
+  }
+
+  if (Notification.permission === 'granted') {
+    if (typeof showToast === 'function') {
+      showToast('Phone Alerts Active', 'Lock-screen push notifications & haptic vibration are already activated!', 'success');
+    }
+    if ('vibrate' in navigator) navigator.vibrate([150, 80, 150]);
+    updateMobilePushBadge();
+    return true;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      if (typeof showToast === 'function') {
+        showToast('Push Alerts Activated! 🔔', 'Senior Manager will now receive lock-screen alerts & vibrations whenever an order is submitted.', 'success');
+      }
+      if ('vibrate' in navigator) navigator.vibrate([300, 150, 300]);
+      if (typeof playNotificationChime === 'function') playNotificationChime();
+      updateMobilePushBadge();
+      return true;
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Permission Blocked', 'Push notifications were declined. Enable notifications in your mobile browser site settings to receive order alerts.', 'warning');
+      }
+      updateMobilePushBadge();
+      return false;
+    }
+  } catch (err) {
+    console.warn('Notification permission request error:', err);
+    return false;
+  }
+};
+
+window.updateMobilePushBadge = function() {
+  const badge = document.getElementById('mobilePushStatusBadge');
+  const btn = document.getElementById('enablePushBtn');
+  const modalBadge = document.getElementById('managerModalPushStatus');
+
+  const isSupported = ('Notification' in window);
+  const isGranted = isSupported && Notification.permission === 'granted';
+  const isDenied = isSupported && Notification.permission === 'denied';
+
+  const badgeHtml = isGranted 
+    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"><i data-lucide="bell-ring" class="w-3 h-3 text-emerald-400"></i> Push Alerts ON</span>`
+    : isDenied 
+    ? `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30"><i data-lucide="bell-off" class="w-3 h-3 text-rose-400"></i> Alerts Blocked</span>`
+    : `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30"><i data-lucide="bell" class="w-3 h-3 text-amber-300"></i> Push Alerts OFF</span>`;
+
+  if (badge) badge.innerHTML = badgeHtml;
+  if (modalBadge) modalBadge.innerHTML = badgeHtml;
+  if (btn) {
+    if (isGranted) {
+      btn.innerHTML = `<i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-400"></i> Push Enabled`;
+      btn.className = "px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-bold text-xs flex items-center gap-1.5";
+    } else {
+      btn.innerHTML = `<i data-lucide="bell-ring" class="w-3.5 h-3.5"></i> Enable Phone Alerts`;
+      btn.className = "px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 active:scale-95 transition-all";
+    }
+  }
+  safeLucide();
 };
 
 // =========================================================================
