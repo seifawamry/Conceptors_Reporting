@@ -1328,13 +1328,13 @@ function getScopedPlans() {
 /**
  * Calculates the earliest allowed date for a planned visit.
  * Under Conceptors SOP, planned visits must be scheduled at least 1 day
- * in advance (24 hours prior: plannedDate >= today + 1 day).
+ * in advance (1-day advance planning rule: plannedDate >= today + 1 day).
  */
-function getMinPlannedDate(baseDateStr = null) {
-  const base = baseDateStr || state.dailyDate || getSyncedTodayDate();
+function getMinPlannedDate() {
+  const base = getSyncedTodayDate();
   const parts = base.split('-').map(Number);
   const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-  d.setUTCDate(d.getUTCDate() + 1); // 1-day advance planning rule (tomorrow / >= 24h prior)
+  d.setUTCDate(d.getUTCDate() + 1); // Strictly 1 day in advance (tomorrow)
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
@@ -1688,16 +1688,22 @@ function renderDailyWorkspace() {
                 <p class="text-[11px] text-slate-400">${v.clientCode || ''} • ${v.location || 'UAE'}</p>
               </div>
 
-              ${!isCompleted ? `
-                <button onclick="openSubmitPlannedModal('${v.id}')" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 shrink-0">
-                  <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
-                  <span>Check-in & Submit</span>
-                </button>
-              ` : `
-                <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold shrink-0">
-                  Edit Report
-                </button>
-              `}
+              <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                ${!isCompleted ? `
+                  <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 font-bold text-xs flex items-center gap-1 transition-all active:scale-95 touch-manipulation" title="Freely edit target doctor, time round, or detailing goals">
+                    <i data-lucide="edit-3" class="w-3.5 h-3.5 text-cyan-400"></i>
+                    <span>Edit Plan</span>
+                  </button>
+                  <button onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95">
+                    <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
+                    <span>Check-in & Submit</span>
+                  </button>
+                ` : `
+                  <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">
+                    Edit Report
+                  </button>
+                `}
+              </div>
             </div>
 
             <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
@@ -3511,7 +3517,7 @@ window.handlePlannedVisitSubmit = function(e) {
 };
 
 // =========================================================================
-// 8B. AMEND PLANNED VISITS (24-HOUR ADVANCE NOTICE RULE)
+// 8B. FREE EDIT PLANNED VISITS (DOCTOR, TIME WINDOW, GOALS, DATE & CANCELLATION)
 // =========================================================================
 
 window.openAmendPlannedModal = function(visitId) {
@@ -3523,16 +3529,6 @@ window.openAmendPlannedModal = function(visitId) {
 
   if (visit.status === 'Completed') {
     showToast('Already Completed', 'This visit report has already been executed and completed.', 'info');
-    return;
-  }
-
-  const todayStr = getSyncedTodayDate();
-  if (visit.date <= todayStr) {
-    showToast(
-      '24-Hour Notice Required',
-      `Cannot amend planned visit scheduled for today (${visit.date}). Under Conceptors SOP, planned visits can only be amended at least 24 hours prior. For today's activities, execute the planned call or log an Unplanned Visit.`,
-      'warning'
-    );
     return;
   }
 
@@ -3548,15 +3544,16 @@ window.openAmendPlannedModal = function(visitId) {
   const repEl = document.getElementById('amendRepTerritory');
   if (repEl) repEl.textContent = `Rep ${visit.repId || 'T1'} • ${visit.location || 'UAE'}`;
 
-  const minAllowed = getMinPlannedDate(todayStr); // Tomorrow (>= 24h prior)
+  const todayStr = getSyncedTodayDate();
   const dateInput = document.getElementById('amendDate');
   if (dateInput) {
-    dateInput.min = minAllowed;
-    dateInput.value = visit.date >= minAllowed ? visit.date : minAllowed;
+    // Medical reps can freely keep current date or reschedule
+    dateInput.value = visit.date || todayStr;
+    dateInput.min = visit.date < todayStr ? visit.date : todayStr;
   }
   const noticeEl = document.getElementById('amendEarliestNotice');
   if (noticeEl) {
-    noticeEl.textContent = `${minAllowed} (>= 24h advance)`;
+    noticeEl.textContent = `Current Plan Date: ${visit.date}`;
   }
 
   const slotInput = document.getElementById('amendTimeSlot');
@@ -3566,15 +3563,44 @@ window.openAmendPlannedModal = function(visitId) {
   const purpInput = document.getElementById('amendPurpose');
   if (purpInput) purpInput.value = visit.purpose || '';
   const reasonInput = document.getElementById('amendReason');
-  if (reasonInput) reasonInput.value = '';
+  if (reasonInput) reasonInput.value = visit.amendmentReason || '';
 
   modal.classList.remove('hidden');
   safeLucide();
 };
+window.openEditPlannedModal = window.openAmendPlannedModal;
 
 window.closeAmendPlannedModal = function() {
   const modal = document.getElementById('amendPlannedVisitModal');
   if (modal) modal.classList.add('hidden');
+};
+
+window.handleDeletePlannedVisit = async function() {
+  const visitId = document.getElementById('amendVisitId').value;
+  const visit = (state.visits || []).find(v => v.id === visitId);
+  if (!visit) return;
+
+  if (!confirm(`Are you sure you want to remove the planned call for "${visit.clientName}" on ${visit.date}?`)) {
+    return;
+  }
+
+  // Remove from state
+  const idx = (state.visits || []).findIndex(v => v.id === visitId);
+  if (idx !== -1) {
+    state.visits.splice(idx, 1);
+  }
+  persistData();
+
+  // Cloud delete from Supabase
+  try {
+    await supabaseRest(`visits?id=eq.${visitId}`, { method: 'DELETE' });
+  } catch (err) {
+    console.warn('Supabase delete planned visit warning:', err);
+  }
+
+  closeAmendPlannedModal();
+  renderAll();
+  showToast('Plan Removed', `Visit for ${visit.clientName} removed from schedule.`, 'info');
 };
 
 window.handleAmendPlannedVisitSubmit = async function(e) {
@@ -3583,12 +3609,9 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
   const visit = (state.visits || []).find(v => v.id === visitId);
   if (!visit) return;
 
-  const todayStr = getSyncedTodayDate();
   const newDate = document.getElementById('amendDate').value;
-  const minAllowed = getMinPlannedDate(todayStr);
-
-  if (newDate < minAllowed) {
-    showToast('Invalid Date', `The rescheduled date must be at least 24 hours in advance (earliest allowed: ${minAllowed}).`, 'error');
+  if (!newDate) {
+    showToast('Date Required', 'Please select a valid scheduled date.', 'error');
     return;
   }
 
@@ -3606,7 +3629,7 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
   if (newPurpose) visit.purpose = newPurpose;
   visit.amendedAt = new Date().toISOString();
   visit.amendedBy = state.currentUser ? state.currentUser.name : 'Representative';
-  visit.amendmentReason = reason;
+  if (reason) visit.amendmentReason = reason;
 
   persistData();
 
@@ -3622,7 +3645,7 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
   const notif = {
     id: `NOTIF-AMEND-${Date.now()}`,
     type: 'PLAN_AMENDED',
-    title: `Planned Visit Rescheduled: ${visit.clientName}`,
+    title: `Planned Call Updated: ${visit.clientName}`,
     orderNumber: visit.clientCode,
     repId: visit.repId,
     repName: repName,
@@ -3631,8 +3654,8 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
     location: visit.location,
     timestamp: new Date().toISOString(),
     read: false,
-    approvalStatus: 'Rescheduled',
-    itemsSummary: `${repName} rescheduled planned call to ${visit.clientName} from ${oldDate} (${oldTimeSlot}) to ${newDate} (${newTimeSlot}). Reason: ${reason}`
+    approvalStatus: 'Updated',
+    itemsSummary: `${repName} updated planned call to ${visit.clientName} on ${newDate} (${newTimeSlot}). Doctor: ${newDoctor || visit.doctorName || 'Doctor'}.${reason ? ` Notes: ${reason}` : ''}`
   };
   state.notifications.unshift(notif);
   persistData();
@@ -3983,7 +4006,7 @@ window.renderPlannerCalendar = function() {
   }
 
   const minNoticeEl = document.getElementById('calendarMinDateNotice');
-  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const minDateStr = getMinPlannedDate();
   if (minNoticeEl) {
     minNoticeEl.textContent = minDateStr;
   }
@@ -4184,7 +4207,7 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
   const scopedVisits = getScopedVisits();
   const dayVisits = scopedVisits.filter(v => v.date === dateStr);
   const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
-  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const minDateStr = getMinPlannedDate();
   const isEligibleToPlan = (dateStr >= minDateStr);
   const isToday = (dateStr === getSyncedTodayDate() || dateStr === state.dailyDate);
 
@@ -4198,7 +4221,7 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
           <div class="flex flex-wrap items-center gap-2">
             <h4 class="text-sm font-extrabold text-white">Schedule for ${formatDisplayDate(dateStr)}</h4>
             ${isToday ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">Today</span>' : ''}
-            ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 24 Hours / 1 Day)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Under 24h Window</span>'}
+            ${isEligibleToPlan ? '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold">Advance Notice Met (>= 1 Day)</span>' : '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">Planned Day</span>'}
           </div>
           <p class="text-xs text-slate-400">${plannedVisits.length} planned target${plannedVisits.length === 1 ? '' : 's'} scheduled for this date</p>
         </div>
@@ -4215,7 +4238,7 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
           </button>
         ` : `
           <span class="text-xs text-amber-400 font-medium px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex-1 sm:flex-initial text-center sm:text-left">
-            Cannot schedule (&lt; 24-hour notice rule).
+            Under 1-day planning advance rule.
           </span>
         `)}
         <button type="button" onclick="state.plannerSelectedDay = null; renderPlannerCalendar();" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation shrink-0" title="Close drawer">
@@ -4256,11 +4279,9 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
               <span class="text-[10px] text-slate-400 font-mono">${v.timeSlot ? v.timeSlot.split(' ')[0] : 'Day'}</span>
               ${v.status !== 'Completed' ? `
                 <div class="flex items-center gap-1.5">
-                  ${v.date > getSyncedTodayDate() ? `
-                    <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Reschedule planned call (allowed 24h prior)">
-                      <i data-lucide="calendar-clock" class="w-3 h-3 text-cyan-400"></i> Amend
-                    </button>
-                  ` : ''}
+                  <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Freely edit target doctor, time round, or detailing goals">
+                    <i data-lucide="edit-3" class="w-3 h-3 text-cyan-400"></i> Edit Plan
+                  </button>
                   <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
                     <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
                   </button>
@@ -4297,7 +4318,7 @@ window.renderPlannerAgenda = function() {
 
   const totalDays = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const scopedVisits = getScopedVisits();
-  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const minDateStr = getMinPlannedDate();
   const todayStr = getSyncedTodayDate();
 
   const monthVisits = scopedVisits.filter(v => v.date && v.date.startsWith(monthPrefix) && (v.visitCategory === 'Planned' || !v.visitCategory));
@@ -4381,11 +4402,9 @@ window.renderPlannerAgenda = function() {
                         <i data-lucide="check" class="w-3 h-3"></i> Completed
                       </span>
                     ` : `
-                      ${v.date > getSyncedTodayDate() ? `
-                        <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1 transition-all" title="Reschedule planned visit (allowed 24h prior)">
-                          <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-cyan-400"></i> Amend
-                        </button>
-                      ` : ''}
+                      <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-bold flex items-center gap-1 transition-all active:scale-95 touch-manipulation" title="Freely edit target doctor, time round, or detailing goals">
+                        <i data-lucide="edit-3" class="w-3.5 h-3.5 text-cyan-400"></i> Edit Plan
+                      </button>
                       <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm transition-transform active:scale-95 touch-manipulation">
                         <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
                       </button>
@@ -4471,13 +4490,9 @@ window.renderPlannerTable = function() {
           </div>
           <div class="pt-1 flex items-center justify-end gap-2">
             ${!isCompleted ? `
-              ${v.date > getSyncedTodayDate() ? `
-                <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1 transition-colors" title="Reschedule planned call (allowed 24h prior)">
-                  <i data-lucide="calendar-clock" class="w-3.5 h-3.5 text-cyan-400"></i> Amend
-                </button>
-              ` : `
-                <span class="text-[10px] text-slate-500 font-semibold" title="Under SOP, planned visits cannot be amended on the day of the visit (24h rule)">Same-Day Locked</span>
-              `}
+              <button type="button" onclick="openAmendPlannedModal('${v.id}')" class="px-2.5 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Freely edit plan (doctor, round, goals)">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5 text-cyan-400"></i> Edit Plan
+              </button>
               <button type="button" onclick="openSubmitPlannedModal('${v.id}')" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm active:scale-95 touch-manipulation">
                 <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i> Execute Call
               </button>
@@ -4528,13 +4543,9 @@ window.renderPlannerTable = function() {
         <td class="py-3 px-3 text-center whitespace-nowrap">
           ${!isCompleted ? `
             <div class="flex items-center justify-center gap-1.5">
-              ${v.date > getSyncedTodayDate() ? `
-                <button onclick="openAmendPlannedModal('${v.id}')" class="px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Reschedule planned call (allowed 24h prior)">
-                  <i data-lucide="calendar-clock" class="w-3 h-3 text-cyan-400"></i> Amend
-                </button>
-              ` : `
-                <span class="text-[9px] text-slate-500 font-semibold" title="Cannot amend on same day (24h rule applies)">Locked</span>
-              `}
+              <button onclick="openAmendPlannedModal('${v.id}')" class="px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation" title="Freely edit plan (doctor, round, goals)">
+                <i data-lucide="edit-3" class="w-3 h-3 text-cyan-400"></i> Edit Plan
+              </button>
               <button onclick="openSubmitPlannedModal('${v.id}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 touch-manipulation">
                 <i data-lucide="clipboard-check" class="w-3 h-3"></i> Execute
               </button>
@@ -4649,7 +4660,7 @@ window.openPlanVisitModal = function(preferredDate = null) {
   clearCustomerCombobox('plan');
 
   // Enforce 1-day (24h) advance planning rule
-  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const minDateStr = getMinPlannedDate();
   const planDateInput = document.getElementById('planDate');
   if (planDateInput) {
     planDateInput.min = minDateStr;
@@ -4659,8 +4670,8 @@ window.openPlanVisitModal = function(preferredDate = null) {
       planDateInput.value = minDateStr;
       if (preferredDate && preferredDate < minDateStr) {
         showToast(
-          '24-Hour Advance Notice Required',
-          `The selected date (${preferredDate}) does not meet the 24-hour advance planning rule. Adjusted to earliest allowed date (${minDateStr}).`,
+          '1-Day Advance Notice Required',
+          `The selected date (${preferredDate}) does not meet the 1-day advance planning rule. Adjusted to earliest allowed date (${minDateStr}).`,
           'warning'
         );
       }
@@ -4712,11 +4723,11 @@ window.handlePlanVisitSubmit = function(e) {
   }
 
   const date = document.getElementById('planDate').value;
-  const minDateStr = getMinPlannedDate(state.dailyDate);
+  const minDateStr = getMinPlannedDate();
   if (date < minDateStr) {
     showToast(
-      '24-Hour Advance Rule Violation',
-      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 24 hours (1 day) in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
+      '1-Day Advance Rule Violation',
+      `Cannot schedule planned visit on ${date}. Under Conceptors SOP, monthly plan visits must be entered at least 1 day in advance (earliest allowed: ${minDateStr}). For earlier dates or today, please log an Unplanned Visit.`,
       'error'
     );
     return;

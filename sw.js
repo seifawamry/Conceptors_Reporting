@@ -1,12 +1,18 @@
 // Conceptors Veterinary CRM Service Worker for Mobile Push & Offline Shell
-const CACHE_NAME = 'conceptors-crm-v1';
+const CACHE_NAME = 'conceptors-crm-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 // Mobile push notification click handler
