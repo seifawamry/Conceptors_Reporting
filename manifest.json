@@ -2,20 +2,36 @@
   "name": "Conceptors Veterinary CRM",
   "short_name": "Conceptors CRM",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#090d16",
-  "theme_color": "#0284c7",
+  "orientation": "portrait",
+  "background_color": "#070d19",
+  "theme_color": "#0d5d38",
   "description": "Executive Veterinary CRM & Field Reporting Portal for Conceptors UAE",
   "icons": [
     {
-      "src": "./conceptors_logo.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "./conceptors_logo.png",
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./conceptors_crm_icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

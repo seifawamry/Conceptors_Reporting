@@ -1,5 +1,5 @@
 // Conceptors Veterinary CRM Service Worker for Mobile Push & Offline Shell
-const CACHE_NAME = 'conceptors-crm-v3';
+const CACHE_NAME = 'conceptors-crm-v4';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -48,8 +48,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '🚨 Conceptors Field Order Alert';
   const options = {
     body: data.body || 'A new field sales order has been booked.',
-    icon: './conceptors_logo.png',
-    badge: './conceptors_logo.png',
+    icon: './icon-192.png',
+    badge: './favicon.png',
     vibrate: [300, 150, 300, 150, 450],
     data: data.data || { url: './' }
   };
