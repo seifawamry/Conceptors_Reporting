@@ -330,6 +330,7 @@ function mapOrderFromDb(row) {
     repId: row.rep_id,
     repName: row.rep_name,
     clientCode: row.client_code,
+    accountCode: row.client_code,
     clientName: row.client_name,
     location: row.location,
     territory: row.territory,
@@ -351,7 +352,7 @@ function mapOrderToDb(o) {
     date: o.date,
     rep_id: o.repId,
     rep_name: o.repName,
-    client_code: o.clientCode,
+    client_code: o.clientCode || o.accountCode,
     client_name: o.clientName,
     location: o.location,
     territory: o.territory,
@@ -436,6 +437,7 @@ function mapNotifFromDb(row) {
     repId: row.rep_id,
     repName: row.rep_name,
     clientCode: row.client_code,
+    accountCode: row.client_code,
     clientName: row.client_name,
     location: row.location,
     totalExcVat: Number(row.total_exc_vat) || 0,
@@ -458,7 +460,7 @@ function mapNotifToDb(n) {
     order_number: n.orderNumber,
     rep_id: n.repId,
     rep_name: n.repName,
-    client_code: n.clientCode,
+    client_code: n.clientCode || n.accountCode,
     client_name: n.clientName,
     location: n.location,
     total_exc_vat: Number(n.totalExcVat) || 0,
@@ -4797,6 +4799,8 @@ function renderOrdersTable() {
     list = list.filter(o =>
       (o.invoiceNumber && o.invoiceNumber.toLowerCase().includes(searchQ)) ||
       (o.clientName && o.clientName.toLowerCase().includes(searchQ)) ||
+      (o.clientCode && o.clientCode.toLowerCase().includes(searchQ)) ||
+      (o.accountCode && o.accountCode.toLowerCase().includes(searchQ)) ||
       (o.repName && o.repName.toLowerCase().includes(searchQ))
     );
   }
@@ -5081,10 +5085,12 @@ window.handleOrderSubmit = function(e) {
 
   const newOrder = {
     invoiceNumber: orderNumber,
+    orderNumber: orderNumber,
     date,
     repId,
     repName: repObj ? repObj.name : `Rep ${repId}`,
     clientCode,
+    accountCode: clientCode,
     clientName: customer ? customer.name : clientCode,
     location: customer ? customer.location : 'UAE',
     territory: repId,
@@ -5110,6 +5116,7 @@ window.handleOrderSubmit = function(e) {
     repId,
     repName: newOrder.repName,
     clientCode,
+    accountCode: clientCode,
     clientName: newOrder.clientName,
     location: newOrder.location,
     totalExcVat: subtotal,
@@ -5182,7 +5189,7 @@ window.handleOrderSubmit = function(e) {
     if (state.managerSettings.toastAlert) {
       showToast(
         `🚨 New Order #${orderNumber} Submitted!`,
-        `${newOrder.repName} booked an order for ${newOrder.clientName} (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED.`,
+        `${newOrder.repName} booked an order for ${newOrder.clientName} [Account: ${clientCode}] (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED.`,
         'success',
         {
           label: 'Send to Dr. Sameh on WhatsApp',
@@ -5322,7 +5329,7 @@ function renderManagerNotifications() {
                 <span class="px-2 py-0.5 rounded text-[10px] font-extrabold ${n.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${n.repId}</span>
               </div>
               <p class="text-[11px] text-slate-300 mt-0.5 font-medium">
-                Booked by <strong class="text-white">${escapeHtml(n.repName)}</strong> for <span class="text-sky-300 font-bold">${escapeHtml(n.clientName)}</span> (${n.location || 'UAE'})
+                Booked by <strong class="text-white">${escapeHtml(n.repName)}</strong> for <span class="text-sky-300 font-bold">${escapeHtml(n.clientName)}</span> ${(n.accountCode || n.clientCode) ? `<span class="text-teal-300 font-mono font-bold text-[10px] ml-1 bg-teal-950/40 px-1.5 py-0.5 rounded border border-teal-500/30">${escapeHtml(n.accountCode || n.clientCode)}</span>` : ''} (${n.location || 'UAE'})
               </p>
               ${n.itemsSummary ? `<p class="text-[10px] text-slate-400 mt-1 bg-slate-950/60 p-1.5 rounded border border-slate-800/80">${escapeHtml(n.itemsSummary)}</p>` : ''}
             </div>
@@ -5452,8 +5459,10 @@ window.viewNotificationEmailByOrder = function(orderNum) {
     }
     const btnResend = document.getElementById('btnResendEmailAction');
     if (btnResend) {
-      const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName} (${formatCurrency(order.totalIncVat)} AED)`);
-      const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${order.repName || `Rep ${order.repId}`}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName} (${order.location})\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
+      const accountCode = order.accountCode || order.clientCode || '';
+      const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
+      const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName}${accountTag} (${formatCurrency(order.totalIncVat)} AED)`);
+      const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${order.repName || `Rep ${order.repId}`}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${order.location}\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
       btnResend.onclick = () => {
         const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
         window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
@@ -5471,7 +5480,8 @@ window.viewNotificationEmail = function(notifId) {
   const order = state.orders.find(o => o.invoiceNumber === notif.orderNumber) || {
     invoiceNumber: notif.orderNumber,
     date: notif.timestamp ? notif.timestamp.split('T')[0] : '2026-09-09',
-    clientCode: notif.clientCode,
+    clientCode: notif.clientCode || notif.accountCode,
+    accountCode: notif.accountCode || notif.clientCode,
     clientName: notif.clientName,
     location: notif.location,
     territory: notif.repId,
@@ -5497,8 +5507,10 @@ window.viewNotificationEmail = function(notifId) {
 
   const btnResend = document.getElementById('btnResendEmailAction');
   if (btnResend) {
-    const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName} (${formatCurrency(order.totalIncVat)} AED)`);
-    const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${notif.repName}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName} (${order.location})\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
+    const accountCode = order.accountCode || order.clientCode || notif.accountCode || notif.clientCode || '';
+    const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
+    const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName}${accountTag} (${formatCurrency(order.totalIncVat)} AED)`);
+    const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${notif.repName}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${order.location}\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
     btnResend.onclick = () => {
       const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
       window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
@@ -5551,7 +5563,7 @@ function generateExecutiveEmailHtml(order, repName) {
           <div>
             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Veterinary Clinic / Partner</span>
             <strong style="color: #f8fafc; font-size: 13px;">${escapeHtml(order.clientName)}</strong>
-            <span style="display: block; color: #94a3b8; font-size: 11px;">${order.clientCode || ''} • ${order.location || 'UAE'}</span>
+            <span style="display: block; color: #94a3b8; font-size: 11px;">Account Code: <strong style="color: #38bdf8; font-family: monospace;">${escapeHtml(order.accountCode || order.clientCode || 'N/A')}</strong> • ${escapeHtml(order.location || 'UAE')}</span>
           </div>
           <div>
             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Order Date</span>
@@ -6933,6 +6945,11 @@ window.handleSaveManagerSettings = function(e) {
 function formatWhatsappOrderMessage(orderData, items = []) {
   const orderNum = orderData.orderNumber || orderData.order_number || orderData.invoiceNumber || 'New Order';
   const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  let accountCode = orderData.accountCode || orderData.account_code || orderData.clientCode || orderData.client_code || '';
+  if (!accountCode && orderData.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === orderData.clientName || c.clientName === orderData.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
   const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
   const location = orderData.location || 'UAE';
   const total = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -6954,6 +6971,7 @@ function formatWhatsappOrderMessage(orderData, items = []) {
 📋 *Invoice:* #${orderNum}
 👤 *Representative:* ${repName}
 🏥 *Clinic Account:* ${clientName}
+🏷️ *Account Code:* ${accountCode || 'N/A'}
 📍 *Location:* ${location}
 💰 *Net Total:* *${total} AED* (Incl. 5% VAT)
 ⏱️ *Delivery Urgency:* ${delivery}
@@ -7025,6 +7043,8 @@ window.testWhatsappPhoneAlert = async function() {
   const testOrder = {
     orderNumber: 'ORD-TEST-ALERT',
     repName: 'Dr. Shaimaa (Rep T1)',
+    clientCode: 'DC0340',
+    accountCode: 'DC0340',
     clientName: 'Al Barsha Veterinary Clinic',
     location: 'Dubai - Al Barsha',
     totalIncVat: 2450,
@@ -7068,6 +7088,11 @@ window.sendNtfyOrderAlert = async function(orderData, items = []) {
 
   const orderNum = orderData.orderNumber || orderData.order_number || orderData.invoiceNumber || 'New Order';
   const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  let accountCode = orderData.accountCode || orderData.account_code || orderData.clientCode || orderData.client_code || '';
+  if (!accountCode && orderData.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === orderData.clientName || c.clientName === orderData.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
   const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
   const location = orderData.location || 'UAE';
   const total = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -7079,7 +7104,8 @@ window.sendNtfyOrderAlert = async function(orderData, items = []) {
     if (items.length > 3) itemsSummary += `\n...and ${items.length - 3} more items`;
   }
 
-  const bodyText = `${repName} logged order #${orderNum} for ${clientName} (${location}). Net: ${total} AED (5% VAT incl). Urgency: ${delivery}.${itemsSummary}`;
+  const accountTag = accountCode ? ` [${accountCode}]` : '';
+  const bodyText = `${repName} logged order #${orderNum} for ${clientName}${accountTag} (${location}). Net: ${total} AED (5% VAT incl). Urgency: ${delivery}.${itemsSummary}`;
 
   try {
     const res = await fetch('https://ntfy.sh', {
@@ -7126,6 +7152,8 @@ window.testNtfyPhoneAlert = async function() {
   const testOrder = {
     orderNumber: 'ORD-TEST-CHIME',
     repName: 'Dr. Shaimaa (Rep T1)',
+    clientCode: 'DC0340',
+    accountCode: 'DC0340',
     clientName: 'Al Barsha Veterinary Clinic',
     location: 'Dubai - Al Barsha',
     totalIncVat: 2450,
@@ -7149,10 +7177,18 @@ window.sendWebhookOrderAlert = async function(orderData, items = []) {
   const webhookUrl = state.managerSettings?.webhookUrl;
   if (!webhookUrl) return;
 
+  let accountCode = orderData.accountCode || orderData.account_code || orderData.clientCode || orderData.client_code || '';
+  if (!accountCode && orderData.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === orderData.clientName || c.clientName === orderData.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
+
   const payload = {
     event: 'ORDER_SUBMITTED',
     orderNumber: orderData.orderNumber || orderData.invoiceNumber,
     repName: orderData.repName || 'Medical Rep',
+    clientCode: accountCode || orderData.clientCode || '',
+    accountCode: accountCode || orderData.clientCode || '',
     clientName: orderData.clientName || 'Clinic Account',
     location: orderData.location || 'UAE',
     totalIncVat: Number(orderData.totalIncVat || orderData.total || 0),
@@ -7185,7 +7221,9 @@ window.showWakeupOrderBanner = function(notif) {
   activeWakeupOrderNumber = notif.orderNumber;
   if (textEl) {
     const totalStr = notif.totalIncVat ? `${formatCurrency(notif.totalIncVat)} AED` : '';
-    textEl.textContent = `${notif.orderNumber || 'New Order'} • ${notif.clientName || 'Clinic'}${totalStr ? ` • ${totalStr}` : ''}`;
+    const accountCode = notif.accountCode || notif.clientCode || '';
+    const accountTag = accountCode ? ` [${accountCode}]` : '';
+    textEl.textContent = `${notif.orderNumber || 'New Order'} • ${notif.clientName || 'Clinic'}${accountTag}${totalStr ? ` • ${totalStr}` : ''}`;
   }
   banner.classList.remove('hidden');
   safeLucide();
@@ -7215,6 +7253,7 @@ window.triggerTestOrderNotification = function() {
     repId: 'T1',
     repName: 'Shaimaa (Rep T1)',
     clientCode: 'DC0340',
+    accountCode: 'DC0340',
     clientName: 'DR SAMIR VET CLINIC',
     location: 'Dubai',
     totalExcVat: 1860,
@@ -7356,9 +7395,15 @@ window.triggerManagerOrderAlert = function(orderData) {
 
   const orderNumber = orderData.orderNumber || orderData.order_number || 'New Order';
   const repName = orderData.repName || orderData.rep_name || (orderData.repId ? `Rep ${orderData.repId}` : 'Medical Rep');
+  let accountCode = orderData.accountCode || orderData.account_code || orderData.clientCode || orderData.client_code || '';
+  if (!accountCode && orderData.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === orderData.clientName || c.clientName === orderData.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
   const clientName = orderData.clientName || orderData.client_name || 'Clinic Account';
   const totalIncVat = Number(orderData.totalIncVat || orderData.total_inc_vat || orderData.total || 0);
   const formattedTotal = totalIncVat > 0 ? `${totalIncVat.toLocaleString()} AED` : '';
+  const accountTag = accountCode ? ` [${accountCode}]` : '';
 
   // 1. Mobile Phone Haptic Vibration (distinct 3-burst pulse: 300ms on, 150ms off, 300ms on, 150ms off, 450ms on)
   try {
@@ -7380,11 +7425,11 @@ window.triggerManagerOrderAlert = function(orderData) {
   if ('Notification' in window && Notification.permission === 'granted') {
     try {
       const notifTitle = `🚨 New Field Order: #${orderNumber}`;
-      const notifBody = `${repName} closed order for ${clientName}${formattedTotal ? ` • ${formattedTotal}` : ''}. Tap to inspect.`;
+      const notifBody = `${repName} closed order for ${clientName}${accountTag}${formattedTotal ? ` • ${formattedTotal}` : ''}. Tap to inspect.`;
       const notifOptions = {
         body: notifBody,
-        icon: './conceptors_logo.png',
-        badge: './conceptors_logo.png',
+        icon: './icon-192.png',
+        badge: './favicon.png',
         tag: `order-${orderNumber}`,
         renotify: true,
         vibrate: [300, 150, 300, 150, 450],
@@ -7409,7 +7454,7 @@ window.triggerManagerOrderAlert = function(orderData) {
   if (typeof showToast === 'function') {
     showToast(
       `🚨 New Order #${orderNumber} Submitted!`,
-      `${repName} logged an order with ${clientName}${formattedTotal ? ` totaling ${formattedTotal}` : ''}.`,
+      `${repName} logged an order with ${clientName}${accountTag}${formattedTotal ? ` totaling ${formattedTotal}` : ''}.`,
       'success',
       {
         label: 'Open in WhatsApp',
@@ -7950,7 +7995,7 @@ function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'A
   if (type === 'summary') {
     const headers = [
       'Invoice Number', 'Order Date', 'Rep ID', 'Rep Name', 'Territory',
-      'Clinic Code', 'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency',
+      'Account Code', 'Clinic Name', 'Location', 'Payment Terms', 'Delivery Urgency',
       'Subtotal Exc VAT (AED)', 'VAT 5% (AED)', 'Total Inc VAT (AED)', 'Approval Status', 'Approved By'
     ];
     const rows = orders.map(o => [
@@ -7959,7 +8004,7 @@ function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'A
       `"${o.repId || ''}"`,
       `"${o.repName || getRepName(o.repId)}"`,
       `"${o.territory || o.repId || ''}"`,
-      `"${o.clientCode || ''}"`,
+      `"${o.clientCode || o.accountCode || ''}"`,
       `"${(o.clientName || '').replace(/"/g, '""')}"`,
       `"${o.location || ''}"`,
       `"${o.paymentTerms || ''}"`,
@@ -7974,7 +8019,7 @@ function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'A
     showToast('Orders Summary CSV Exported', `Exported ${orders.length} orders.`, 'success');
   } else {
     const headers = [
-      'Invoice Number', 'Order Date', 'Rep Name', 'Territory', 'Clinic Code',
+      'Invoice Number', 'Order Date', 'Rep Name', 'Territory', 'Account Code',
       'Clinic Name', 'Location', 'Product Code', 'Product Name', 'Unit Price (AED)',
       'Sales Qty', 'Bonus FOC Qty', 'Line Total Exc VAT (AED)', 'Invoice Net (AED)',
       'VAT 5% (AED)', 'Invoice Total (AED)', 'Payment Terms', 'Approval Status'
@@ -7990,7 +8035,7 @@ function exportOrdersCSV(type = 'itemized', statusFilter = 'ALL', repFilter = 'A
           `"${o.date || ''}"`,
           `"${o.repName || getRepName(o.repId)}"`,
           `"${o.territory || o.repId || ''}"`,
-          `"${o.clientCode || ''}"`,
+          `"${o.clientCode || o.accountCode || ''}"`,
           `"${(o.clientName || '').replace(/"/g, '""')}"`,
           `"${o.location || ''}"`,
           `"${it.productCode || ''}"`,
