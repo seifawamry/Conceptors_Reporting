@@ -377,6 +377,10 @@
             <button type="button" onclick="window.print()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-sm" title="Print this day's field report">
               <i data-lucide="printer" class="w-3.5 h-3.5"></i>
             </button>
+            <button type="button" id="dailyReportManagerPurgeBtn" onclick="openManagerPurgeModal()" class="hidden px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 touch-manipulation" title="Manager Tool: Reset pilot test data or delete records for chosen dates/reps">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+              <span class="hidden sm:inline">Reset / Purge Data</span>
+            </button>
           </div>
         </div>
       </div>
@@ -951,6 +955,9 @@
           </button>
           <button onclick="triggerTestOrderNotification()" class="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center gap-1.5">
             <i data-lucide="send" class="w-3.5 h-3.5"></i> Dispatch Test Alert
+          </button>
+          <button type="button" onclick="openManagerPurgeModal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 touch-manipulation" title="Reset pilot test trials and purge records by date or range">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400"></i> Reset Pilot / Purge Data
           </button>
         </div>
       </div>
@@ -2303,8 +2310,131 @@
         <!-- Injected via JS -->
       </div>
 
-      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+      <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-800" id="dailyReportModalFooter">
+        <div id="dailyReportModalManagerActions">
+          <!-- Injected via JS for manager: Delete Single Record -->
+        </div>
         <button type="button" onclick="closeDailyReportVisitModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold">Close Window</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: SENIOR MANAGER PILOT DATA RESET & AUDIT PURGE ================= -->
+  <div id="managerPurgeDataModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-rose-500/40 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[92vh] overflow-y-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+            <i data-lucide="shield-alert" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white">Pilot Data Reset & Historical Purge</h3>
+            <p class="text-[11px] text-slate-400">Senior Sales Manager Executive Tool (Dr. Sameh Ageez)</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeManagerPurgeModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <div class="text-slate-300 text-xs leading-relaxed">
+        Use this tool to reset trial test entries made during onboarding or purge false field data for a specific day or date range across both <strong class="text-cyan-400">Supabase Cloud Database</strong> and local storage as if it never happened.
+      </div>
+
+      <!-- Scope 1: Medical Representative -->
+      <div class="space-y-1.5">
+        <label class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">1. Select Representative Scope</label>
+        <select id="purgeRepSelect" onchange="updatePurgePreviewCount()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2.5 outline-none focus:border-rose-500">
+          <option value="ALL">👥 All Medical Representatives (Company-wide)</option>
+          <option value="T1">Dr. Shaimaa (Rep T1 - Dubai & Abu Dhabi)</option>
+          <option value="T2">Dr. Marsel (Rep T2 - Northern Emirates)</option>
+        </select>
+      </div>
+
+      <!-- Scope 2: Date Mode (Single Day vs Date Range) -->
+      <div class="space-y-2">
+        <label class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">2. Select Time Period Mode</label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-700 cursor-pointer text-slate-200 text-xs font-semibold hover:border-slate-600">
+            <input type="radio" name="purgeMode" id="purgeModeSingle" value="single" checked onchange="setPurgeDateMode('single')" class="w-4 h-4 accent-rose-500">
+            <span>Single Day</span>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900 border border-slate-700 cursor-pointer text-slate-200 text-xs font-semibold hover:border-slate-600">
+            <input type="radio" name="purgeMode" id="purgeModeRange" value="range" onchange="setPurgeDateMode('range')" class="w-4 h-4 accent-rose-500">
+            <span>Date Range (Period)</span>
+          </label>
+        </div>
+
+        <!-- Single Date Input -->
+        <div id="purgeSingleDateRow" class="space-y-1">
+          <label class="block text-slate-400 text-[11px]">Selected Day to Reset:</label>
+          <input type="date" id="purgeSingleDate" onchange="updatePurgePreviewCount()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-rose-500">
+        </div>
+
+        <!-- Date Range Inputs -->
+        <div id="purgeDateRangeRow" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div class="space-y-1">
+            <label class="block text-slate-400 text-[11px]">From Date:</label>
+            <input type="date" id="purgeDateFrom" onchange="updatePurgePreviewCount()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-rose-500">
+          </div>
+          <div class="space-y-1">
+            <label class="block text-slate-400 text-[11px]">To Date:</label>
+            <input type="date" id="purgeDateTo" onchange="updatePurgePreviewCount()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-rose-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- Scope 3: Data Types to Purge -->
+      <div class="space-y-1.5">
+        <label class="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">3. Select Records to Delete</label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 text-xs cursor-pointer hover:border-slate-700">
+            <input type="checkbox" id="purgeTypePlanned" checked onchange="updatePurgePreviewCount()" class="w-4 h-4 rounded accent-rose-500">
+            <span>Planned Visits (Pending)</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 text-xs cursor-pointer hover:border-slate-700">
+            <input type="checkbox" id="purgeTypeCompleted" checked onchange="updatePurgePreviewCount()" class="w-4 h-4 rounded accent-rose-500">
+            <span>Completed Calls (DCRs)</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 text-xs cursor-pointer hover:border-slate-700">
+            <input type="checkbox" id="purgeTypeUnplanned" checked onchange="updatePurgePreviewCount()" class="w-4 h-4 rounded accent-rose-500">
+            <span>Missed & Spontaneous Calls</span>
+          </label>
+          <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-300 text-xs cursor-pointer hover:border-slate-700">
+            <input type="checkbox" id="purgeTypeOrders" checked onchange="updatePurgePreviewCount()" class="w-4 h-4 rounded accent-rose-500">
+            <span>Field Sales Orders & Invoices</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Impact Counter Box -->
+      <div id="purgeImpactBox" class="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+        <!-- Injected via updatePurgePreviewCount() -->
+      </div>
+
+      <!-- Irreversible Warning Box -->
+      <div class="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2.5">
+        <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5"></i>
+        <div>
+          <strong class="font-bold text-rose-300 block">Irreversible Database Deletion:</strong>
+          <span>This action will permanently delete the matching records from the live Supabase cloud database and local device storage. Reports and adherence metrics will recalculate as if these records were never created.</span>
+        </div>
+      </div>
+
+      <!-- Confirmation Checkbox -->
+      <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/90 border border-slate-700 cursor-pointer font-bold text-slate-200 text-xs hover:border-rose-500/60 transition-colors">
+        <input type="checkbox" id="purgeConfirmCheckbox" onchange="togglePurgeSubmitBtn()" class="w-4 h-4 rounded accent-rose-500">
+        <span>I confirm I want to permanently delete these pilot/trial records.</span>
+      </label>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+        <button type="button" onclick="closeManagerPurgeModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors">
+          Cancel
+        </button>
+        <button type="button" id="purgeExecuteBtn" onclick="handleManagerPurgeSubmit()" disabled class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold flex items-center gap-2 shadow-lg shadow-rose-900/40 transition-all active:scale-95 touch-manipulation">
+          <i data-lucide="trash-2" class="w-4 h-4"></i> Permanently Purge Selected Data
+        </button>
       </div>
     </div>
   </div>

@@ -487,16 +487,15 @@ async function syncWithSupabase(force = false) {
     }
 
     if (visitsRes.data && Array.isArray(visitsRes.data)) {
-      if (visitsRes.data.length > 0) {
-        state.visits = visitsRes.data.map(mapVisitFromDb);
-      }
+      state.visits = visitsRes.data.map(mapVisitFromDb);
+      try { localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits)); } catch(e) {}
     }
 
     const [ordersRes, itemsRes] = await Promise.all([
       supabaseRest('orders?select=*&order=date.desc'),
       supabaseRest('order_items?select=*')
     ]);
-    if (ordersRes.data && Array.isArray(ordersRes.data) && ordersRes.data.length > 0) {
+    if (ordersRes.data && Array.isArray(ordersRes.data)) {
       const allItems = (itemsRes && itemsRes.data && Array.isArray(itemsRes.data)) ? itemsRes.data : [];
       const itemsByOrder = {};
       allItems.forEach(it => {
@@ -507,11 +506,13 @@ async function syncWithSupabase(force = false) {
         o.order_items = itemsByOrder[o.invoice_number] || [];
         return mapOrderFromDb(o);
       });
+      try { localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders)); } catch(e) {}
     }
 
     const plansRes = await supabaseRest('monthly_plans?select=*');
-    if (plansRes.data && Array.isArray(plansRes.data) && plansRes.data.length > 0) {
+    if (plansRes.data && Array.isArray(plansRes.data)) {
       state.monthlyPlans = plansRes.data.map(mapPlanFromDb);
+      try { localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(state.monthlyPlans)); } catch(e) {}
     }
 
     const custRes = await supabaseRest('customers?select=*');
@@ -898,34 +899,52 @@ function loadStoredData() {
   state.plannerCalendarMonth = parseInt(dateParts[1], 10);
 
   const storedVisits = localStorage.getItem(STORAGE_KEY_VISITS);
-  let loadedVisits = storedVisits ? JSON.parse(storedVisits) : [];
-  if (window.INITIAL_VISITS && Array.isArray(window.INITIAL_VISITS)) {
-    const existingVisitIds = new Set(loadedVisits.map(v => v.id));
-    window.INITIAL_VISITS.forEach(iv => {
-      if (!existingVisitIds.has(iv.id)) {
-        loadedVisits.push(iv);
-      }
-    });
+  if (storedVisits !== null) {
+    try {
+      state.visits = JSON.parse(storedVisits) || [];
+    } catch (e) {
+      state.visits = [];
+    }
+  } else {
+    state.visits = [...(window.INITIAL_VISITS || [])];
+    localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits));
   }
-  state.visits = loadedVisits.length > 0 ? loadedVisits : [...(window.INITIAL_VISITS || [])];
 
   const storedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
-  let loadedOrders = storedOrders ? JSON.parse(storedOrders) : [];
-  if (window.INITIAL_ORDERS && Array.isArray(window.INITIAL_ORDERS)) {
-    const existingOrderNos = new Set(loadedOrders.map(o => o.invoiceNumber));
-    window.INITIAL_ORDERS.forEach(io => {
-      if (!existingOrderNos.has(io.invoiceNumber)) {
-        loadedOrders.push(io);
-      }
-    });
+  if (storedOrders !== null) {
+    try {
+      state.orders = JSON.parse(storedOrders) || [];
+    } catch (e) {
+      state.orders = [];
+    }
+  } else {
+    state.orders = [...(window.INITIAL_ORDERS || [])];
+    localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders));
   }
-  state.orders = loadedOrders.length > 0 ? loadedOrders : [...(window.INITIAL_ORDERS || [])];
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
-  state.monthlyPlans = storedPlans ? JSON.parse(storedPlans) : [...(window.INITIAL_MONTHLY_PLANS || [])];
+  if (storedPlans !== null) {
+    try {
+      state.monthlyPlans = JSON.parse(storedPlans) || [];
+    } catch (e) {
+      state.monthlyPlans = [];
+    }
+  } else {
+    state.monthlyPlans = [...(window.INITIAL_MONTHLY_PLANS || [])];
+    localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(state.monthlyPlans));
+  }
 
   const storedNotifs = localStorage.getItem(STORAGE_KEY_NOTIFS);
-  state.notifications = storedNotifs ? JSON.parse(storedNotifs) : [...(window.INITIAL_NOTIFICATIONS || [])];
+  if (storedNotifs !== null) {
+    try {
+      state.notifications = JSON.parse(storedNotifs) || [];
+    } catch (e) {
+      state.notifications = [];
+    }
+  } else {
+    state.notifications = [...(window.INITIAL_NOTIFICATIONS || [])];
+    localStorage.setItem(STORAGE_KEY_NOTIFS, JSON.stringify(state.notifications));
+  }
 
   const storedSettings = localStorage.getItem(STORAGE_KEY_SETTINGS);
   if (storedSettings) {
@@ -1961,544 +1980,9 @@ window.resetDailyReportFilters = function() {
 
 function ensureDailyReportDataForDate(dateStr) {
   if (!dateStr) dateStr = getSyncedTodayDate();
-  
-  // Check if we already have visits for this exact date
-  const existingVisits = (state.visits || []).filter(v => v.date === dateStr);
-  if (existingVisits.length > 0) {
-    return existingVisits;
-  }
-
-  // Parse date components for deterministic pseudo-random seed
-  const parts = dateStr.split('-').map(Number);
-  const year = parts[0] || 2026;
-  const month = parts[1] || 9;
-  const day = parts[2] || 1;
-  const daySeed = (year * 372) + (month * 31) + day;
-
-  // Filter customers by territory
-  const t1Customers = (state.customers || []).filter(c => c.repId === 'T1' || c.territory === 'T1');
-  const t2Customers = (state.customers || []).filter(c => c.repId === 'T2' || c.territory === 'T2');
-
-  const generatedVisits = [];
-  const generatedOrders = [];
-
-  function pick(arr, offset = 0) {
-    if (!arr || arr.length === 0) return null;
-    return arr[Math.abs(daySeed + offset) % arr.length];
-  }
-
-  const doctorRoles = ['Clinical Director', 'Head Vet Surgeon', 'Small Animal Specialist', 'Equine Specialist', 'Senior Veterinarian', 'Practice Owner'];
-  
-  const missedReasonsT1 = [
-    'Doctor called into emergency caesarean surgery at 11:30 AM; appointment rescheduled with clinic coordinator for next cycle.',
-    'Head veterinarian attending urgent equine endoscopy at track; rescheduled with practice nurse.',
-    'Clinic closed early for quarterly ministry inspection; product catalog and trial dossier handed to head nurse.',
-    'Doctor delayed in severe highway congestion between Abu Dhabi and Dubai; follow-up scheduled for next field round.',
-    'Attending critical inpatient canine parvovirus resuscitation in ICU ward; doctor requested reschedule via WhatsApp.'
-  ];
-
-  const missedReasonsT2 = [
-    'Doctor on emergency farm callout in Al Dhaid for dairy cattle postpartum paresis; appointment deferred.',
-    'Clinic experiencing unexpected network and power maintenance; practice manager requested visit next Tuesday.',
-    'Veterinary surgeon occupied with continuous emergency orthopaedic surgery until late evening.',
-    'Doctor called to equestrian endurance stable in Sharjah for urgent lameness examination.',
-    'Annual regulatory audit in progress; clinic receptionist accepted promotional product literature and trial pack.'
-  ];
-
-  const unplannedReasonsT1 = [
-    'Urgent stockout of Bravecto Spot-On reported by pharmacy director while rep was visiting neighboring clinic.',
-    'Walk-in cold call to newly opened veterinary polyclinic branch on the same boulevard to introduce Conceptors portfolio.',
-    'Emergency sample request for acute renal insufficiency treatment in hospitalized feline patient.',
-    'Spontaneous follow-up visit requested via WhatsApp by clinical director regarding seasonal immunity protocols.'
-  ];
-
-  const unplannedReasonsT2 = [
-    'Spontaneous visit to veterinary pharmacy adjacent to clinic to audit competitor pricing and retail display.',
-    'Emergency clinical inquiry regarding Cepravin dry cow mastitis treatment protocol for commercial dairy client.',
-    'Walk-in drop-in on private falcon and avian veterinary center while returning from Kalba field round.',
-    'Clinic manager requested urgent in-person quotation for bulk canine vaccination campaign.'
-  ];
-
-  const productsList = [
-    ['VIUSID 30 ml', 'ASBRIP 30 ml'],
-    ['RENALOF 150 ml', 'ASBRIP 150 ml'],
-    ['CARMINAL 30 ml', 'DIALIX Lespedeza 15'],
-    ['VIUSID 150 ml', 'CARMINAL 150 ml'],
-    ['BOVILIS BVD', 'CEPRAVIN Dry Cow'],
-    ['CANIGEN DHPPi', 'VIUSID 30 ml']
-  ];
-
-  const isToday = (dateStr === getSyncedTodayDate());
-
-  if (isToday) {
-    // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi) - 3 Pending Planned Visits for live field execution
-    if (t1Customers.length >= 3) {
-      const c1 = pick(t1Customers, 1);
-      const c2 = pick(t1Customers, 3);
-      const c3 = pick(t1Customers, 5);
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Dubai',
-        date: dateStr,
-        timeSlot: 'Morning (09:30 - 11:00)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
-        doctorRole: pick(doctorRoles, 1),
-        productsDetailed: pick(productsList, 1),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 14),
-        nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
-      });
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c2.code,
-        clientName: c2.name,
-        location: c2.city || 'Dubai',
-        date: dateStr,
-        timeSlot: 'Midday (11:30 - 13:00)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
-        doctorRole: pick(doctorRoles, 2),
-        productsDetailed: pick(productsList, 2),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 7),
-        nextFollowUpPurpose: 'Collect patient trial evaluation results'
-      });
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-03`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c3.code,
-        clientName: c3.name,
-        location: c3.city || 'Abu Dhabi',
-        date: dateStr,
-        timeSlot: 'Afternoon (14:30 - 15:30)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
-        doctorRole: pick(doctorRoles, 3),
-        productsDetailed: pick(productsList, 3),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 3),
-        nextFollowUpPurpose: 'Rescheduled appointment follow-up'
-      });
-    }
-
-    // Territory T2 (Dr. Marsel - Northern Emirates) - 3 Pending Planned Visits for live field execution
-    if (t2Customers.length >= 3) {
-      const c1 = pick(t2Customers, 2);
-      const c2 = pick(t2Customers, 4);
-      const c3 = pick(t2Customers, 6);
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Sharjah',
-        date: dateStr,
-        timeSlot: 'Morning (10:00 - 11:30)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
-        doctorRole: pick(doctorRoles, 0),
-        productsDetailed: pick(productsList, 4),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 14),
-        nextFollowUpPurpose: 'Delivery verification and protocol check'
-      });
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c2.code,
-        clientName: c2.name,
-        location: c2.city || 'Ajman',
-        date: dateStr,
-        timeSlot: 'Midday (12:30 - 14:00)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
-        doctorRole: pick(doctorRoles, 1),
-        productsDetailed: pick(productsList, 5),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Small animal respiratory and viral protection presentation',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 8),
-        nextFollowUpPurpose: 'Assess trial cases outcome'
-      });
-
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-03`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c3.code,
-        clientName: c3.name,
-        location: c3.city || 'Ras Al Khaimah',
-        date: dateStr,
-        timeSlot: 'Afternoon (15:00 - 16:00)',
-        visitCategory: 'Planned',
-        status: 'Planned',
-        doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
-        doctorRole: pick(doctorRoles, 2),
-        productsDetailed: pick(productsList, 0),
-        doctorSentiment: 'Pending',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
-        outcome: '',
-        nextFollowUp: getOffsetDateStr(dateStr, 4),
-        nextFollowUpPurpose: 'Rescheduled clinic visit'
-      });
-    }
-  } else {
-    // Territory T1 (Dr. Shaimaa - Dubai / Abu Dhabi) - Historical Demo Audit with completed calls & orders
-    if (t1Customers.length >= 3) {
-      const c1 = pick(t1Customers, 1);
-      const c2 = pick(t1Customers, 3);
-      const c3 = pick(t1Customers, 5); // Missed
-      const c4 = pick(t1Customers, 7); // Unplanned
-
-      // Visit 1: Planned & Visited (With Order)
-      const orderVal1 = 1250 + ((daySeed * 73) % 1800);
-      const orderRef1 = `ORD-${dateStr.replace(/-/g, '')}-T1`;
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-01`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Dubai',
-        date: dateStr,
-        timeSlot: 'Morning (09:30 - 11:00)',
-        visitCategory: 'Planned',
-        status: 'Completed',
-        doctorName: `Dr. ${c1.contactPerson || 'Sarah Al-Maktoum'}`,
-        doctorRole: pick(doctorRoles, 1),
-        productsDetailed: pick(productsList, 1),
-        doctorSentiment: 'Enthusiastic',
-        samplesDropped: 2,
-        sampleProduct: pick(productsList, 1)[0],
-        orderPlaced: true,
-        orderRef: orderRef1,
-        orderValueAed: orderVal1,
-        purpose: 'Monthly scheduled clinical review & promotional detailing on immunity and recovery portfolio',
-        outcome: `Conducted comprehensive detailing. Doctor confirmed excellent patient recovery and placed stocking order for AED ${formatCurrency(orderVal1)}.`,
-        nextFollowUp: getOffsetDateStr(dateStr, 14),
-        nextFollowUpPurpose: 'Review patient clinical response & restock monitoring'
-      });
-
-      generatedOrders.push({
-        invoiceNumber: orderRef1,
-        orderNumber: orderRef1,
-        date: dateStr,
-        time: '10:45:00',
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Dubai',
-        items: [
-          { productId: 'P001', productName: pick(productsList, 1)[0], unitPrice: 85, quantity: 12, bonusFoc: 2, lineTotal: 1020 },
-          { productId: 'P002', productName: pick(productsList, 1)[1], unitPrice: 75, quantity: 5, bonusFoc: 0, lineTotal: 375 }
-        ],
-        subtotal: 1395,
-        vatAmount: Math.round(1395 * 0.05 * 100) / 100,
-        totalIncVat: Math.round(1395 * 1.05 * 100) / 100,
-        status: 'Approved',
-        paymentTerms: '30 Days Credit',
-        notes: 'Generated via Field Call Detailing. Standard 10+1 bonus applied.'
-      });
-
-      // Visit 2: Planned & Visited (Clinical Discussion, No Order)
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-02`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c2.code,
-        clientName: c2.name,
-        location: c2.city || 'Dubai',
-        date: dateStr,
-        timeSlot: 'Midday (11:30 - 13:00)',
-        visitCategory: 'Planned',
-        status: 'Completed',
-        doctorName: `Dr. ${c2.contactPerson || 'Karim Haddad'}`,
-        doctorRole: pick(doctorRoles, 2),
-        productsDetailed: pick(productsList, 2),
-        doctorSentiment: 'Positive',
-        samplesDropped: 1,
-        sampleProduct: pick(productsList, 2)[0],
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Present clinical trial literature on activated antioxidant molecules for nephrology management',
-        outcome: 'Shared clinical monographs. Doctor agreed to initiate patient trial on 4 surgical cases before next purchasing cycle.',
-        nextFollowUp: getOffsetDateStr(dateStr, 7),
-        nextFollowUpPurpose: 'Collect patient trial evaluation results'
-      });
-
-      // Visit 3: Planned but MISSED / UNVISITED
-      const missedReason1 = pick(missedReasonsT1, 0);
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-03-MISSED`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c3.code,
-        clientName: c3.name,
-        location: c3.city || 'Abu Dhabi',
-        date: dateStr,
-        timeSlot: 'Afternoon (14:30 - 15:30)',
-        visitCategory: 'Planned',
-        status: 'Missed',
-        missedReason: missedReason1,
-        doctorName: `Dr. ${c3.contactPerson || 'Alexander White'}`,
-        doctorRole: pick(doctorRoles, 3),
-        productsDetailed: [],
-        doctorSentiment: 'Neutral',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Scheduled cycle visit to detail renal support and anti-inflammatory suspension',
-        outcome: `Visit could not be completed on this day. Reason: ${missedReason1}`,
-        nextFollowUp: getOffsetDateStr(dateStr, 3),
-        nextFollowUpPurpose: 'Rescheduled appointment follow-up'
-      });
-
-      // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
-      const unpReason1 = pick(unplannedReasonsT1, 0);
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T1-04-UNP`,
-        repId: 'T1',
-        territory: 'T1',
-        clientCode: c4.code,
-        clientName: c4.name,
-        location: c4.city || 'Dubai',
-        date: dateStr,
-        timeSlot: 'Spontaneous Afternoon (16:00 - 17:00)',
-        visitCategory: 'Unplanned',
-        unplannedReason: unpReason1,
-        status: 'Completed',
-        doctorName: `Dr. ${c4.contactPerson || 'Elena Rostova'}`,
-        doctorRole: pick(doctorRoles, 4),
-        productsDetailed: pick(productsList, 3),
-        doctorSentiment: 'Enthusiastic',
-        samplesDropped: 2,
-        sampleProduct: pick(productsList, 3)[0],
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: `Unplanned field call: ${unpReason1}`,
-        outcome: `Dropped in spontaneously while in neighborhood. Met doctor, discussed gastrointestinal emergency protocols, and supplied sample starter packs.`,
-        nextFollowUp: getOffsetDateStr(dateStr, 10),
-        nextFollowUpPurpose: 'Formal procurement proposal review'
-      });
-    }
-
-    // Territory T2 (Dr. Marsel - Northern Emirates) - Historical Demo Audit
-    if (t2Customers.length >= 3) {
-      const c1 = pick(t2Customers, 2);
-      const c2 = pick(t2Customers, 4);
-      const c3 = pick(t2Customers, 6); // Missed
-      const c4 = pick(t2Customers, 8); // Unplanned
-
-      // Visit 1: Planned & Visited
-      const orderVal2 = 950 + ((daySeed * 47) % 1500);
-      const orderRef2 = `ORD-${dateStr.replace(/-/g, '')}-T2`;
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-01`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Sharjah',
-        date: dateStr,
-        timeSlot: 'Morning (10:00 - 11:30)',
-        visitCategory: 'Planned',
-        status: 'Completed',
-        doctorName: `Dr. ${c1.contactPerson || 'Mansoor Al-Zaabi'}`,
-        doctorRole: pick(doctorRoles, 0),
-        productsDetailed: pick(productsList, 4),
-        doctorSentiment: 'Enthusiastic',
-        samplesDropped: 3,
-        sampleProduct: pick(productsList, 4)[0],
-        orderPlaced: true,
-        orderRef: orderRef2,
-        orderValueAed: orderVal2,
-        purpose: 'Field detailing on herd mastitis prevention and biological vaccine schedule',
-        outcome: `Productive session. Doctor approved stocking order for AED ${formatCurrency(orderVal2)} with delivery requested by Thursday.`,
-        nextFollowUp: getOffsetDateStr(dateStr, 14),
-        nextFollowUpPurpose: 'Delivery verification and protocol check'
-      });
-
-      generatedOrders.push({
-        invoiceNumber: orderRef2,
-        orderNumber: orderRef2,
-        date: dateStr,
-        time: '11:15:00',
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c1.code,
-        clientName: c1.name,
-        location: c1.city || 'Sharjah',
-        items: [
-          { productId: 'P007', productName: pick(productsList, 4)[0], unitPrice: 110, quantity: 10, bonusFoc: 1, lineTotal: 1100 }
-        ],
-        subtotal: 1100,
-        vatAmount: Math.round(1100 * 0.05 * 100) / 100,
-        totalIncVat: Math.round(1100 * 1.05 * 100) / 100,
-        status: 'Approved',
-        paymentTerms: 'Cash On Delivery',
-        notes: 'Territory T2 field booking. Standard 10+1 bonus included.'
-      });
-
-      // Visit 2: Planned & Visited
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-02`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c2.code,
-        clientName: c2.name,
-        location: c2.city || 'Ajman',
-        date: dateStr,
-        timeSlot: 'Midday (12:30 - 14:00)',
-        visitCategory: 'Planned',
-        status: 'Completed',
-        doctorName: `Dr. ${c2.contactPerson || 'Fatima Al-Nuaimi'}`,
-        doctorRole: pick(doctorRoles, 1),
-        productsDetailed: pick(productsList, 5),
-        doctorSentiment: 'Positive',
-        samplesDropped: 1,
-        sampleProduct: pick(productsList, 5)[0],
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Small animal respiratory and viral protection presentation',
-        outcome: 'Presented trial efficacy data on Asbrip and Viusid. Samples handed over for kennel cough trial cases.',
-        nextFollowUp: getOffsetDateStr(dateStr, 8),
-        nextFollowUpPurpose: 'Assess trial cases outcome'
-      });
-
-      // Visit 3: Planned but MISSED / UNVISITED
-      const missedReason2 = pick(missedReasonsT2, 0);
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-03-MISSED`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c3.code,
-        clientName: c3.name,
-        location: c3.city || 'Ras Al Khaimah',
-        date: dateStr,
-        timeSlot: 'Afternoon (15:00 - 16:00)',
-        visitCategory: 'Planned',
-        status: 'Missed',
-        missedReason: missedReason2,
-        doctorName: `Dr. ${c3.contactPerson || 'Rashid Al-Qasimi'}`,
-        doctorRole: pick(doctorRoles, 2),
-        productsDetailed: [],
-        doctorSentiment: 'Neutral',
-        samplesDropped: 0,
-        sampleProduct: '',
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: 'Evaluate antibiotic and anti-infective treatment protocols',
-        outcome: `Visit could not be performed on this date. Reason: ${missedReason2}`,
-        nextFollowUp: getOffsetDateStr(dateStr, 4),
-        nextFollowUpPurpose: 'Rescheduled clinic visit'
-      });
-
-      // Visit 4: Spontaneous UNPLANNED Visit (Beside Planned)
-      const unpReason2 = pick(unplannedReasonsT2, 0);
-      generatedVisits.push({
-        id: `VIS-${dateStr.replace(/-/g, '')}-T2-04-UNP`,
-        repId: 'T2',
-        territory: 'T2',
-        clientCode: c4.code,
-        clientName: c4.name,
-        location: c4.city || 'Sharjah',
-        date: dateStr,
-        timeSlot: 'Spontaneous Evening (17:00 - 18:00)',
-        visitCategory: 'Unplanned',
-        unplannedReason: unpReason2,
-        status: 'Completed',
-        doctorName: `Dr. ${c4.contactPerson || 'Zaid Al-Balooshi'}`,
-        doctorRole: pick(doctorRoles, 5),
-        productsDetailed: pick(productsList, 0),
-        doctorSentiment: 'Positive',
-        samplesDropped: 2,
-        sampleProduct: pick(productsList, 0)[0],
-        orderPlaced: false,
-        orderRef: '',
-        orderValueAed: 0,
-        purpose: `Unplanned visit: ${unpReason2}`,
-        outcome: 'Walked in spontaneously. Doctor was very receptive and expressed strong interest in seasonal recovery lines.',
-        nextFollowUp: getOffsetDateStr(dateStr, 12),
-        nextFollowUpPurpose: 'Present formal institutional agreement'
-      });
-    }
-  }
-
-  // Push new visits and orders into state
-  generatedVisits.forEach(gv => {
-    state.visits.push(gv);
-  });
-  generatedOrders.forEach(go => {
-    state.orders.push(go);
-  });
-
-  persistData();
-  return generatedVisits;
+  // Strictly return only real visits recorded for this date.
+  // NEVER synthesize, fabricate, or inject artificial visits or orders into state or cloud.
+  return (state.visits || []).filter(v => v.date === dateStr);
 }
 
 function renderDailyReportDateRibbon() {
@@ -2585,6 +2069,15 @@ function renderDailyReport() {
         <option value="T2">Dr. Marsel (Rep T2 - Northern Emirates)</option>
       `;
       repFilter.value = state.filters.dailyReportRep || 'ALL';
+    }
+  }
+
+  const purgeBtn = document.getElementById('dailyReportManagerPurgeBtn');
+  if (purgeBtn) {
+    if (isManager) {
+      purgeBtn.classList.remove('hidden');
+    } else {
+      purgeBtn.classList.add('hidden');
     }
   }
 
@@ -3439,6 +2932,19 @@ window.openDailyReportVisitModal = function(visitId) {
     `;
   }
 
+  const managerActions = document.getElementById('dailyReportModalManagerActions');
+  if (managerActions) {
+    if (state.currentUser && state.currentUser.role === 'manager') {
+      managerActions.innerHTML = `
+        <button type="button" onclick="handleManagerDeleteSingleVisit('${visit.id}')" class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation" title="Permanently delete this individual visit record from Supabase Cloud & local storage">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i> Delete Record (Manager)
+        </button>
+      `;
+    } else {
+      managerActions.innerHTML = '';
+    }
+  }
+
   if (modal) modal.classList.remove('hidden');
   safeLucide();
 };
@@ -3446,6 +2952,320 @@ window.openDailyReportVisitModal = function(visitId) {
 window.closeDailyReportVisitModal = function() {
   const modal = document.getElementById('dailyReportVisitModal');
   if (modal) modal.classList.add('hidden');
+};
+
+// =========================================================================
+// 8A. SENIOR SALES MANAGER: PILOT DATA RESET & AUDIT PURGE ENGINE
+// =========================================================================
+
+window.handleManagerDeleteSingleVisit = async function(visitId) {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Permission Denied', 'Only Senior Sales Manager can delete historical or planned records.', 'error');
+    return;
+  }
+  const visit = (state.visits || []).find(v => v.id === visitId);
+  if (!visit) return;
+
+  const desc = `${visit.clientName} (${visit.date}, Rep ${visit.repId})`;
+  if (!confirm(`Are you sure you want to permanently delete this visit record for "${desc}"?\n\nThis will remove it from both Supabase Cloud Database and local storage as if it never happened.`)) {
+    return;
+  }
+
+  // Remove from in-memory state
+  state.visits = (state.visits || []).filter(v => v.id !== visitId);
+  persistData();
+
+  // Cloud delete from Supabase
+  try {
+    await supabaseRest(`visits?id=eq.${visitId}`, { method: 'DELETE' });
+    updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+  } catch (err) {
+    console.warn('Supabase delete single visit warning:', err);
+  }
+
+  closeDailyReportVisitModal();
+  renderAll();
+  showToast('Record Deleted', `Permanently removed visit record for ${desc}.`, 'success');
+};
+
+window.openManagerPurgeModal = function() {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Restricted Access', 'This tool is restricted to Senior Sales Manager (Dr. Sameh Ageez).', 'warning');
+    return;
+  }
+  const modal = document.getElementById('managerPurgeDataModal');
+  if (!modal) return;
+
+  const activeDate = state.dailyReportDate || state.dailyDate || getSyncedTodayDate();
+
+  // Set default values
+  const repSelect = document.getElementById('purgeRepSelect');
+  if (repSelect) {
+    repSelect.value = state.filters.dailyReportRep || 'ALL';
+  }
+
+  // Set mode to single date by default
+  const modeSingle = document.getElementById('purgeModeSingle');
+  const modeRange = document.getElementById('purgeModeRange');
+  if (modeSingle) modeSingle.checked = true;
+  if (modeRange) modeRange.checked = false;
+
+  setPurgeDateMode('single');
+
+  const singleDateInput = document.getElementById('purgeSingleDate');
+  if (singleDateInput) singleDateInput.value = activeDate;
+
+  const dateFromInput = document.getElementById('purgeDateFrom');
+  if (dateFromInput) dateFromInput.value = activeDate;
+
+  const dateToInput = document.getElementById('purgeDateTo');
+  if (dateToInput) dateToInput.value = activeDate;
+
+  // Check all category checkboxes
+  const chkPlanned = document.getElementById('purgeTypePlanned');
+  if (chkPlanned) chkPlanned.checked = true;
+  const chkCompleted = document.getElementById('purgeTypeCompleted');
+  if (chkCompleted) chkCompleted.checked = true;
+  const chkUnplanned = document.getElementById('purgeTypeUnplanned');
+  if (chkUnplanned) chkUnplanned.checked = true;
+  const chkOrders = document.getElementById('purgeTypeOrders');
+  if (chkOrders) chkOrders.checked = true;
+
+  // Reset confirmation
+  const confirmChk = document.getElementById('purgeConfirmCheckbox');
+  if (confirmChk) confirmChk.checked = false;
+  togglePurgeSubmitBtn();
+
+  updatePurgePreviewCount();
+
+  modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeManagerPurgeModal = function() {
+  const modal = document.getElementById('managerPurgeDataModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.setPurgeDateMode = function(mode) {
+  const singleRow = document.getElementById('purgeSingleDateRow');
+  const rangeRow = document.getElementById('purgeDateRangeRow');
+  if (mode === 'single') {
+    if (singleRow) singleRow.classList.remove('hidden');
+    if (rangeRow) rangeRow.classList.add('hidden');
+  } else {
+    if (singleRow) singleRow.classList.add('hidden');
+    if (rangeRow) rangeRow.classList.remove('hidden');
+  }
+  updatePurgePreviewCount();
+};
+
+function getPurgeMatchingRecords() {
+  const repScope = document.getElementById('purgeRepSelect')?.value || 'ALL';
+  const isRange = document.getElementById('purgeModeRange')?.checked;
+  const singleDate = document.getElementById('purgeSingleDate')?.value;
+  const dateFrom = document.getElementById('purgeDateFrom')?.value;
+  const dateTo = document.getElementById('purgeDateTo')?.value;
+
+  const typePlanned = document.getElementById('purgeTypePlanned')?.checked;
+  const typeCompleted = document.getElementById('purgeTypeCompleted')?.checked;
+  const typeUnplanned = document.getElementById('purgeTypeUnplanned')?.checked;
+  const typeOrders = document.getElementById('purgeTypeOrders')?.checked;
+
+  const dateMatch = (d) => {
+    if (!d) return false;
+    if (isRange) {
+      if (dateFrom && dateTo) return d >= dateFrom && d <= dateTo;
+      if (dateFrom) return d >= dateFrom;
+      if (dateTo) return d <= dateTo;
+      return true;
+    }
+    return d === singleDate;
+  };
+
+  const repMatch = (rId, terr) => {
+    if (repScope === 'ALL') return true;
+    return rId === repScope || terr === repScope;
+  };
+
+  // Filter visits
+  const matchingVisits = (state.visits || []).filter(v => {
+    if (!repMatch(v.repId, v.territory)) return false;
+    if (!dateMatch(v.date)) return false;
+
+    const isPlanned = v.visitCategory === 'Planned' || !v.visitCategory;
+    const isUnplanned = v.visitCategory === 'Unplanned';
+    const isCompleted = v.status === 'Completed';
+    const isMissed = v.status === 'Missed';
+
+    if (isPlanned && !isCompleted && !isMissed && !typePlanned) return false;
+    if (isCompleted && !typeCompleted) return false;
+    if ((isMissed || isUnplanned) && !typeUnplanned) return false;
+
+    return true;
+  });
+
+  // Filter orders
+  let matchingOrders = [];
+  if (typeOrders) {
+    matchingOrders = (state.orders || []).filter(o => {
+      if (!repMatch(o.repId, o.territory)) return false;
+      if (!dateMatch(o.date)) return false;
+      return true;
+    });
+  }
+
+  return { matchingVisits, matchingOrders, repScope, isRange, singleDate, dateFrom, dateTo };
+}
+
+window.updatePurgePreviewCount = function() {
+  const impactBox = document.getElementById('purgeImpactBox');
+  if (!impactBox) return;
+
+  const { matchingVisits, matchingOrders, repScope, isRange, singleDate, dateFrom, dateTo } = getPurgeMatchingRecords();
+
+  const plannedCount = matchingVisits.filter(v => (v.visitCategory === 'Planned' || !v.visitCategory) && v.status !== 'Completed').length;
+  const completedCount = matchingVisits.filter(v => v.status === 'Completed').length;
+  const unplannedCount = matchingVisits.filter(v => v.visitCategory === 'Unplanned' || v.status === 'Missed').length;
+
+  const ordersVal = matchingOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
+
+  const dateDesc = isRange 
+    ? `From <strong>${dateFrom || 'start'}</strong> to <strong>${dateTo || 'end'}</strong>` 
+    : `Date: <strong>${singleDate || 'Not selected'}</strong>`;
+
+  const repDesc = repScope === 'ALL' 
+    ? 'All Representatives (Company-wide)' 
+    : (repScope === 'T1' ? 'Dr. Shaimaa (T1 - DXB/AUH)' : 'Dr. Marsel (T2 - Northern Emirates)');
+
+  if (matchingVisits.length === 0 && matchingOrders.length === 0) {
+    impactBox.innerHTML = `
+      <div class="text-slate-400 text-xs flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-slate-500 shrink-0"></i>
+        <span>No visits or orders found matching this scope (${repDesc} • ${dateDesc}).</span>
+      </div>
+    `;
+  } else {
+    impactBox.innerHTML = `
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-white">
+          <span class="flex items-center gap-1.5 text-rose-400">
+            <i data-lucide="alert-octagon" class="w-4 h-4"></i> Records Identified for Permanent Deletion:
+          </span>
+          <span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px]">
+            ${matchingVisits.length} Visits + ${matchingOrders.length} Orders
+          </span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+          <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+            <span class="text-slate-400 block text-[10px]">Planned Calls:</span>
+            <strong class="text-amber-400 font-mono text-sm">${plannedCount}</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+            <span class="text-slate-400 block text-[10px]">Completed Calls:</span>
+            <strong class="text-emerald-400 font-mono text-sm">${completedCount}</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+            <span class="text-slate-400 block text-[10px]">Missed/Unplanned:</span>
+            <strong class="text-sky-400 font-mono text-sm">${unplannedCount}</strong>
+          </div>
+          <div class="p-2 rounded-lg bg-slate-950/60 border border-slate-800">
+            <span class="text-slate-400 block text-[10px]">Orders Booked:</span>
+            <strong class="text-rose-400 font-mono text-sm">${matchingOrders.length} <span class="text-[10px] text-slate-400 font-normal">(${formatCurrency(ordersVal)} AED)</span></strong>
+          </div>
+        </div>
+        <div class="text-[10px] text-slate-400">
+          Scope: <strong>${repDesc}</strong> • Period: ${dateDesc}
+        </div>
+      </div>
+    `;
+  }
+  safeLucide();
+};
+
+window.togglePurgeSubmitBtn = function() {
+  const chk = document.getElementById('purgeConfirmCheckbox');
+  const btn = document.getElementById('purgeExecuteBtn');
+  if (btn) {
+    btn.disabled = !chk || !chk.checked;
+  }
+};
+
+window.handleManagerPurgeSubmit = async function() {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Unauthorized', 'Only Senior Sales Manager can execute pilot data resets.', 'error');
+    return;
+  }
+
+  const { matchingVisits, matchingOrders, repScope, isRange, singleDate, dateFrom, dateTo } = getPurgeMatchingRecords();
+
+  if (matchingVisits.length === 0 && matchingOrders.length === 0) {
+    showToast('Nothing to Purge', 'No records match the selected scope.', 'info');
+    return;
+  }
+
+  const btn = document.getElementById('purgeExecuteBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Purging Cloud & Local...`;
+  }
+
+  const visitIds = matchingVisits.map(v => v.id);
+  const orderNumbers = matchingOrders.map(o => o.invoiceNumber || o.orderNumber).filter(Boolean);
+
+  // 1. Remove from in-memory state
+  const visitIdSet = new Set(visitIds);
+  const orderNumSet = new Set(orderNumbers);
+
+  state.visits = (state.visits || []).filter(v => !visitIdSet.has(v.id));
+  state.orders = (state.orders || []).filter(o => !orderNumSet.has(o.invoiceNumber) && !orderNumSet.has(o.orderNumber));
+
+  // Also clean up notifications relating to these orders/visits
+  if (orderNumbers.length > 0 || visitIds.length > 0) {
+    state.notifications = (state.notifications || []).filter(n => {
+      const txt = (n.title || '') + ' ' + (n.itemsSummary || '') + ' ' + (n.message || '');
+      for (const on of orderNumbers) {
+        if (txt.includes(on)) return false;
+      }
+      return true;
+    });
+  }
+
+  // 2. Persist to localStorage immediately
+  persistData();
+
+  // 3. Cloud DELETE from Supabase
+  try {
+    // Delete order items in batches
+    if (orderNumbers.length > 0) {
+      for (let i = 0; i < orderNumbers.length; i += 20) {
+        const chunk = orderNumbers.slice(i, i + 20);
+        await supabaseRest(`order_items?order_number=in.(${chunk.join(',')})`, { method: 'DELETE' });
+        await supabaseRest(`orders?invoice_number=in.(${chunk.join(',')})`, { method: 'DELETE' });
+      }
+    }
+
+    // Delete visits in batches
+    if (visitIds.length > 0) {
+      for (let i = 0; i < visitIds.length; i += 20) {
+        const chunk = visitIds.slice(i, i + 20);
+        await supabaseRest(`visits?id=in.(${chunk.join(',')})`, { method: 'DELETE' });
+      }
+    }
+    updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+  } catch (err) {
+    console.warn('Supabase purge error:', err);
+  }
+
+  closeManagerPurgeModal();
+  renderAll();
+
+  const periodLabel = isRange ? `${dateFrom} to ${dateTo}` : singleDate;
+  showToast(
+    'Data Reset Successful',
+    `Permanently purged ${matchingVisits.length} visits and ${matchingOrders.length} orders for ${periodLabel}.`,
+    'success'
+  );
 };
 
 // =========================================================================

@@ -2130,3 +2130,44 @@ html:not(.dark) .brand-logo-pill {
     padding: 1rem !important;
   }
 }
+
+/* Senior Manager Purge & Pilot Reset Modal in Bright Mode */
+html:not(.dark) #managerPurgeDataModal .glass-panel {
+  background-color: #ffffff !important;
+  border-color: #fca5a5 !important;
+  color: #0f172a !important;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
+}
+html:not(.dark) #managerPurgeDataModal h3,
+html:not(.dark) #managerPurgeDataModal strong {
+  color: #0f172a !important;
+}
+html:not(.dark) #managerPurgeDataModal label,
+html:not(.dark) #managerPurgeDataModal .text-slate-300,
+html:not(.dark) #managerPurgeDataModal .text-slate-200 {
+  color: #1e293b !important;
+}
+html:not(.dark) #managerPurgeDataModal input:not([type="checkbox"]):not([type="radio"]),
+html:not(.dark) #managerPurgeDataModal select {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html:not(.dark) #managerPurgeDataModal label.bg-slate-900,
+html:not(.dark) #managerPurgeDataModal label[class*="bg-slate-900"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+html:not(.dark) #managerPurgeDataModal #purgeImpactBox {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) #managerPurgeDataModal #purgeImpactBox [class*="bg-slate-950"] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) #managerPurgeDataModal .border-b,
+html:not(.dark) #managerPurgeDataModal .border-t {
+  border-color: #e2e8f0 !important;
+}
