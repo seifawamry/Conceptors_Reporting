@@ -763,6 +763,7 @@ const state = {
     ntfyTopic: 'conceptors-orders-sameh',
     webhookUrl: ''
   },
+  editingOrderInvoiceNumber: null,
   filters: {
     dailyReportRep: 'ALL',
     dailyReportStatus: 'ALL',
@@ -779,11 +780,14 @@ const state = {
     accountsTerritory: 'ALL',
     accountsMonthFilter: 'CURRENT',
     analyticsRepFilter: 'ALL',
-    analyticsTimeframe: 'MTD',
+    analyticsTimeframe: 'SEP_2026',
+    analyticsDateFrom: '2026-09-01',
+    analyticsDateTo: '2026-09-30',
     analyticsRosterSearch: '',
     analyticsRosterFilter: 'ALL'
   }
 };
+window.state = state;
 
 // =========================================================================
 // 2. LIFECYCLE & INITIALIZATION
@@ -4843,27 +4847,41 @@ function renderOrdersTable() {
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           ${isApproved ? `
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
-              Approved
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              ✓ Approved
+            </span>
+          ` : (o.approvalStatus === 'Rejected' ? `
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+              ✕ Rejected
             </span>
           ` : `
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              Pending Review
+              ⏳ Pending Review
             </span>
-          `}
+          `)}
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
-          <div class="flex items-center justify-center gap-1.5">
+          <div class="flex items-center justify-center gap-1.5 flex-wrap">
             <button onclick="openWhatsappOrderShare('${o.invoiceNumber}')" class="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95" title="Share Order to WhatsApp">
               <i data-lucide="message-circle" class="w-3 h-3 text-emerald-400"></i> WA
             </button>
             <button onclick="viewNotificationEmailByOrder('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[10px] font-bold flex items-center gap-1" title="View Executive Dispatched Email">
               <i data-lucide="mail" class="w-3 h-3"></i> View Email
             </button>
-            ${!isApproved && state.currentUser && state.currentUser.role === 'manager' ? `
-              <button onclick="approveOrderDirect('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm">
-                <i data-lucide="check" class="w-3 h-3"></i> Authorize
+            ${state.currentUser && state.currentUser.role === 'manager' ? `
+              ${!isApproved ? `
+                <button onclick="approveOrderDirect('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-sm" title="Authorize & Release Order">
+                  <i data-lucide="check" class="w-3 h-3"></i> Authorize
+                </button>
+              ` : ''}
+              <button onclick="openAmendOrderModal('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1 shadow-sm" title="Amend Order Quantities / Items (Zero Duplication)">
+                <i data-lucide="edit-3" class="w-3 h-3"></i> Amend
               </button>
+              ${o.approvalStatus !== 'Rejected' ? `
+                <button onclick="rejectOrderDirect('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[10px] font-bold flex items-center gap-1 shadow-sm" title="Reject Order (Zero Duplication)">
+                  <i data-lucide="x" class="w-3 h-3"></i> Reject
+                </button>
+              ` : ''}
             ` : ''}
           </div>
         </td>
@@ -4880,6 +4898,22 @@ window.handleOrdersFilter = function() {
 };
 
 window.openOrderModal = function(defaultClient = null, defaultRep = null) {
+  state.editingOrderInvoiceNumber = null;
+  const numInput = document.getElementById('orderNumber');
+  if (numInput) {
+    numInput.removeAttribute('readonly');
+    numInput.classList.remove('bg-slate-800', 'cursor-not-allowed');
+  }
+  const modalTitle = document.getElementById('orderModalTitle');
+  if (modalTitle) {
+    modalTitle.innerHTML = `<i data-lucide="shopping-bag" class="w-5 h-5 text-indigo-400 inline mr-2"></i> Book Commercial Field Sales Order`;
+  }
+  const submitBtn = document.getElementById('btnSubmitOrder');
+  if (submitBtn) {
+    submitBtn.innerHTML = `<i data-lucide="send" class="w-4 h-4 mr-1"></i> Submit Order & Alert Senior Managers`;
+    submitBtn.className = 'px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/25 flex items-center gap-2';
+  }
+
   let targetRep = defaultRep;
   if (state.currentUser && state.currentUser.role === 'rep_t1') targetRep = 'T1';
   if (state.currentUser && state.currentUser.role === 'rep_t2') targetRep = 'T2';
@@ -4916,10 +4950,98 @@ window.openOrderModal = function(defaultClient = null, defaultRep = null) {
   safeLucide();
 };
 
+window.openAmendOrderModal = function(orderNum) {
+  const order = state.orders.find(o => o.invoiceNumber === orderNum);
+  if (!order) {
+    showToast('Order Not Found', `Cannot locate order #${orderNum} to amend.`, 'error');
+    return;
+  }
+
+  state.editingOrderInvoiceNumber = orderNum;
+
+  // Set rep
+  const repSelect = document.getElementById('orderRepSelect');
+  if (repSelect) {
+    repSelect.disabled = false;
+    repSelect.innerHTML = state.reps.map(r => `<option value="${r.id}" ${r.id === order.repId ? 'selected' : ''}>${r.name} (${r.territory})</option>`).join('');
+  }
+
+  filterOrderClinics();
+
+  // Set client
+  const clientCode = order.clientCode || order.accountCode;
+  if (clientCode) {
+    selectCustomerCombobox('order', clientCode);
+  }
+
+  // Lock order reference number so it cannot be altered, ensuring zero duplication
+  const numInput = document.getElementById('orderNumber');
+  if (numInput) {
+    numInput.value = order.invoiceNumber;
+    numInput.setAttribute('readonly', 'true');
+    numInput.classList.add('bg-slate-800', 'cursor-not-allowed');
+  }
+
+  // Set date, terms, urgency
+  const dateInput = document.getElementById('orderDate');
+  if (dateInput) dateInput.value = order.date || state.dailyDate;
+
+  const termsSelect = document.getElementById('orderPaymentTerms');
+  if (termsSelect) termsSelect.value = order.paymentTerms || '30 Days Credit';
+
+  const urgencySelect = document.getElementById('orderDeliveryUrgency');
+  if (urgencySelect) urgencySelect.value = order.deliveryUrgency || 'Normal (48h)';
+
+  // Populate line items
+  const linesBody = document.getElementById('orderLineItemsBody');
+  if (linesBody) {
+    linesBody.innerHTML = '';
+    const items = order.items || [];
+    if (items.length > 0) {
+      items.forEach(it => {
+        addOrderLineItem(it.productCode, it.salesQty, it.focQty);
+      });
+    } else {
+      addOrderLineItem('VR030', 10, 2);
+    }
+  }
+
+  recalculateOrderTotals();
+
+  // Update modal title & submit button
+  const modalTitle = document.getElementById('orderModalTitle');
+  if (modalTitle) {
+    modalTitle.innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-amber-400 inline mr-2"></i> Amend Order <span class="font-mono text-amber-300">#${order.invoiceNumber}</span>`;
+  }
+  const submitBtn = document.getElementById('btnSubmitOrder');
+  if (submitBtn) {
+    submitBtn.innerHTML = `<i data-lucide="save" class="w-4 h-4 mr-1"></i> Save Order Amendments (No Duplicate)`;
+    submitBtn.className = 'px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 text-white font-bold shadow-lg shadow-amber-500/25 flex items-center gap-2';
+  }
+
+  document.getElementById('fieldOrderModal').classList.remove('hidden');
+  safeLucide();
+};
+
 window.closeOrderModal = function() {
   const m = document.getElementById('fieldOrderModal');
   if (m) m.classList.add('hidden');
   closeCustomerCombobox('order');
+  state.editingOrderInvoiceNumber = null;
+  const numInput = document.getElementById('orderNumber');
+  if (numInput) {
+    numInput.removeAttribute('readonly');
+    numInput.classList.remove('bg-slate-800', 'cursor-not-allowed');
+  }
+  const modalTitle = document.getElementById('orderModalTitle');
+  if (modalTitle) {
+    modalTitle.innerHTML = `<i data-lucide="shopping-bag" class="w-5 h-5 text-indigo-400 inline mr-2"></i> Book Commercial Field Sales Order`;
+  }
+  const submitBtn = document.getElementById('btnSubmitOrder');
+  if (submitBtn) {
+    submitBtn.innerHTML = `<i data-lucide="send" class="w-4 h-4 mr-1"></i> Submit Order & Alert Senior Managers`;
+    submitBtn.className = 'px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/25 flex items-center gap-2';
+  }
 };
 
 window.filterOrderClinics = function() {
@@ -5082,6 +5204,97 @@ window.handleOrderSubmit = function(e) {
 
   const vatAmount = subtotal * 0.05;
   const totalIncVat = subtotal + vatAmount;
+
+  const isAmending = !!state.editingOrderInvoiceNumber;
+
+  if (isAmending) {
+    const existingOrder = state.orders.find(o => o.invoiceNumber === state.editingOrderInvoiceNumber);
+    if (existingOrder) {
+      existingOrder.date = date;
+      existingOrder.repId = repId;
+      existingOrder.repName = repObj ? repObj.name : `Rep ${repId}`;
+      existingOrder.clientCode = clientCode;
+      existingOrder.accountCode = clientCode;
+      existingOrder.clientName = customer ? customer.name : clientCode;
+      existingOrder.location = customer ? customer.location : 'UAE';
+      existingOrder.territory = repId;
+      existingOrder.paymentTerms = paymentTerms;
+      existingOrder.deliveryUrgency = deliveryUrgency;
+      existingOrder.items = items;
+      existingOrder.totalExcVat = subtotal;
+      existingOrder.vatAmount = vatAmount;
+      existingOrder.totalIncVat = totalIncVat;
+      existingOrder.amendedAt = new Date().toISOString();
+      existingOrder.amendedBy = (state.currentUser && state.currentUser.name) || 'Dr. Sameh Ageez (Senior Sales Manager)';
+    }
+
+    const notif = state.notifications.find(n => n.orderNumber === state.editingOrderInvoiceNumber);
+    if (notif) {
+      notif.totalExcVat = subtotal;
+      notif.totalIncVat = totalIncVat;
+      notif.itemsSummary = items.map(i => `${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? ` + ${i.focQty} FOC` : ''})`).join(', ');
+      notif.paymentTerms = paymentTerms;
+      notif.deliveryUrgency = deliveryUrgency;
+      notif.items = items;
+      notif.clientCode = clientCode;
+      notif.accountCode = clientCode;
+      notif.clientName = customer ? customer.name : clientCode;
+    }
+
+    persistData();
+
+    const amendedOrder = existingOrder || { invoiceNumber: state.editingOrderInvoiceNumber, totalIncVat };
+
+    // Cloud write-through to Google Drive (upsertOrderRow overwrites in-place by invoice number)
+    pushToGoogleDrive('ADD_ORDER', {
+      order: amendedOrder,
+      user: (state.currentUser && state.currentUser.name) || 'Senior Manager'
+    });
+
+    // Cloud write-through to Supabase
+    (async () => {
+      try {
+        await supabaseRest(`orders?invoice_number=eq.${encodeURIComponent(amendedOrder.invoiceNumber)}`, {
+          method: 'PATCH',
+          body: mapOrderToDb(amendedOrder)
+        });
+        await supabaseRest(`order_items?order_invoice_number=eq.${encodeURIComponent(amendedOrder.invoiceNumber)}`, {
+          method: 'DELETE'
+        });
+        for (const it of items) {
+          await supabaseRest('order_items', {
+            method: 'POST',
+            body: {
+              order_invoice_number: amendedOrder.invoiceNumber,
+              order_number: amendedOrder.invoiceNumber,
+              product_code: it.productCode,
+              product_name: it.productName,
+              unit_price: it.unitPrice,
+              sales_qty: it.salesQty,
+              foc_qty: it.focQty,
+              line_total: it.total,
+              total_price: it.total
+            }
+          });
+        }
+        updateCloudSyncBadge('connected', '⚡ Cloud Synced');
+      } catch (err) {
+        console.warn('Amended order Supabase sync warning:', err);
+      }
+    })();
+
+    const amendedInvoiceNum = state.editingOrderInvoiceNumber;
+    closeOrderModal();
+
+    showToast(
+      'Order Amended',
+      `Order #${amendedInvoiceNum} amended successfully. Quantities and terms updated without creating duplicate orders.`,
+      'success'
+    );
+
+    renderAll();
+    return;
+  }
 
   const newOrder = {
     invoiceNumber: orderNumber,
@@ -5338,9 +5551,13 @@ function renderManagerNotifications() {
           <div class="text-right shrink-0">
             ${n.totalIncVat > 0 ? `<div class="font-black text-emerald-400 text-sm">${formatCurrency(n.totalIncVat)} AED</div>` : ''}
             <span class="text-[10px] text-slate-400 block">${dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="text-[10px] font-bold ${isApproved ? 'text-sky-400' : 'text-amber-400'} block mt-1">
-              ${isApproved ? '✓ Approved' : '⏳ Pending Review'}
-            </span>
+            ${isApproved ? `
+              <span class="text-[10px] font-bold text-emerald-400 block mt-1">✓ Approved</span>
+            ` : (n.approvalStatus === 'Rejected' ? `
+              <span class="text-[10px] font-bold text-rose-400 block mt-1">✕ Rejected</span>
+            ` : `
+              <span class="text-[10px] font-bold text-amber-400 block mt-1">⏳ Pending Review</span>
+            `)}
           </div>
         </div>
 
@@ -5351,14 +5568,24 @@ function renderManagerNotifications() {
             <span>Delivery: <strong class="text-amber-300">${n.deliveryUrgency || 'Normal'}</strong></span>
           </div>
 
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 flex-wrap">
             <button onclick="viewNotificationEmail('${n.id}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold flex items-center gap-1">
               <i data-lucide="mail" class="w-3 h-3"></i> View Dispatched Email
             </button>
-            ${!isApproved && state.currentUser && state.currentUser.role === 'manager' ? `
-              <button onclick="approveOrderFromNotification('${n.id}', '${n.orderNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm">
-                <i data-lucide="check" class="w-3 h-3"></i> Authorize
+            ${state.currentUser && state.currentUser.role === 'manager' && n.type === 'ORDER_SUBMITTED' ? `
+              ${!isApproved ? `
+                <button onclick="approveOrderFromNotification('${n.id}', '${n.orderNumber}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm" title="Authorize & Release Order">
+                  <i data-lucide="check" class="w-3 h-3"></i> Authorize
+                </button>
+              ` : ''}
+              <button onclick="openAmendOrderModal('${n.orderNumber}')" class="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1 shadow-sm" title="Amend Order Quantities / Items (Zero Duplication)">
+                <i data-lucide="edit-3" class="w-3 h-3"></i> Amend
               </button>
+              ${n.approvalStatus !== 'Rejected' ? `
+                <button onclick="rejectOrderFromNotification('${n.id}', '${n.orderNumber}')" class="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-bold flex items-center gap-1 shadow-sm" title="Reject Order (Zero Duplication)">
+                  <i data-lucide="x" class="w-3 h-3"></i> Reject
+                </button>
+              ` : ''}
             ` : ''}
           </div>
         </div>
@@ -5391,6 +5618,16 @@ window.approveOrderFromNotification = function(notifId, orderNum) {
     notif.read = true;
   }
   approveOrderDirect(orderNum);
+  renderManagerNotifications();
+};
+
+window.rejectOrderFromNotification = function(notifId, orderNum) {
+  const notif = state.notifications.find(n => n.id === notifId);
+  if (notif) {
+    notif.approvalStatus = 'Rejected';
+    notif.read = true;
+  }
+  rejectOrderDirect(orderNum);
   renderManagerNotifications();
 };
 
@@ -5438,87 +5675,196 @@ window.approveOrderDirect = function(orderNum) {
 
   showToast('Order Approved', `Order #${orderNum} authorized and released for commercial delivery.`, 'success');
   renderAll();
+
+  // If email modal is open, refresh it
+  const emailModal = document.getElementById('viewEmailModal');
+  if (emailModal && !emailModal.classList.contains('hidden')) {
+    viewNotificationEmailByOrder(orderNum);
+  }
+};
+
+window.rejectOrderDirect = function(orderNum, reason = null) {
+  const order = state.orders.find(o => o.invoiceNumber === orderNum);
+  if (!order) {
+    showToast('Order Not Found', `Cannot locate order #${orderNum}.`, 'error');
+    return;
+  }
+
+  let rejectReason = reason;
+  if (!rejectReason) {
+    const inputReason = prompt(`Reject Commercial Order #${orderNum}?\nEnter reason for rejection (optional):`, 'Commercial adjustment / pricing review');
+    if (inputReason === null) return;
+    rejectReason = inputReason.trim() || 'Rejected by Senior Sales Manager';
+  }
+
+  const managerName = (state.currentUser && state.currentUser.name) || 'Dr. Sameh Ageez (Senior Sales Manager)';
+  const nowIso = new Date().toISOString();
+
+  order.approvalStatus = 'Rejected';
+  order.approvedBy = null;
+  order.approvedAt = null;
+  order.rejectedBy = managerName;
+  order.rejectedAt = nowIso;
+  order.rejectionReason = rejectReason;
+
+  const notif = state.notifications.find(n => n.orderNumber === orderNum);
+  if (notif) {
+    notif.approvalStatus = 'Rejected';
+    notif.read = true;
+    notif.rejectionReason = rejectReason;
+  }
+
+  persistData();
+
+  // Cloud write-through to Google Drive
+  pushToGoogleDrive('UPDATE_ORDER_STATUS', {
+    invoiceNumber: orderNum,
+    status: 'Rejected',
+    approvedBy: managerName,
+    rejectionReason: rejectReason
+  });
+
+  // Cloud write-through to Supabase
+  supabaseRest(`orders?invoice_number=eq.${encodeURIComponent(orderNum)}`, {
+    method: 'PATCH',
+    body: {
+      approval_status: 'Rejected',
+      approved_by: managerName,
+      approved_at: nowIso,
+      updated_at: nowIso
+    }
+  });
+
+  if (notif) {
+    supabaseRest(`notifications?order_number=eq.${encodeURIComponent(orderNum)}`, {
+      method: 'PATCH',
+      body: { approval_status: 'Rejected', read: true }
+    });
+  }
+
+  showToast('Order Rejected', `Order #${orderNum} marked as Rejected without duplicating order records.`, 'warning');
+  renderAll();
+
+  // If email modal is open for this order, refresh its preview
+  const emailModal = document.getElementById('viewEmailModal');
+  if (emailModal && !emailModal.classList.contains('hidden')) {
+    viewNotificationEmailByOrder(orderNum);
+  }
 };
 
 window.viewNotificationEmailByOrder = function(orderNum) {
   const notif = state.notifications.find(n => n.orderNumber === orderNum);
-  if (notif) {
-    viewNotificationEmail(notif.id);
-  } else {
-    const order = state.orders.find(o => o.invoiceNumber === orderNum);
-    if (!order) return;
-    const html = generateExecutiveEmailHtml(order, order.repName || `Rep ${order.repId}`);
-    document.getElementById('emailPreviewContent').innerHTML = html;
-    const toEmail = state.managerSettings.managerEmails || 's.ageez@the-conceptors.com';
-    const ccEmail = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
-    const ccText = ccEmail ? ` (CC: ${ccEmail})` : '';
-    document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${toEmail}${ccText}`;
-    const btnWa = document.getElementById('btnWhatsappShareAction');
-    if (btnWa) {
-      btnWa.onclick = () => openWhatsappOrderShare(order.invoiceNumber);
-    }
-    const btnResend = document.getElementById('btnResendEmailAction');
-    if (btnResend) {
-      const accountCode = order.accountCode || order.clientCode || '';
-      const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
-      const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName}${accountTag} (${formatCurrency(order.totalIncVat)} AED)`);
-      const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${order.repName || `Rep ${order.repId}`}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${order.location}\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
-      btnResend.onclick = () => {
-        const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
-        window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
-      };
-    }
-    document.getElementById('viewEmailModal').classList.remove('hidden');
-    safeLucide();
-  }
-};
+  const order = state.orders.find(o => o.invoiceNumber === orderNum);
+  if (!order && !notif) return;
 
-window.viewNotificationEmail = function(notifId) {
-  const notif = state.notifications.find(n => n.id === notifId);
-  if (!notif) return;
-
-  const order = state.orders.find(o => o.invoiceNumber === notif.orderNumber) || {
+  const targetOrder = order || {
     invoiceNumber: notif.orderNumber,
-    date: notif.timestamp ? notif.timestamp.split('T')[0] : '2026-09-09',
+    date: notif.timestamp ? notif.timestamp.split('T')[0] : getSyncedTodayDate(),
     clientCode: notif.clientCode || notif.accountCode,
     accountCode: notif.accountCode || notif.clientCode,
     clientName: notif.clientName,
     location: notif.location,
     territory: notif.repId,
     totalExcVat: notif.totalExcVat,
-    vatAmount: (notif.totalIncVat - notif.totalExcVat),
+    vatAmount: ((notif.totalIncVat || 0) - (notif.totalExcVat || 0)),
     totalIncVat: notif.totalIncVat,
+    approvalStatus: notif.approvalStatus || 'Pending',
     paymentTerms: notif.paymentTerms,
     deliveryUrgency: notif.deliveryUrgency,
     items: notif.items || []
   };
 
-  const html = generateExecutiveEmailHtml(order, notif.repName);
-  document.getElementById('emailPreviewContent').innerHTML = html;
+  const repName = targetOrder.repName || (notif ? notif.repName : `Rep ${targetOrder.repId}`);
+  const html = generateExecutiveEmailHtml(targetOrder, repName);
+  const previewEl = document.getElementById('emailPreviewContent');
+  if (previewEl) previewEl.innerHTML = html;
+
   const toEmail = state.managerSettings.managerEmails || 's.ageez@the-conceptors.com';
   const ccEmail = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
   const ccText = ccEmail ? ` (CC: ${ccEmail})` : '';
-  document.getElementById('emailRecipientHeader').textContent = `Dispatched to: ${toEmail}${ccText}`;
+  const recipientEl = document.getElementById('emailRecipientHeader');
+  if (recipientEl) recipientEl.textContent = `Dispatched to: ${toEmail}${ccText}`;
 
+  // Update status badge
+  const badge = document.getElementById('emailModalStatusBadge');
+  if (badge) {
+    if (targetOrder.approvalStatus === 'Approved') {
+      badge.textContent = '✓ Approved';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+    } else if (targetOrder.approvalStatus === 'Rejected') {
+      badge.textContent = '✕ Rejected';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
+    } else {
+      badge.textContent = '⏳ Dispatched';
+      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+    }
+  }
+
+  // Configure action toolbar buttons
   const btnWa = document.getElementById('btnWhatsappShareAction');
   if (btnWa) {
-    btnWa.onclick = () => openWhatsappOrderShare(order.invoiceNumber);
+    btnWa.onclick = () => openWhatsappOrderShare(targetOrder.invoiceNumber);
   }
 
   const btnResend = document.getElementById('btnResendEmailAction');
   if (btnResend) {
-    const accountCode = order.accountCode || order.clientCode || notif.accountCode || notif.clientCode || '';
+    const accountCode = targetOrder.accountCode || targetOrder.clientCode || '';
     const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
-    const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${order.invoiceNumber} - ${order.clientName}${accountTag} (${formatCurrency(order.totalIncVat)} AED)`);
-    const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${notif.repName}.\n\nOrder Ref: #${order.invoiceNumber}\nClient: ${order.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${order.location}\nNet Total: ${formatCurrency(order.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
+    const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${targetOrder.invoiceNumber} - ${targetOrder.clientName}${accountTag} (${formatCurrency(targetOrder.totalIncVat)} AED)`);
+    const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${repName}.\n\nOrder Ref: #${targetOrder.invoiceNumber}\nClient: ${targetOrder.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${targetOrder.location}\nNet Total: ${formatCurrency(targetOrder.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
     btnResend.onclick = () => {
       const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
       window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
     };
   }
 
-  document.getElementById('viewEmailModal').classList.remove('hidden');
+  const isManager = state.currentUser && state.currentUser.role === 'manager';
+  const btnAuth = document.getElementById('btnModalAuthorizeOrder');
+  if (btnAuth) {
+    if (isManager && targetOrder.approvalStatus !== 'Approved') {
+      btnAuth.classList.remove('hidden');
+      btnAuth.onclick = () => {
+        approveOrderDirect(targetOrder.invoiceNumber);
+      };
+    } else {
+      btnAuth.classList.add('hidden');
+    }
+  }
+
+  const btnAmend = document.getElementById('btnModalAmendOrder');
+  if (btnAmend) {
+    if (isManager) {
+      btnAmend.classList.remove('hidden');
+      btnAmend.onclick = () => {
+        closeEmailModal();
+        openAmendOrderModal(targetOrder.invoiceNumber);
+      };
+    } else {
+      btnAmend.classList.add('hidden');
+    }
+  }
+
+  const btnReject = document.getElementById('btnModalRejectOrder');
+  if (btnReject) {
+    if (isManager && targetOrder.approvalStatus !== 'Rejected') {
+      btnReject.classList.remove('hidden');
+      btnReject.onclick = () => {
+        rejectOrderDirect(targetOrder.invoiceNumber);
+      };
+    } else {
+      btnReject.classList.add('hidden');
+    }
+  }
+
+  const modal = document.getElementById('viewEmailModal');
+  if (modal) modal.classList.remove('hidden');
   safeLucide();
+};
+
+window.viewNotificationEmail = function(notifId) {
+  const notif = state.notifications.find(n => n.id === notifId);
+  if (!notif) return;
+  viewNotificationEmailByOrder(notif.orderNumber);
 };
 
 window.closeEmailModal = function() {
@@ -5527,94 +5873,150 @@ window.closeEmailModal = function() {
 };
 
 function generateExecutiveEmailHtml(order, repName) {
+  const isDay = !document.documentElement.classList.contains('dark') || (window.state && window.state.theme === 'light');
   const items = order.items || [];
+  const status = order.approvalStatus || 'Pending';
+  const isApproved = status === 'Approved';
+  const isRejected = status === 'Rejected';
+
+  // Colors based on theme
+  const bgCard = isDay ? '#ffffff' : '#070d19';
+  const borderCard = isDay ? '#cbd5e1' : '#334155';
+  const bgHeader = 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)';
+  const bgMeta = isDay ? '#f8fafc' : '#0f172a';
+  const borderMeta = isDay ? '#e2e8f0' : '#1e293b';
+  const labelColor = isDay ? '#64748b' : '#94a3b8';
+  const textPrimary = isDay ? '#0f172a' : '#f8fafc';
+  const textMuted = isDay ? '#475569' : '#cbd5e1';
+  const bgTableHead = isDay ? '#f1f5f9' : '#1e293b';
+  const textTableHead = isDay ? '#475569' : '#94a3b8';
+  const borderRow = isDay ? '#e2e8f0' : '#1e293b';
+  const bgTotalBox = isDay ? '#f8fafc' : '#0f172a';
+  const borderTotalBox = isDay ? '#e2e8f0' : '#1e293b';
+  const grandTotalColor = isDay ? '#059669' : '#34d399';
+  const footerBorder = isDay ? '#e2e8f0' : '#1e293b';
+
+  let statusBadgeHtml = '';
+  if (isApproved) {
+    statusBadgeHtml = '<span style="display: inline-block; padding: 6px 12px; background: #10b981; color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 11px; letter-spacing: 0.5px;">✓ AUTHORIZED & APPROVED</span>';
+  } else if (isRejected) {
+    statusBadgeHtml = '<span style="display: inline-block; padding: 6px 12px; background: #ef4444; color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 11px; letter-spacing: 0.5px;">✕ REJECTED ORDER</span>';
+  } else {
+    statusBadgeHtml = '<span style="display: inline-block; padding: 6px 12px; background: #f59e0b; color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 11px; letter-spacing: 0.5px;">⏳ PENDING AUTHORIZATION</span>';
+  }
+
   const rowsHtml = items.map(it => `
-    <tr style="border-bottom: 1px solid #1e293b;">
-      <td style="padding: 10px 8px; font-weight: 600; color: #f8fafc;">${escapeHtml(it.productName)}</td>
-      <td style="padding: 10px 8px; text-align: right; color: #94a3b8;">${formatCurrency(it.unitPrice)} AED</td>
-      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #38bdf8;">${it.salesQty}</td>
-      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #fbbf24;">${it.focQty > 0 ? `+${it.focQty} FOC` : '0'}</td>
-      <td style="padding: 10px 8px; text-align: right; font-weight: 700; color: #34d399;">${formatCurrency(it.total)} AED</td>
+    <tr style="border-bottom: 1px solid ${borderRow};">
+      <td style="padding: 10px 8px; font-weight: 700; color: ${textPrimary};">${escapeHtml(it.productName || it.productCode)}</td>
+      <td style="padding: 10px 8px; text-align: right; color: ${textMuted}; font-family: monospace;">${formatCurrency(it.unitPrice)} AED</td>
+      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #0284c7;">${it.salesQty}</td>
+      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #d97706;">${it.focQty > 0 ? `+${it.focQty} FOC` : '0'}</td>
+      <td style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${grandTotalColor}; font-family: monospace;">${formatCurrency(it.total)} AED</td>
     </tr>
   `).join('');
 
   return `
-    <div style="max-width: 680px; margin: 0 auto; background: #070d19; border: 1px solid #334155; border-radius: 16px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); padding: 24px; color: #ffffff;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
+    <div style="max-width: 680px; margin: 0 auto; background: ${bgCard}; border: 1px solid ${borderCard}; border-radius: 16px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06);">
+      <div style="background: ${bgHeader}; padding: 22px 24px; color: #ffffff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
           <div>
-            <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px;">Automated Executive Alert</span>
-            <h2 style="margin: 8px 0 2px 0; font-size: 20px; font-weight: 800;">Conceptors Animal Health LLC</h2>
-            <p style="margin: 0; font-size: 12px; opacity: 0.9;">Catalysis Spain • BARD Czech • Vitasigna • Ringbio</p>
+            <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; background: rgba(255,255,255,0.22); padding: 4px 10px; border-radius: 20px; display: inline-block;">Automated Executive Alert</span>
+            <h2 style="margin: 8px 0 2px 0; font-size: 20px; font-weight: 800; color: #ffffff;">Conceptors Animal Health LLC</h2>
+            <p style="margin: 0; font-size: 12px; color: #e0f2fe; opacity: 0.95;">Catalysis Spain • BARD Czech • Vitasigna • Ringbio</p>
           </div>
           <div style="text-align: right;">
-            <span style="display: inline-block; padding: 6px 12px; background: #10b981; color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 11px;">NEW FIELD ORDER</span>
-            <div style="font-size: 13px; font-family: monospace; font-weight: bold; margin-top: 4px;">#${order.invoiceNumber}</div>
+            ${statusBadgeHtml}
+            <div style="font-size: 13px; font-family: monospace; font-weight: bold; margin-top: 5px; color: #ffffff;">#${escapeHtml(order.invoiceNumber)}</div>
           </div>
         </div>
       </div>
 
-      <div style="padding: 20px; background: #0f172a; border-bottom: 1px solid #1e293b;">
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; font-size: 12px;">
+      <div style="padding: 20px; background: ${bgMeta}; border-bottom: 1px solid ${borderMeta};">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; font-size: 12px;">
           <div>
-            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Medical Representative</span>
-            <strong style="color: #38bdf8; font-size: 13px;">${escapeHtml(repName)}</strong>
+            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Medical Representative</span>
+            <strong style="color: #0284c7; font-size: 13px;">${escapeHtml(repName)}</strong>
           </div>
           <div>
-            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Veterinary Clinic / Partner</span>
-            <strong style="color: #f8fafc; font-size: 13px;">${escapeHtml(order.clientName)}</strong>
-            <span style="display: block; color: #94a3b8; font-size: 11px;">Account Code: <strong style="color: #38bdf8; font-family: monospace;">${escapeHtml(order.accountCode || order.clientCode || 'N/A')}</strong> • ${escapeHtml(order.location || 'UAE')}</span>
+            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Veterinary Clinic / Partner</span>
+            <strong style="color: ${textPrimary}; font-size: 13px;">${escapeHtml(order.clientName)}</strong>
+            <span style="display: block; color: ${textMuted}; font-size: 11px; margin-top: 2px;">Account Code: <strong style="color: #0284c7; font-family: monospace;">${escapeHtml(order.accountCode || order.clientCode || 'N/A')}</strong> • ${escapeHtml(order.location || 'UAE')}</span>
           </div>
           <div>
-            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Order Date</span>
-            <span style="color: #cbd5e1; font-weight: 600;">${order.date}</span>
+            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Order Date</span>
+            <span style="color: ${textPrimary}; font-weight: 600;">${order.date}</span>
           </div>
           <div>
-            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block;">Terms & Delivery</span>
-            <span style="color: #fcd34d; font-weight: 600;">${order.paymentTerms || '30 Days Credit'} • ${order.deliveryUrgency || 'Normal (48h)'}</span>
+            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Commercial Terms & Delivery</span>
+            <span style="color: #d97706; font-weight: 700;">${escapeHtml(order.paymentTerms || '30 Days Credit')} • ${escapeHtml(order.deliveryUrgency || 'Normal (48h)')}</span>
           </div>
         </div>
+        ${isRejected && order.rejectionReason ? `
+          <div style="margin-top: 14px; padding: 10px 14px; background: ${isDay ? '#fee2e2' : 'rgba(239, 68, 68, 0.15)'}; border: 1px solid #f87171; border-radius: 8px; color: #b91c1c; font-size: 11px;">
+            <strong>Rejection Reason:</strong> ${escapeHtml(order.rejectionReason)}
+            ${order.rejectedBy ? `<span style="display: block; margin-top: 2px; color: #dc2626;">By: ${escapeHtml(order.rejectedBy)}</span>` : ''}
+          </div>
+        ` : ''}
+        ${isApproved && order.approvedBy ? `
+          <div style="margin-top: 14px; padding: 10px 14px; background: ${isDay ? '#d1fae5' : 'rgba(16, 185, 129, 0.15)'}; border: 1px solid #34d399; border-radius: 8px; color: #047857; font-size: 11px;">
+            <strong>Authorized By:</strong> ${escapeHtml(order.approvedBy)}
+          </div>
+        ` : ''}
       </div>
 
       <div style="padding: 20px;">
-        <h4 style="margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;">Itemized Commercial Products</h4>
-        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
-          <thead>
-            <tr style="background: #1e293b; color: #94a3b8; text-transform: uppercase; font-size: 10px; font-weight: 700;">
-              <th style="padding: 8px; text-align: left;">Product SKU</th>
-              <th style="padding: 8px; text-align: right;">Unit Price</th>
-              <th style="padding: 8px; text-align: center;">Sales Qty</th>
-              <th style="padding: 8px; text-align: center;">Bonus FOC</th>
-              <th style="padding: 8px; text-align: right;">Line Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rowsHtml || '<tr><td colspan="5" style="text-align: center; padding: 12px; color: #64748b;">No products listed</td></tr>'}
-          </tbody>
-        </table>
+        <h4 style="margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: ${labelColor}; font-weight: 700;">Itemized Commercial Products</h4>
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="background: ${bgTableHead}; color: ${textTableHead}; text-transform: uppercase; font-size: 10px; font-weight: 700;">
+                <th style="padding: 10px 8px; text-align: left;">Product SKU</th>
+                <th style="padding: 10px 8px; text-align: right;">Unit Price</th>
+                <th style="padding: 10px 8px; text-align: center;">Sales Qty</th>
+                <th style="padding: 10px 8px; text-align: center;">Bonus FOC</th>
+                <th style="padding: 10px 8px; text-align: right;">Line Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml || `<tr><td colspan="5" style="text-align: center; padding: 14px; color: ${labelColor};">No products listed</td></tr>`}
+            </tbody>
+          </table>
+        </div>
 
-        <div style="margin-top: 20px; padding: 16px; background: #0f172a; border-radius: 12px; border: 1px solid #1e293b;">
-          <div style="display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-bottom: 6px;">
+        <div style="margin-top: 20px; padding: 16px; background: ${bgTotalBox}; border-radius: 12px; border: 1px solid ${borderTotalBox};">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: ${labelColor}; margin-bottom: 6px;">
             <span>Subtotal (Excl. VAT):</span>
-            <span style="font-weight: 600; color: #e2e8f0;">${formatCurrency(order.totalExcVat)} AED</span>
+            <span style="font-weight: 700; color: ${textPrimary}; font-family: monospace;">${formatCurrency(order.totalExcVat)} AED</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-bottom: 6px;">
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: ${labelColor}; margin-bottom: 6px;">
             <span>Standard UAE VAT (5%):</span>
-            <span style="font-weight: 600; color: #e2e8f0;">${formatCurrency(order.vatAmount)} AED</span>
+            <span style="font-weight: 700; color: ${textPrimary}; font-family: monospace;">${formatCurrency(order.vatAmount)} AED</span>
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: #ffffff; padding-top: 10px; border-top: 1px solid #334155;">
+          <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 800; color: ${textPrimary}; padding-top: 10px; border-top: 1px solid ${borderTotalBox};">
             <span>Grand Total Net (Incl. VAT):</span>
-            <span style="color: #34d399; font-size: 17px;">${formatCurrency(order.totalIncVat)} AED</span>
+            <span style="color: ${grandTotalColor}; font-size: 18px; font-weight: 800; font-family: monospace;">${formatCurrency(order.totalIncVat)} AED</span>
           </div>
         </div>
 
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 11px; color: #64748b;">Conceptors CRM Automated Alert Server</span>
-          ${state.currentUser && state.currentUser.role === 'manager' ? `
-            <button onclick="approveOrderDirect('${order.invoiceNumber}')" style="background: #10b981; color: #ffffff; border: none; padding: 8px 18px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
-              ✓ Authorize & Approve Order
-            </button>
-          ` : ''}
+        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid ${footerBorder}; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <span style="font-size: 11px; color: ${labelColor};">Conceptors CRM Senior Manager Dispatch Engine</span>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            ${state.currentUser && state.currentUser.role === 'manager' ? `
+              ${!isApproved ? `
+                <button type="button" onclick="approveOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #10b981; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                  ✓ Authorize
+                </button>
+              ` : ''}
+              <button type="button" onclick="closeEmailModal(); openAmendOrderModal('${escapeHtml(order.invoiceNumber)}');" style="background: #f59e0b; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                ✏️ Amend Order
+              </button>
+              ${!isRejected ? `
+                <button type="button" onclick="rejectOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #ef4444; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                  ✕ Reject Order
+                </button>
+              ` : ''}
+            ` : ''}
+          </div>
         </div>
       </div>
     </div>
@@ -6121,13 +6523,21 @@ function calculateRepMetrics(repKey = 'ALL', timeframe = 'MTD') {
     return c.repId === repKey || c.territory === repKey || c.territoryId === repKey;
   });
 
+  const dateFrom = state.filters.analyticsDateFrom || '';
+  const dateTo = state.filters.analyticsDateTo || '';
+
+  const inRange = (d) => {
+    if (!d) return false;
+    const dateStr = String(d).slice(0, 10);
+    if (dateFrom && dateStr < dateFrom) return false;
+    if (dateTo && dateStr > dateTo) return false;
+    return true;
+  };
+
   const allVisits = (state.visits || []).filter(v => {
     if (v.status !== 'Completed') return false;
     if (repKey !== 'ALL' && v.repId !== repKey && v.territory !== repKey) return false;
-    if (timeframe === 'MTD') {
-      return v.date && v.date.startsWith('2026-09');
-    }
-    return true;
+    return inRange(v.date);
   });
 
   const totalAccounts = accounts.length;
@@ -6140,8 +6550,7 @@ function calculateRepMetrics(repKey = 'ALL', timeframe = 'MTD') {
   // Planned Adherence
   const plannedScheduled = (state.plannedVisits || []).filter(pv => {
     if (repKey !== 'ALL' && pv.repId !== repKey && pv.territory !== repKey) return false;
-    if (timeframe === 'MTD') return pv.date && pv.date.startsWith('2026-09');
-    return true;
+    return inRange(pv.date);
   });
   const completedPlanned = completedVisits.filter(v => v.isPlanned);
   const totalPlannedCount = Math.max(plannedScheduled.length, completedPlanned.length);
@@ -6151,16 +6560,22 @@ function calculateRepMetrics(repKey = 'ALL', timeframe = 'MTD') {
   const unplannedVisits = completedVisits.filter(v => !v.isPlanned);
   const unplannedRatio = completedVisits.length > 0 ? ((unplannedVisits.length / completedVisits.length) * 100) : 0;
 
-  // Commercial revenue & orders
+  // Commercial revenue & orders (exclude Rejected)
   const orders = (state.orders || []).filter(o => {
     if (repKey !== 'ALL' && o.repId !== repKey && o.territory !== repKey) return false;
-    if (timeframe === 'MTD') return o.date && o.date.startsWith('2026-09');
-    return true;
+    if (o.approvalStatus === 'Rejected') return false;
+    return inRange(o.date);
   });
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.grandTotal || o.totalIncVat) || 0), 0);
   const avgOrderValue = orders.length > 0 ? (totalRevenue / orders.length) : 0;
 
-  const orderVisits = completedVisits.filter(v => v.orderPlaced || (v.orderData && (v.orderData.grandTotal > 0 || v.orderData.totalIncVat > 0)));
+  const orderVisits = completedVisits.filter(v => {
+    if (v.orderPlaced) return true;
+    if (v.orderData && (v.orderData.grandTotal > 0 || v.orderData.totalIncVat > 0)) {
+      if (v.orderData.approvalStatus !== 'Rejected') return true;
+    }
+    return false;
+  });
   const orderStrikeRate = completedVisits.length > 0 ? ((orderVisits.length / completedVisits.length) * 100) : 0;
 
   const samplingVisits = completedVisits.filter(v => v.samplesGiven || (Array.isArray(v.samplesList) && v.samplesList.length > 0) || v.sampleProduct);
@@ -6264,7 +6679,23 @@ function renderAnalyticsDashboard() {
   }
 
   const activeRep = isManager ? (state.filters.analyticsRepFilter || 'ALL') : userTerritory;
-  const activeTimeframe = state.filters.analyticsTimeframe || 'MTD';
+  const activeTimeframe = state.filters.analyticsTimeframe || 'SEP_2026';
+  const curFrom = state.filters.analyticsDateFrom || '2026-09-01';
+  const curTo = state.filters.analyticsDateTo || '2026-09-30';
+
+  // Synchronize Calendar Inputs & Preset Dropdown if not currently focused
+  const dateFromInput = document.getElementById('analyticsDateFrom');
+  const dateToInput = document.getElementById('analyticsDateTo');
+  const presetSelect = document.getElementById('analyticsTimeframeSelect');
+  if (dateFromInput && document.activeElement !== dateFromInput) {
+    dateFromInput.value = curFrom;
+  }
+  if (dateToInput && document.activeElement !== dateToInput) {
+    dateToInput.value = curTo;
+  }
+  if (presetSelect && document.activeElement !== presetSelect) {
+    presetSelect.value = activeTimeframe;
+  }
 
   // Rep Selector Container Visibility & Button Styling
   const repSelectorContainer = document.getElementById('analyticsRepSelectorContainer');
@@ -6290,6 +6721,7 @@ function renderAnalyticsDashboard() {
   const headingEl = document.getElementById('analyticsHeading');
   const repPillEl = document.getElementById('analyticsRepPill');
   const subtitleEl = document.getElementById('analyticsSubtitle');
+  const dateRangeLabel = curFrom && curTo ? `${curFrom} to ${curTo}` : (curFrom ? `From ${curFrom}` : (curTo ? `Up to ${curTo}` : 'All Time'));
 
   if (headingEl && repPillEl) {
     if (isManager) {
@@ -6297,24 +6729,24 @@ function renderAnalyticsDashboard() {
         headingEl.textContent = 'National Territory Performance & Field Benchmarking';
         repPillEl.textContent = 'National Overview (Shaimaa & Marsel)';
         repPillEl.className = 'px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold';
-        if (subtitleEl) subtitleEl.textContent = 'Consolidated territory coverage, call frequency, plan compliance, and commercial yield for Dr. Sameh Ageez';
+        if (subtitleEl) subtitleEl.textContent = `Period: ${dateRangeLabel} • Consolidated territory coverage, call frequency, plan compliance, and commercial yield for Dr. Sameh Ageez`;
       } else if (activeRep === 'T1') {
         headingEl.textContent = 'Territory 1 Analytics — Shaimaa';
         repPillEl.textContent = 'Shaimaa • Territory 1 (Dubai / Abu Dhabi / Al Ain)';
         repPillEl.className = 'px-2.5 py-0.5 rounded-full badge-t1 text-[10px] font-bold';
-        if (subtitleEl) subtitleEl.textContent = 'Detailed territory audit for Shaimaa (Dubai, Abu Dhabi, Al Ain)';
+        if (subtitleEl) subtitleEl.textContent = `Period: ${dateRangeLabel} • Detailed territory audit for Shaimaa (Dubai, Abu Dhabi, Al Ain)`;
       } else {
         headingEl.textContent = 'Territory 2 Analytics — Marsel';
         repPillEl.textContent = 'Marsel • Territory 2 (Northern Emirates)';
         repPillEl.className = 'px-2.5 py-0.5 rounded-full badge-t2 text-[10px] font-bold';
-        if (subtitleEl) subtitleEl.textContent = 'Detailed territory audit for Marsel (Sharjah, Ajman, RAK, Fujairah, UAQ)';
+        if (subtitleEl) subtitleEl.textContent = `Period: ${dateRangeLabel} • Detailed territory audit for Marsel (Sharjah, Ajman, RAK, Fujairah, UAQ)`;
       }
     } else {
       const repName = user.name || (userTerritory === 'T1' ? 'Shaimaa' : 'Marsel');
       headingEl.textContent = `${escapeHtml(repName)}'s Field Performance & Territory Analytics`;
       repPillEl.textContent = userTerritory === 'T1' ? 'Shaimaa • Territory 1 (Dubai / AUH / Al Ain)' : 'Marsel • Territory 2 (Northern Emirates)';
       repPillEl.className = `px-2.5 py-0.5 rounded-full ${userTerritory === 'T1' ? 'badge-t1' : 'badge-t2'} text-[10px] font-bold`;
-      if (subtitleEl) subtitleEl.textContent = 'Real-time personal call frequency, account coverage, plan adherence, and order strike metrics';
+      if (subtitleEl) subtitleEl.textContent = `Period: ${dateRangeLabel} • Real-time personal call frequency, account coverage, plan adherence, and order strike metrics`;
     }
   }
 
@@ -6593,7 +7025,17 @@ function renderAnalyticsRosterOnly() {
   const isManager = state.currentUser && state.currentUser.role === 'manager';
   const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : (state.currentUser.role === 'rep_t2' ? 'T2' : 'ALL'))) : 'ALL';
   const activeRep = isManager ? (state.filters.analyticsRepFilter || 'ALL') : userTerritory;
-  const timeframe = state.filters.analyticsTimeframe || 'MTD';
+  const dateFrom = state.filters.analyticsDateFrom || '';
+  const dateTo = state.filters.analyticsDateTo || '';
+
+  const inRange = (d) => {
+    if (!d) return false;
+    const dateStr = String(d).slice(0, 10);
+    if (dateFrom && dateStr < dateFrom) return false;
+    if (dateTo && dateStr > dateTo) return false;
+    return true;
+  };
+
   const q = (state.filters.analyticsRosterSearch || '').toLowerCase().trim();
   const filterType = state.filters.analyticsRosterFilter || 'ALL';
 
@@ -6603,16 +7045,15 @@ function renderAnalyticsRosterOnly() {
     return c.repId === activeRep || c.territory === activeRep || c.territoryId === activeRep;
   });
 
-  // Calculate visits and orders per account
+  // Calculate visits and orders per account in selected period
   const visits = (state.visits || []).filter(v => {
     if (v.status !== 'Completed') return false;
-    if (timeframe === 'MTD') return v.date && v.date.startsWith('2026-09');
-    return true;
+    return inRange(v.date);
   });
 
   const orders = (state.orders || []).filter(o => {
-    if (timeframe === 'MTD') return o.date && o.date.startsWith('2026-09');
-    return true;
+    if (o.approvalStatus === 'Rejected') return false;
+    return inRange(o.date);
   });
 
   // Filter accounts by search & roster filter
@@ -6724,9 +7165,174 @@ window.setAnalyticsRepFilter = function(filter) {
   renderAnalyticsDashboard();
 };
 
-window.handleAnalyticsTimeframeChange = function(tf) {
-  state.filters.analyticsTimeframe = tf;
+window.handleAnalyticsPresetChange = function(preset) {
+  state.filters.analyticsTimeframe = preset;
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  if (preset === 'SEP_2026') {
+    state.filters.analyticsDateFrom = '2026-09-01';
+    state.filters.analyticsDateTo = '2026-09-30';
+  } else if (preset === 'OCT_2026') {
+    state.filters.analyticsDateFrom = '2026-10-01';
+    state.filters.analyticsDateTo = '2026-10-31';
+  } else if (preset === 'THIS_MONTH') {
+    const firstDay = `${yyyy}-${mm}-01`;
+    const lastDayNum = new Date(yyyy, now.getMonth() + 1, 0).getDate();
+    const lastDay = `${yyyy}-${mm}-${String(lastDayNum).padStart(2, '0')}`;
+    state.filters.analyticsDateFrom = firstDay;
+    state.filters.analyticsDateTo = lastDay;
+  } else if (preset === 'LAST_30') {
+    const past = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    const py = past.getFullYear();
+    const pm = String(past.getMonth() + 1).padStart(2, '0');
+    const pd = String(past.getDate()).padStart(2, '0');
+    state.filters.analyticsDateFrom = `${py}-${pm}-${pd}`;
+    state.filters.analyticsDateTo = todayStr;
+  } else if (preset === 'TODAY') {
+    state.filters.analyticsDateFrom = todayStr;
+    state.filters.analyticsDateTo = todayStr;
+  } else if (preset === 'ALL_TIME') {
+    state.filters.analyticsDateFrom = '';
+    state.filters.analyticsDateTo = '';
+  }
+
+  // Update calendar inputs in DOM if present
+  const fromEl = document.getElementById('analyticsDateFrom');
+  const toEl = document.getElementById('analyticsDateTo');
+  if (fromEl) fromEl.value = state.filters.analyticsDateFrom;
+  if (toEl) toEl.value = state.filters.analyticsDateTo;
+
   renderAnalyticsDashboard();
+};
+
+window.handleAnalyticsTimeframeChange = window.handleAnalyticsPresetChange;
+
+window.handleAnalyticsDateRangeChange = function() {
+  const fromEl = document.getElementById('analyticsDateFrom');
+  const toEl = document.getElementById('analyticsDateTo');
+  const presetEl = document.getElementById('analyticsTimeframeSelect');
+
+  const fromVal = fromEl ? fromEl.value : '';
+  const toVal = toEl ? toEl.value : '';
+
+  state.filters.analyticsDateFrom = fromVal;
+  state.filters.analyticsDateTo = toVal;
+  state.filters.analyticsTimeframe = 'CUSTOM';
+  if (presetEl) presetEl.value = 'CUSTOM';
+
+  renderAnalyticsDashboard();
+};
+
+window.exportAnalyticsPeriodCSV = function() {
+  const isManager = state.currentUser && state.currentUser.role === 'manager';
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : (state.currentUser.role === 'rep_t2' ? 'T2' : 'ALL'))) : 'ALL';
+  const activeRep = isManager ? (state.filters.analyticsRepFilter || 'ALL') : userTerritory;
+  
+  const m = calculateRepMetrics(activeRep, state.filters.analyticsTimeframe);
+  const curFrom = state.filters.analyticsDateFrom || 'AllTime';
+  const curTo = state.filters.analyticsDateTo || 'AllTime';
+  const periodLabel = `${curFrom}_to_${curTo}`;
+  const repLabel = activeRep === 'ALL' ? 'National' : (activeRep === 'T1' ? 'Shaimaa_T1' : 'Marsel_T2');
+
+  const rows = [];
+  rows.push(['CONCEPTORS VETERINARY CRM - EXECUTIVE FIELD ANALYTICS & KPI REPORT']);
+  rows.push(['Report Period', `"${curFrom} to ${curTo}"`]);
+  rows.push(['Territory / Rep Filter', `"${repLabel}"`]);
+  rows.push(['Generated By', `"${state.currentUser?.name || 'Authorized User'}"`]);
+  rows.push(['Generated At', `"${new Date().toLocaleString('en-US', { timeZone: 'Asia/Dubai' })} GST"`]);
+  rows.push([]);
+
+  // Section 1: KPI Summary Scorecard
+  rows.push(['--- EXECUTIVE KPI SCORECARD ---']);
+  rows.push(['Metric Name', 'Value', 'Unit / Benchmark', 'Detail']);
+  rows.push(['Account Universe', m.totalAccounts, 'Clinics / Pharmacies', 'Total accounts assigned']);
+  rows.push(['Accounts Covered', m.uniqueVisitedCount, 'Clinics Visited', `${m.coveragePct.toFixed(1)}% Coverage`]);
+  rows.push(['Customer Coverage Rate', `${m.coveragePct.toFixed(1)}%`, 'Target >= 85%', `${m.uniqueVisitedCount} of ${m.totalAccounts} accounts reached`]);
+  rows.push(['Completed Field Visits', m.completedVisitsCount, 'Visits Conducted', `${m.callFrequency.toFixed(2)} calls per covered account`]);
+  rows.push(['Call Frequency', `${m.callFrequency.toFixed(2)}x`, 'Calls/Account', 'Call repetition intensity']);
+  rows.push(['Planned Calls Scheduled', m.plannedScheduledCount, 'Calls in Plan', 'Monthly plan target']);
+  rows.push(['Planned Calls Completed', m.completedPlannedCount, 'Visits', 'Plan execution count']);
+  rows.push(['Plan Adherence Rate', `${m.adherencePct.toFixed(1)}%`, 'Target >= 85%', `${m.completedPlannedCount} of ${m.plannedScheduledCount} planned calls`]);
+  rows.push(['Unplanned / Ad-hoc Calls', m.unplannedVisitsCount, 'Calls', `${m.unplannedRatio.toFixed(1)}% of total visits`]);
+  rows.push(['Sampling Strike Rate', `${m.samplingStrikeRate.toFixed(1)}%`, 'Visits with Samples', `${m.samplingVisitsCount} sampling interactions`]);
+  rows.push(['Order Strike Rate', `${m.orderStrikeRate.toFixed(1)}%`, 'Visits with Orders', `${m.orderVisitsCount} commercial conversions`]);
+  rows.push(['Total Booked Orders', m.ordersCount, 'Purchase Orders', 'Approved/Pending orders in period']);
+  rows.push(['Gross Booked Revenue (AED)', m.totalRevenue.toFixed(2), 'AED Total Inc VAT', 'Commercial yield (excluding rejected)']);
+  rows.push(['Average Order Value (AED)', m.avgOrderValue.toFixed(2), 'AED / Order', 'Transaction average']);
+  rows.push([]);
+
+  // Section 2: Manager Head-to-Head Benchmark (if Manager)
+  if (isManager && activeRep === 'ALL') {
+    const m1 = calculateRepMetrics('T1', state.filters.analyticsTimeframe);
+    const m2 = calculateRepMetrics('T2', state.filters.analyticsTimeframe);
+    rows.push(['--- HEAD-TO-HEAD TERRITORY BENCHMARK ---']);
+    rows.push(['Performance Metric', 'Shaimaa (T1 - Dubai/AUH/Al Ain)', 'Marsel (T2 - Northern Emirates)', 'National Total']);
+    rows.push(['Account Universe', `${m1.totalAccounts} accounts`, `${m2.totalAccounts} accounts`, `${m1.totalAccounts + m2.totalAccounts} accounts`]);
+    rows.push(['Coverage Rate', `${m1.coveragePct.toFixed(1)}% (${m1.uniqueVisitedCount}/${m1.totalAccounts})`, `${m2.coveragePct.toFixed(1)}% (${m2.uniqueVisitedCount}/${m2.totalAccounts})`, `${((m1.uniqueVisitedCount + m2.uniqueVisitedCount) / Math.max(1, m1.totalAccounts + m2.totalAccounts) * 100).toFixed(1)}%`]);
+    rows.push(['Completed Visits', m1.completedVisitsCount, m2.completedVisitsCount, m1.completedVisitsCount + m2.completedVisitsCount]);
+    rows.push(['Call Frequency', `${m1.callFrequency.toFixed(2)}x`, `${m2.callFrequency.toFixed(2)}x`, `${((m1.completedVisitsCount + m2.completedVisitsCount) / Math.max(1, m1.uniqueVisitedCount + m2.uniqueVisitedCount)).toFixed(2)}x`]);
+    rows.push(['Plan Adherence', `${m1.adherencePct.toFixed(1)}%`, `${m2.adherencePct.toFixed(1)}%`, `${((m1.completedPlannedCount + m2.completedPlannedCount) / Math.max(1, m1.plannedScheduledCount + m2.plannedScheduledCount) * 100).toFixed(1)}%`]);
+    rows.push(['Unplanned Ratio', `${m1.unplannedRatio.toFixed(1)}%`, `${m2.unplannedRatio.toFixed(1)}%`, `${((m1.unplannedVisitsCount + m2.unplannedVisitsCount) / Math.max(1, m1.completedVisitsCount + m2.completedVisitsCount) * 100).toFixed(1)}%`]);
+    rows.push(['Sampling Strike Rate', `${m1.samplingStrikeRate.toFixed(1)}%`, `${m2.samplingStrikeRate.toFixed(1)}%`, `${((m1.samplingVisitsCount + m2.samplingVisitsCount) / Math.max(1, m1.completedVisitsCount + m2.completedVisitsCount) * 100).toFixed(1)}%`]);
+    rows.push(['Order Strike Rate', `${m1.orderStrikeRate.toFixed(1)}%`, `${m2.orderStrikeRate.toFixed(1)}%`, `${((m1.orderVisitsCount + m2.orderVisitsCount) / Math.max(1, m1.completedVisitsCount + m2.completedVisitsCount) * 100).toFixed(1)}%`]);
+    rows.push(['Total Booked Orders', m1.ordersCount, m2.ordersCount, m1.ordersCount + m2.ordersCount]);
+    rows.push(['Gross Booked Revenue (AED)', m1.totalRevenue.toFixed(2), m2.totalRevenue.toFixed(2), (m1.totalRevenue + m2.totalRevenue).toFixed(2)]);
+    rows.push([]);
+  }
+
+  // Section 3: Itemized Account Performance Table
+  rows.push(['--- ITEMIZED ACCOUNT ROSTER PERFORMANCE ---']);
+  rows.push([
+    'Account Code', 'Clinic Name', 'Contact Person', 'Territory', 'Medical Rep',
+    'Location / City', 'Tier', 'Period Visits Count', 'Coverage Status',
+    'Last Visit Date', 'Period Orders Count', 'Period Revenue (AED)'
+  ]);
+
+  const dateFrom = state.filters.analyticsDateFrom || '';
+  const dateTo = state.filters.analyticsDateTo || '';
+  const inRange = (d) => {
+    if (!d) return false;
+    const dateStr = String(d).slice(0, 10);
+    if (dateFrom && dateStr < dateFrom) return false;
+    if (dateTo && dateStr > dateTo) return false;
+    return true;
+  };
+
+  const periodVisits = (state.visits || []).filter(v => v.status === 'Completed' && inRange(v.date));
+  const periodOrders = (state.orders || []).filter(o => o.approvalStatus !== 'Rejected' && inRange(o.date));
+
+  m.accounts.forEach(acc => {
+    const accVisits = periodVisits.filter(v => (v.customerCode === acc.code || v.clientCode === acc.code));
+    const sortedVisits = [...accVisits].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const lastVisit = sortedVisits[0];
+    const accOrders = periodOrders.filter(o => (o.customerCode === acc.code || o.clientCode === acc.code));
+    const totalOrderVal = accOrders.reduce((sum, o) => sum + (Number(o.grandTotal || o.totalIncVat) || 0), 0);
+    const accTerritory = acc.repId || acc.territory || 'T1';
+
+    rows.push([
+      `"${acc.code}"`,
+      `"${(acc.name || '').replace(/"/g, '""')}"`,
+      `"${(acc.contactPerson || acc.doctor || '').replace(/"/g, '""')}"`,
+      `"${accTerritory}"`,
+      `"${accTerritory === 'T1' ? 'Shaimaa' : 'Marsel'}"`,
+      `"${(acc.location || acc.city || 'UAE').replace(/"/g, '""')}"`,
+      `"${acc.tier || 'Silver'}"`,
+      accVisits.length,
+      accVisits.length > 0 ? 'Covered' : 'Unreached',
+      `"${lastVisit ? lastVisit.date : 'Never'}"`,
+      accOrders.length,
+      totalOrderVal.toFixed(2)
+    ]);
+  });
+
+  const csvContent = rows.map(r => r.join(',')).join('\r\n');
+  const filename = `Conceptors_Analytics_KPI_${repLabel}_${periodLabel}.csv`;
+  downloadCsvFile(filename, csvContent);
+  showToast('📥 Analytics Period CSV Exported', `Generated KPI & performance report for ${periodLabel}.`, 'success');
 };
 
 window.handleAnalyticsRosterSearch = function(query) {

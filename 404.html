@@ -867,7 +867,8 @@
           <select id="ordersApprovalFilter" onchange="handleOrdersFilter()" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none">
             <option value="ALL">All Approval Statuses</option>
             <option value="Pending">⏳ Pending Senior Manager Approval</option>
-            <option value="Approved">✅ Approved Orders</option>
+            <option value="Approved">✓ Approved Orders</option>
+            <option value="Rejected">✕ Rejected Orders</option>
           </select>
         </div>
 
@@ -1075,12 +1076,36 @@
             <button type="button" onclick="setAnalyticsRepFilter('T2')" id="analyticsRepBtn-T2" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all">Marsel (T2)</button>
           </div>
 
-          <!-- Time Period Selector -->
-          <select id="analyticsTimeframeSelect" onchange="handleAnalyticsTimeframeChange(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-brand-500">
-            <option value="MTD" selected>Month-to-Date (Sep 2026)</option>
-            <option value="LAST_30">Last 30 Days Cycle</option>
-            <option value="Q3">Q3 2026 Quarterly</option>
-          </select>
+          <!-- Period Presets Dropdown -->
+          <div class="analytics-filter-box flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5">
+            <label for="analyticsTimeframeSelect" class="text-[10px] uppercase font-bold text-slate-400">Preset:</label>
+            <select id="analyticsTimeframeSelect" onchange="handleAnalyticsPresetChange(this.value)" class="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer">
+              <option value="SEP_2026" selected>September 2026 (Pilot Cycle)</option>
+              <option value="OCT_2026">October 2026</option>
+              <option value="THIS_MONTH">This Month</option>
+              <option value="LAST_30">Last 30 Days</option>
+              <option value="TODAY">Today</option>
+              <option value="ALL_TIME">All Time</option>
+              <option value="CUSTOM">Custom Range</option>
+            </select>
+          </div>
+
+          <!-- Date Range Picker (From : To :) with Calendar inputs -->
+          <div class="analytics-filter-box flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-300">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From:</span>
+              <input type="date" id="analyticsDateFrom" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">To:</span>
+              <input type="date" id="analyticsDateTo" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
+            </div>
+          </div>
+
+          <!-- Quick Export Period Report Button -->
+          <button type="button" onclick="exportAnalyticsPeriodCSV()" class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all" title="Export KPI Summary & Territory Performance Report for chosen period to CSV">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export Period CSV
+          </button>
         </div>
       </div>
 
@@ -1873,7 +1898,7 @@
             <i data-lucide="shopping-bag" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">Book Commercial Field Sales Order</h3>
+            <h3 id="orderModalTitle" class="text-base font-bold text-white">Book Commercial Field Sales Order</h3>
             <p class="text-[11px] text-slate-400">Automated bonus FOC & senior manager instant notification</p>
           </div>
         </div>
@@ -2001,7 +2026,7 @@
 
         <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2 shrink-0">
           <button type="button" onclick="closeOrderModal()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold">Cancel</button>
-          <button type="submit" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/25 flex items-center gap-2">
+          <button type="submit" id="btnSubmitOrder" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/25 flex items-center gap-2">
             <i data-lucide="send" class="w-4 h-4"></i> Submit Order & Alert Senior Managers
           </button>
         </div>
@@ -2039,35 +2064,55 @@
   </div>
 
   <!-- ================= MODAL: VIEW DISPATCHED EXECUTIVE EMAIL ================= -->
-  <div id="viewEmailModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-    <div class="glass-panel bg-[#0c1322] border border-sky-500/40 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative text-xs my-8 max-h-[90vh] flex flex-col">
+  <div id="viewEmailModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-sky-500/40 rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl relative text-xs my-auto max-h-[92vh] flex flex-col">
+      <!-- Header Top Row: Title + Close Button -->
       <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
-        <div class="flex items-center gap-2.5">
-          <div class="p-2 rounded-xl bg-sky-500/20 text-sky-300">
+        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <div class="p-2 rounded-xl bg-sky-500/20 text-sky-400 shrink-0">
             <i data-lucide="mail-check" class="w-5 h-5"></i>
           </div>
-          <div>
-            <h3 class="text-base font-bold text-white flex items-center gap-2">
-              <span>Executive Order Notification Email</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Dispatched</span>
-            </h3>
-            <p class="text-[11px] text-slate-400" id="emailRecipientHeader">Sent to Senior Management Team</p>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="text-sm sm:text-base font-bold text-white truncate modal-header-title">Executive Order Alert</h3>
+              <span id="emailModalStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Dispatched
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 truncate mt-0.5" id="emailRecipientHeader">Sent to Senior Management Team</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button id="btnWhatsappShareAction" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
-            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp
-          </button>
-          <button id="btnResendEmailAction" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform">
-            <i data-lucide="send" class="w-3.5 h-3.5"></i> Open in Mail Client
-          </button>
-          <button type="button" onclick="closeEmailModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/60 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation" aria-label="Close email modal">
-            <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
-          </button>
-        </div>
+        <button type="button" onclick="closeEmailModal()" class="w-9 h-9 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation btn-close-modal" aria-label="Close email modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
       </div>
 
-      <div class="mt-4 flex-1 overflow-y-auto bg-slate-950 p-5 rounded-xl border border-slate-800 text-slate-200" id="emailPreviewContent">
+      <!-- Action Command Toolbar: Responsive Grid on Mobile for Perfect Alignment -->
+      <div id="emailModalActionToolbar" class="pt-3 pb-2 shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 border-b border-slate-800/80">
+        <button id="btnWhatsappShareAction" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
+          <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+          <span>WhatsApp</span>
+        </button>
+        <button id="btnResendEmailAction" class="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Mail Client</span>
+        </button>
+        <button id="btnModalAuthorizeOrder" class="hidden px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          <span>Authorize</span>
+        </button>
+        <button id="btnModalAmendOrder" class="hidden px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
+          <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+          <span>Amend</span>
+        </button>
+        <button id="btnModalRejectOrder" class="hidden px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
+          <i data-lucide="x-circle" class="w-3.5 h-3.5"></i>
+          <span>Reject</span>
+        </button>
+      </div>
+
+      <!-- Preview Content Scroll Area -->
+      <div class="mt-3 flex-1 overflow-y-auto bg-slate-950 p-3 sm:p-5 rounded-xl border border-slate-800 text-slate-200" id="emailPreviewContent">
         <!-- Injected via JS -->
       </div>
     </div>
@@ -3004,9 +3049,10 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Status:</label>
                   <select id="exportOrdersStatus" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-amber-500">
-                    <option value="ALL">All Orders (Pending + Approved)</option>
+                    <option value="ALL">All Orders (Pending + Approved + Rejected)</option>
                     <option value="Approved">Approved Orders Only</option>
                     <option value="Pending">Pending Manager Approval Only</option>
+                    <option value="Rejected">Rejected Orders Only</option>
                   </select>
                 </div>
               </div>

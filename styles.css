@@ -1104,28 +1104,73 @@ html:not(.dark) #managerNotificationsList button[onclick*="markNotificationReadD
 /* Executive Email Preview Modal in Bright Mode */
 html:not(.dark) #viewEmailModal .glass-panel {
   background-color: #ffffff !important;
-  border: 2px solid #cbd5e1 !important;
-  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 25px 60px -10px rgba(15, 23, 42, 0.18) !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #viewEmailModal .modal-header-title,
+html:not(.dark) #viewEmailModal h3 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #viewEmailModal #emailRecipientHeader {
+  color: #475569 !important;
+}
+
+html:not(.dark) #viewEmailModal .btn-close-modal {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #viewEmailModal .btn-close-modal:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 html:not(.dark) #emailPreviewContent {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #emailModalActionToolbar {
+  border-top-color: #e2e8f0 !important;
+}
+
+/* Ensure buttons in email modal retain white text on colored backgrounds */
+#viewEmailModal #btnWhatsappShareAction,
+#viewEmailModal #btnResendEmailAction,
+#viewEmailModal #btnModalAuthorizeOrder,
+#viewEmailModal #btnModalAmendOrder,
+#viewEmailModal #btnModalRejectOrder {
+  color: #ffffff !important;
+}
+
+/* Analytics Period Picker in Bright Mode */
+html:not(.dark) .analytics-filter-box {
   background-color: #ffffff !important;
-  border: 2px solid #cbd5e1 !important;
-  color: #0f172a !important;
-}
-
-html:not(.dark) #emailPreviewContent * {
-  color: #0f172a !important;
-}
-
-html:not(.dark) #emailPreviewContent table th {
-  background-color: #f1f5f9 !important;
-  color: #0f172a !important;
   border-color: #cbd5e1 !important;
+  color: #334155 !important;
 }
 
-html:not(.dark) #emailPreviewContent table td {
-  border-color: #e2e8f0 !important;
+html:not(.dark) .analytics-filter-box label,
+html:not(.dark) .analytics-filter-box span {
+  color: #64748b !important;
+}
+
+html:not(.dark) #analyticsDateFrom,
+html:not(.dark) #analyticsDateTo,
+html:not(.dark) #analyticsTimeframeSelect {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #analyticsTimeframeSelect option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
 }
 
 /* Manager Settings Modal in Bright Mode */
@@ -1715,6 +1760,7 @@ html:not(.dark) .mobile-nav-btn.active {
   #addUnplannedVisitModal > div,
   #planVisitModal > div,
   #orderModal > div,
+  #fieldOrderModal > div,
   #managerNotificationsModal > div,
   #viewEmailModal > div,
   #managerSettingsModal > div {
