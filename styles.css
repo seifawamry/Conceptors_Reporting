@@ -1142,6 +1142,7 @@ html:not(.dark) #emailModalActionToolbar {
 /* Ensure buttons in email modal retain white text on colored backgrounds */
 #viewEmailModal #btnWhatsappShareAction,
 #viewEmailModal #btnResendEmailAction,
+#viewEmailModal #btnCopyOrderTemplateAction,
 #viewEmailModal #btnModalAuthorizeOrder,
 #viewEmailModal #btnModalAmendOrder,
 #viewEmailModal #btnModalRejectOrder {

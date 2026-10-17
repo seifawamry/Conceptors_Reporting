@@ -5757,7 +5757,7 @@ window.handleOrderSubmit = function(e) {
     if (notif) {
       notif.totalExcVat = subtotal;
       notif.totalIncVat = totalIncVat;
-      notif.itemsSummary = items.map(i => `${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? ` + ${i.focQty} FOC` : ''})`).join(', ');
+      notif.itemsSummary = items.map(i => `[${i.productCode || i.code || ''}] ${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? ` + ${i.focQty} FOC` : ''})`).join(', ');
       notif.paymentTerms = paymentTerms;
       notif.deliveryUrgency = deliveryUrgency;
       notif.items = items;
@@ -5869,7 +5869,7 @@ window.handleOrderSubmit = function(e) {
     timestamp: new Date().toISOString(),
     read: false,
     approvalStatus: 'Pending',
-    itemsSummary: items.map(i => `${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? ` + ${i.focQty} FOC` : ''})`).join(', '),
+    itemsSummary: items.map(i => `[${i.productCode || i.code || ''}] ${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? ` + ${i.focQty} FOC` : ''})`).join(', '),
     paymentTerms,
     deliveryUrgency,
     items
@@ -6340,13 +6340,33 @@ window.viewNotificationEmailByOrder = function(orderNum) {
 
   const btnResend = document.getElementById('btnResendEmailAction');
   if (btnResend) {
-    const accountCode = targetOrder.accountCode || targetOrder.clientCode || '';
+    let accountCode = targetOrder.accountCode || targetOrder.account_code || targetOrder.clientCode || targetOrder.client_code || '';
+    if (!accountCode && targetOrder.clientName && Array.isArray(state.customers)) {
+      const cust = state.customers.find(c => c.name === targetOrder.clientName || c.clientName === targetOrder.clientName);
+      if (cust) accountCode = cust.code || cust.clientCode || '';
+    }
     const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
     const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${targetOrder.invoiceNumber} - ${targetOrder.clientName}${accountTag} (${formatCurrency(targetOrder.totalIncVat)} AED)`);
-    const body = encodeURIComponent(`Senior Management Team,\n\nA new commercial sales order was submitted by ${repName}.\n\nOrder Ref: #${targetOrder.invoiceNumber}\nClient: ${targetOrder.clientName}\nAccount Code: ${accountCode || 'N/A'}\nLocation: ${targetOrder.location}\nNet Total: ${formatCurrency(targetOrder.totalIncVat)} AED (Incl. 5% VAT)\n\nPlease review and authorize.`);
+    const plainTextBody = formatOrderEmailPlainText(targetOrder, repName);
     btnResend.onclick = () => {
       const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
-      window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${body}`, '_blank');
+      window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${encodeURIComponent(plainTextBody)}`, '_blank');
+    };
+  }
+
+  const btnCopy = document.getElementById('btnCopyOrderTemplateAction');
+  if (btnCopy) {
+    btnCopy.onclick = () => {
+      const textToCopy = formatOrderEmailPlainText(targetOrder, repName);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          showToast('Order Template Copied', 'Order alert text copied to clipboard in WhatsApp / Email format.', 'success');
+        }).catch(() => {
+          showToast('Copy Notice', 'Could not access clipboard automatically.', 'info');
+        });
+      } else {
+        showToast('Order Template', 'Clipboard API unavailable. Use Mail Client or WhatsApp buttons.', 'info');
+      }
     };
   }
 
@@ -6427,6 +6447,58 @@ window.closeEmailModal = function() {
   if (m) m.classList.add('hidden');
 };
 
+function formatOrderEmailPlainText(order, repName) {
+  const orderNum = order.invoiceNumber || order.orderNumber || 'New Order';
+  let accountCode = order.accountCode || order.account_code || order.clientCode || order.client_code || '';
+  if (!accountCode && order.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === order.clientName || c.clientName === order.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
+  const clientName = order.clientName || 'Clinic Account';
+  const location = order.location || 'UAE';
+  const total = formatCurrency(order.totalIncVat || order.total_inc_vat || 0);
+  const subtotal = formatCurrency(order.totalExcVat || order.subtotal_exc_vat || order.total || 0);
+  const vat = formatCurrency(order.vatAmount || order.vat_amount || 0);
+  const delivery = order.deliveryUrgency || order.delivery_urgency || 'Normal (48h)';
+  const terms = order.paymentTerms || order.payment_terms || '30 Days Credit';
+  const items = order.items || order.order_items || [];
+
+  let itemsText = '';
+  if (Array.isArray(items) && items.length > 0) {
+    itemsText = '\n\n📦 Itemized Products:\n' + items.map(it => {
+      let prodCode = it.productCode || it.product_code || it.code || '';
+      if (!prodCode && it.productName && Array.isArray(state.products)) {
+        const prod = state.products.find(p => p.name === it.productName || p.id === it.productName);
+        if (prod) prodCode = prod.code || prod.id || '';
+      }
+      const codeTag = prodCode ? `[${prodCode}] ` : '';
+      const bonusStr = (it.focQty > 0 || it.foc_qty > 0) ? ` (+${it.focQty || it.foc_qty} FOC Bonus)` : '';
+      const priceStr = (it.unitPrice > 0) ? ` (Unit: ${formatCurrency(it.unitPrice)} AED | Total: ${formatCurrency(it.total || (it.unitPrice * (it.salesQty || 0)))} AED)` : '';
+      return `• ${codeTag}${it.productName || it.product_name || prodCode}: ${it.salesQty || it.sales_qty} units${bonusStr}${priceStr}`;
+    }).join('\n');
+  }
+
+  const timeStr = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' });
+
+  return `🚨 NEW CONCEPTORS FIELD ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 Invoice: #${orderNum}
+👤 Representative: ${repName}
+🏥 Clinic Account: ${clientName}${accountCode ? ` [${accountCode}]` : ''}
+🏷️ Account Code: ${accountCode || 'N/A'}
+📍 Location: ${location}
+💰 Net Total: ${total} AED (Incl. 5% VAT)
+⏱️ Delivery Urgency: ${delivery}
+💳 Payment Terms: ${terms}${itemsText}
+
+Subtotal (Excl. VAT): ${subtotal} AED
+Standard UAE VAT (5%): ${vat} AED
+Grand Total Net (Incl. 5% VAT): ${total} AED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 ${timeStr} GST
+⚡ Conceptors Field Sales CRM • Senior Manager Push`;
+}
+
 function generateExecutiveEmailHtml(order, repName) {
   const isDay = !document.documentElement.classList.contains('dark') || (window.state && window.state.theme === 'light');
   const items = order.items || [];
@@ -6434,12 +6506,17 @@ function generateExecutiveEmailHtml(order, repName) {
   const isApproved = status === 'Approved';
   const isRejected = status === 'Rejected';
 
-  // Colors based on theme
+  let accountCode = order.accountCode || order.account_code || order.clientCode || order.client_code || '';
+  if (!accountCode && order.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === order.clientName || c.clientName === order.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
+
+  // Theme colors
   const bgCard = isDay ? '#ffffff' : '#070d19';
   const borderCard = isDay ? '#cbd5e1' : '#334155';
   const bgHeader = 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)';
-  const bgMeta = isDay ? '#f8fafc' : '#0f172a';
-  const borderMeta = isDay ? '#e2e8f0' : '#1e293b';
+  const bgSection = isDay ? '#f8fafc' : '#0c1322';
   const labelColor = isDay ? '#64748b' : '#94a3b8';
   const textPrimary = isDay ? '#0f172a' : '#f8fafc';
   const textMuted = isDay ? '#475569' : '#cbd5e1';
@@ -6450,6 +6527,7 @@ function generateExecutiveEmailHtml(order, repName) {
   const borderTotalBox = isDay ? '#e2e8f0' : '#1e293b';
   const grandTotalColor = isDay ? '#059669' : '#34d399';
   const footerBorder = isDay ? '#e2e8f0' : '#1e293b';
+  const dividerBorder = isDay ? '#e2e8f0' : '#1e293b';
 
   let statusBadgeHtml = '';
   if (isApproved) {
@@ -6460,52 +6538,100 @@ function generateExecutiveEmailHtml(order, repName) {
     statusBadgeHtml = '<span style="display: inline-block; padding: 6px 12px; background: #f59e0b; color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 11px; letter-spacing: 0.5px;">⏳ PENDING AUTHORIZATION</span>';
   }
 
-  const rowsHtml = items.map(it => `
-    <tr style="border-bottom: 1px solid ${borderRow};">
-      <td style="padding: 10px 8px; font-weight: 700; color: ${textPrimary};">${escapeHtml(it.productName || it.productCode)}</td>
-      <td style="padding: 10px 8px; text-align: right; color: ${textMuted}; font-family: monospace;">${formatCurrency(it.unitPrice)} AED</td>
-      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #0284c7;">${it.salesQty}</td>
-      <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #d97706;">${it.focQty > 0 ? `+${it.focQty} FOC` : '0'}</td>
-      <td style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${grandTotalColor}; font-family: monospace;">${formatCurrency(it.total)} AED</td>
-    </tr>
-  `).join('');
+  const rowsHtml = items.map(it => {
+    let prodCode = it.productCode || it.product_code || it.code || '';
+    if (!prodCode && it.productName && Array.isArray(state.products)) {
+      const prod = state.products.find(p => p.name === it.productName || p.id === it.productName);
+      if (prod) prodCode = prod.code || prod.id || '';
+    }
+    const codeBadge = prodCode
+      ? `<span style="display: inline-block; font-family: monospace; font-size: 11px; font-weight: 800; color: #0284c7; background: ${isDay ? '#e0f2fe' : 'rgba(2, 132, 199, 0.18)'}; padding: 2px 6px; border-radius: 6px; border: 1px solid ${isDay ? '#bae6fd' : 'rgba(2, 132, 199, 0.35)'}; margin-right: 6px;">[${escapeHtml(prodCode)}]</span>`
+      : '';
+
+    return `
+      <tr style="border-bottom: 1px solid ${borderRow};">
+        <td style="padding: 10px 8px; font-weight: 700; color: ${textPrimary};">
+          ${codeBadge}<span>${escapeHtml(it.productName || prodCode)}</span>
+        </td>
+        <td style="padding: 10px 8px; text-align: right; color: ${textMuted}; font-family: monospace;">${formatCurrency(it.unitPrice)} AED</td>
+        <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #0284c7;">${it.salesQty}</td>
+        <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: #d97706;">${it.focQty > 0 ? `+${it.focQty} FOC` : '0'}</td>
+        <td style="padding: 10px 8px; text-align: right; font-weight: 700; color: ${grandTotalColor}; font-family: monospace;">${formatCurrency(it.total)} AED</td>
+      </tr>
+    `;
+  }).join('');
+
+  const timeStr = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' });
 
   return `
     <div style="max-width: 680px; margin: 0 auto; background: ${bgCard}; border: 1px solid ${borderCard}; border-radius: 16px; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06);">
-      <div style="background: ${bgHeader}; padding: 22px 24px; color: #ffffff;">
+      <!-- WhatsApp Style Header Banner -->
+      <div style="background: ${bgHeader}; padding: 20px 24px; color: #ffffff;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
           <div>
-            <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; background: rgba(255,255,255,0.22); padding: 4px 10px; border-radius: 20px; display: inline-block;">Automated Executive Alert</span>
-            <h2 style="margin: 8px 0 2px 0; font-size: 20px; font-weight: 800; color: #ffffff;">Conceptors Animal Health LLC</h2>
-            <p style="margin: 0; font-size: 12px; color: #e0f2fe; opacity: 0.95;">Catalysis Spain • BARD Czech • Vitasigna • Ringbio</p>
+            <div style="font-size: 14px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+              <span>🚨</span> <span>NEW CONCEPTORS FIELD ORDER</span>
+            </div>
+            <p style="margin: 4px 0 0 0; font-size: 11px; color: #e0f2fe; opacity: 0.95;">Conceptors Animal Health LLC • Senior Manager Dispatch</p>
           </div>
           <div style="text-align: right;">
             ${statusBadgeHtml}
-            <div style="font-size: 13px; font-family: monospace; font-weight: bold; margin-top: 5px; color: #ffffff;">#${escapeHtml(order.invoiceNumber)}</div>
+            <div style="font-size: 13px; font-family: monospace; font-weight: bold; margin-top: 4px; color: #ffffff;">#${escapeHtml(order.invoiceNumber)}</div>
           </div>
         </div>
       </div>
 
-      <div style="padding: 20px; background: ${bgMeta}; border-bottom: 1px solid ${borderMeta};">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; font-size: 12px;">
-          <div>
-            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Medical Representative</span>
-            <strong style="color: #0284c7; font-size: 13px;">${escapeHtml(repName)}</strong>
-          </div>
-          <div>
-            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Veterinary Clinic / Partner</span>
-            <strong style="color: ${textPrimary}; font-size: 13px;">${escapeHtml(order.clientName)}</strong>
-            <span style="display: block; color: ${textMuted}; font-size: 11px; margin-top: 2px;">Account Code: <strong style="color: #0284c7; font-family: monospace;">${escapeHtml(order.accountCode || order.clientCode || 'N/A')}</strong> • ${escapeHtml(order.location || 'UAE')}</span>
-          </div>
-          <div>
-            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Order Date</span>
-            <span style="color: ${textPrimary}; font-weight: 600;">${order.date}</span>
-          </div>
-          <div>
-            <span style="color: ${labelColor}; font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">Commercial Terms & Delivery</span>
-            <span style="color: #d97706; font-weight: 700;">${escapeHtml(order.paymentTerms || '30 Days Credit')} • ${escapeHtml(order.deliveryUrgency || 'Normal (48h)')}</span>
+      <!-- WhatsApp Template Key-Value Rows Card -->
+      <div style="padding: 18px 20px; background: ${bgSection}; border-bottom: 1px solid ${dividerBorder};">
+        <div style="border-left: 3px solid #0284c7; padding-left: 14px; margin-bottom: 14px;">
+          <div style="font-size: 12px; font-weight: 800; color: ${textPrimary}; text-transform: uppercase; letter-spacing: 1px;">
+            Order Information (WhatsApp Template Format)
           </div>
         </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; font-size: 12px;">
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">📋 <strong>Invoice:</strong></span>
+            <strong style="color: #0284c7; font-family: monospace; font-size: 13px;">#${escapeHtml(order.invoiceNumber)}</strong>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">👤 <strong>Representative:</strong></span>
+            <strong style="color: ${textPrimary}; font-size: 13px;">${escapeHtml(repName)}</strong>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">🏥 <strong>Clinic Account:</strong></span>
+            <strong style="color: ${textPrimary}; font-size: 13px;">${escapeHtml(order.clientName)}</strong>
+            ${accountCode ? `<span style="display: inline-block; font-family: monospace; font-size: 11px; font-weight: 800; color: #0284c7; background: ${isDay ? '#e0f2fe' : 'rgba(2, 132, 199, 0.18)'}; padding: 1px 6px; border-radius: 5px; border: 1px solid ${isDay ? '#bae6fd' : 'rgba(2, 132, 199, 0.35)'}; margin-left: 6px;">[${escapeHtml(accountCode)}]</span>` : ''}
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">🏷️ <strong>Account Code:</strong></span>
+            <strong style="color: #0284c7; font-family: monospace; font-size: 13px;">${escapeHtml(accountCode || 'N/A')}</strong>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">📍 <strong>Location:</strong></span>
+            <span style="color: ${textPrimary}; font-weight: 600;">${escapeHtml(order.location || 'UAE')}</span>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">💰 <strong>Net Total:</strong></span>
+            <strong style="color: ${grandTotalColor}; font-family: monospace; font-size: 14px;">${formatCurrency(order.totalIncVat)} AED</strong> <span style="font-size: 10px; color: ${labelColor};">(Incl. 5% VAT)</span>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">⏱️ <strong>Delivery Urgency:</strong></span>
+            <span style="color: #d97706; font-weight: 700;">${escapeHtml(order.deliveryUrgency || 'Normal (48h)')}</span>
+          </div>
+
+          <div style="padding: 8px 12px; background: ${isDay ? '#ffffff' : '#070d19'}; border: 1px solid ${borderRow}; border-radius: 10px;">
+            <span style="color: ${labelColor}; font-size: 11px; display: block; margin-bottom: 2px;">💳 <strong>Payment Terms:</strong></span>
+            <span style="color: ${textPrimary}; font-weight: 700;">${escapeHtml(order.paymentTerms || '30 Days Credit')}</span>
+          </div>
+        </div>
+
         ${isRejected && order.rejectionReason ? `
           <div style="margin-top: 14px; padding: 10px 14px; background: ${isDay ? '#fee2e2' : 'rgba(239, 68, 68, 0.15)'}; border: 1px solid #f87171; border-radius: 8px; color: #b91c1c; font-size: 11px;">
             <strong>Rejection Reason:</strong> ${escapeHtml(order.rejectionReason)}
@@ -6519,13 +6645,20 @@ function generateExecutiveEmailHtml(order, repName) {
         ` : ''}
       </div>
 
+      <!-- Itemized Products Section with Product Code Beside Each -->
       <div style="padding: 20px;">
-        <h4 style="margin: 0 0 12px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: ${labelColor}; font-weight: 700;">Itemized Commercial Products</h4>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <h4 style="margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: ${labelColor}; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+            <span>📦</span> <span>Itemized Products (With Product Codes)</span>
+          </h4>
+          <span style="font-size: 11px; color: ${labelColor};">${items.length} Product Line${items.length === 1 ? '' : 's'}</span>
+        </div>
+
         <div style="overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
             <thead>
               <tr style="background: ${bgTableHead}; color: ${textTableHead}; text-transform: uppercase; font-size: 10px; font-weight: 700;">
-                <th style="padding: 10px 8px; text-align: left;">Product SKU</th>
+                <th style="padding: 10px 8px; text-align: left;">Product Code &amp; Description</th>
                 <th style="padding: 10px 8px; text-align: right;">Unit Price</th>
                 <th style="padding: 10px 8px; text-align: center;">Sales Qty</th>
                 <th style="padding: 10px 8px; text-align: center;">Bonus FOC</th>
@@ -6553,20 +6686,25 @@ function generateExecutiveEmailHtml(order, repName) {
           </div>
         </div>
 
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid ${footerBorder}; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-          <span style="font-size: 11px; color: ${labelColor};">Conceptors CRM Senior Manager Dispatch Engine</span>
+        <!-- WhatsApp Style Footer Info -->
+        <div style="margin-top: 20px; padding-top: 14px; border-top: 1px solid ${footerBorder}; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11px; color: ${labelColor};">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>📅</span> <span>${timeStr} GST</span>
+            <span>•</span>
+            <span>⚡ Conceptors Field Sales CRM • Senior Manager Push</span>
+          </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             ${state.currentUser && state.currentUser.role === 'manager' ? `
               ${!isApproved ? `
-                <button type="button" onclick="approveOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #10b981; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                <button type="button" onclick="approveOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #10b981; color: #ffffff; border: none; padding: 7px 13px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                   ✓ Authorize
                 </button>
               ` : ''}
-              <button type="button" onclick="closeEmailModal(); openAmendOrderModal('${escapeHtml(order.invoiceNumber)}');" style="background: #f59e0b; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+              <button type="button" onclick="closeEmailModal(); openAmendOrderModal('${escapeHtml(order.invoiceNumber)}');" style="background: #f59e0b; color: #ffffff; border: none; padding: 7px 13px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                 ✏️ Amend Order
               </button>
               ${!isRejected ? `
-                <button type="button" onclick="rejectOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #ef4444; color: #ffffff; border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                <button type="button" onclick="rejectOrderDirect('${escapeHtml(order.invoiceNumber)}')" style="background: #ef4444; color: #ffffff; border: none; padding: 7px 13px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                   ✕ Reject Order
                 </button>
               ` : ''}
@@ -8118,8 +8256,14 @@ function formatWhatsappOrderMessage(orderData, items = []) {
   let itemsText = '';
   if (Array.isArray(items) && items.length > 0) {
     itemsText = '\n\n*📦 Itemized Products:*\n' + items.map(it => {
+      let prodCode = it.productCode || it.product_code || it.code || '';
+      if (!prodCode && it.productName && Array.isArray(state.products)) {
+        const prod = state.products.find(p => p.name === it.productName || p.id === it.productName);
+        if (prod) prodCode = prod.code || prod.id || '';
+      }
+      const codeTag = prodCode ? `[${prodCode}] ` : '';
       const bonusStr = (it.focQty > 0 || it.foc_qty > 0) ? ` (+${it.focQty || it.foc_qty} FOC Bonus)` : '';
-      return `• ${it.productName || it.product_name || it.productCode}: *${it.salesQty || it.sales_qty} units*${bonusStr}`;
+      return `• ${codeTag}${it.productName || it.product_name || prodCode}: *${it.salesQty || it.sales_qty} units*${bonusStr}`;
     }).join('\n');
   }
 
@@ -8129,7 +8273,7 @@ function formatWhatsappOrderMessage(orderData, items = []) {
 ━━━━━━━━━━━━━━━━━━━━━━━
 📋 *Invoice:* #${orderNum}
 👤 *Representative:* ${repName}
-🏥 *Clinic Account:* ${clientName}
+🏥 *Clinic Account:* ${clientName}${accountCode ? ` [${accountCode}]` : ''}
 🏷️ *Account Code:* ${accountCode || 'N/A'}
 📍 *Location:* ${location}
 💰 *Net Total:* *${total} AED* (Incl. 5% VAT)
@@ -8259,7 +8403,15 @@ window.sendNtfyOrderAlert = async function(orderData, items = []) {
 
   let itemsSummary = '';
   if (Array.isArray(items) && items.length > 0) {
-    itemsSummary = '\n' + items.slice(0, 3).map(it => `• ${it.productName || it.product_name || it.productCode}: ${it.salesQty || it.sales_qty} units`).join('\n');
+    itemsSummary = '\n' + items.slice(0, 3).map(it => {
+      let prodCode = it.productCode || it.product_code || it.code || '';
+      if (!prodCode && it.productName && Array.isArray(state.products)) {
+        const prod = state.products.find(p => p.name === it.productName || p.id === it.productName);
+        if (prod) prodCode = prod.code || prod.id || '';
+      }
+      const codeTag = prodCode ? `[${prodCode}] ` : '';
+      return `• ${codeTag}${it.productName || it.product_name || prodCode}: ${it.salesQty || it.sales_qty} units`;
+    }).join('\n');
     if (items.length > 3) itemsSummary += `\n...and ${items.length - 3} more items`;
   }
 
