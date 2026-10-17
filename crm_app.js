@@ -2908,15 +2908,18 @@ function renderDailyReportTableAndCards() {
 
             <!-- Products Detailed & Samples -->
             <td class="py-3 px-3 max-w-[200px]">
-              <div class="text-[11px] text-slate-300 truncate" title="${Array.isArray(v.productsDetailed) ? escapeHtml(v.productsDetailed.join(', ')) : ''}">
+              <div class="text-[11px] text-slate-300 truncate" title="${Array.isArray(v.productsDetailed) ? escapeHtml(v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join(', ')) : ''}">
                 ${Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 
-                  ? v.productsDetailed.map(p => `<span class="inline-block px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 text-[10px] text-cyan-300 mr-1 mb-0.5">${escapeHtml(p)}</span>`).join('') 
+                  ? v.productsDetailed.map(p => {
+                      const disp = getBardDistinctiveName(p) || p;
+                      return `<span class="inline-block px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 text-[10px] text-cyan-300 mr-1 mb-0.5">${escapeHtml(disp)}</span>`;
+                    }).join('') 
                   : '<span class="text-slate-500 text-[10px]">No products detailed</span>'}
               </div>
               ${v.samplesDropped > 0 ? `
                 <div class="mt-1">
                   <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold">
-                    💊 ${v.samplesDropped}x ${escapeHtml(v.sampleProduct || 'Sample')}
+                    💊 ${v.samplesDropped}x ${escapeHtml(getBardDistinctiveName(v.sampleProduct) || v.sampleProduct || 'Sample')}
                   </span>
                 </div>
               ` : ''}
@@ -3151,7 +3154,7 @@ window.openDailyReportVisitModal = function(visitId) {
             ${visit.samplesDropped > 0 ? `
               <div class="pt-1">
                 <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                  💊 ${visit.samplesDropped} Samples Dropped: ${escapeHtml(visit.sampleProduct || 'Promotional Sample')}
+                  💊 ${visit.samplesDropped} Samples Dropped: ${escapeHtml(getBardDistinctiveName(visit.sampleProduct) || visit.sampleProduct || 'Promotional Sample')}
                 </span>
               </div>
             ` : '<div class="text-slate-500 text-[11px]">No clinical samples dropped</div>'}
@@ -3164,11 +3167,14 @@ window.openDailyReportVisitModal = function(visitId) {
         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Veterinary Portfolio Detailed</span>
         <div class="flex flex-wrap gap-1.5">
           ${Array.isArray(visit.productsDetailed) && visit.productsDetailed.length > 0 
-            ? visit.productsDetailed.map(p => `
-              <span class="px-2.5 py-1 rounded-xl bg-cyan-950/40 text-cyan-300 border border-cyan-500/30 text-xs font-bold">
-                ✓ ${escapeHtml(p)}
-              </span>
-            `).join('')
+            ? visit.productsDetailed.map(p => {
+                const disp = getBardDistinctiveName(p) || p;
+                return `
+                  <span class="px-2.5 py-1 rounded-xl bg-cyan-950/40 text-cyan-300 border border-cyan-500/30 text-xs font-bold">
+                    ✓ ${escapeHtml(disp)}
+                  </span>
+                `;
+              }).join('')
             : '<span class="text-slate-500 text-xs">No products detailed during this call.</span>'}
         </div>
       </div>
@@ -3637,7 +3643,25 @@ window.getPurposeControlsValue = function(prefix) {
   return 'Detailing';
 };
 
-// Detailing / Pitched Products Filter (Excludes 150ml products; includes Catalysis 30ml, BARD, Virulys, Rapid Tests)
+// Detailing / Pitched Products Filter & BARD Distinctive Names
+function getBardDistinctiveName(nameOrCode) {
+  const s = String(nameOrCode || '').toLowerCase().trim();
+  if (!s) return null;
+  if (s.includes('be005') || s.includes('ecosin')) return 'Ecosin';
+  if (s.includes('bd0100') || s.includes('dermasine') || s.includes('dermasin')) return 'Dermasin';
+  if (s.includes('bvo50') || s.includes('vet ointment') || s.includes('ointment')) return 'Vet Ointment';
+  if (s.includes('bfb00') || s.includes('fresh breath')) return 'Fresh Breath';
+  if (s.includes('bpe00') || s.includes('ear cleaner')) return 'Ear Cleaner';
+  return null;
+}
+
+function getDetailingProductDisplayName(p) {
+  if (!p) return '';
+  const bardName = getBardDistinctiveName(p.code || p.name);
+  if (bardName) return bardName;
+  return p.name || '';
+}
+
 function getDetailingProducts() {
   const allProds = Array.isArray(state.products) && state.products.length > 0 
     ? state.products 
@@ -3655,10 +3679,20 @@ function getDetailingProducts() {
 
 function renderDetailingProductCheckboxes(products, selectedList = [], accentColor = 'sky') {
   return products.map(p => {
-    const isChecked = Array.isArray(selectedList) && (selectedList.includes(p.name) || selectedList.includes(p.code));
+    const displayName = getDetailingProductDisplayName(p);
+    const bardDistinctive = getBardDistinctiveName(p.code || p.name);
+
+    const isChecked = Array.isArray(selectedList) && selectedList.some(sel => {
+      const s = String(sel || '').trim();
+      if (!s) return false;
+      if (s === displayName || s === p.name || s === p.code) return true;
+      if (bardDistinctive && getBardDistinctiveName(s) === bardDistinctive) return true;
+      return false;
+    });
+
     let brandBadge = '';
     const b = (p.brand || '').toUpperCase();
-    if (b === 'BARD') {
+    if (b === 'BARD' || bardDistinctive) {
       brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">BARD</span>';
     } else if (b === 'VITASIGNA') {
       brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">VITASIGNA</span>';
@@ -3673,8 +3707,8 @@ function renderDetailingProductCheckboxes(products, selectedList = [], accentCol
     return `
       <label class="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-slate-200 text-[11px] group transition-all">
         <div class="flex items-center gap-2 min-w-0">
-          <input type="checkbox" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} class="w-4 h-4 rounded ${accentClass} shrink-0 cursor-pointer">
-          <span class="truncate font-semibold">${escapeHtml(p.name)}</span>
+          <input type="checkbox" value="${escapeHtml(displayName)}" ${isChecked ? 'checked' : ''} class="w-4 h-4 rounded ${accentClass} shrink-0 cursor-pointer">
+          <span class="truncate font-semibold">${escapeHtml(displayName)}</span>
         </div>
         ${brandBadge}
       </label>
@@ -3702,7 +3736,17 @@ window.openSubmitPlannedModal = function(visitId) {
 
   const sampleSelect = document.getElementById('plannedSampleProduct');
   sampleSelect.innerHTML = '<option value="">No sample given</option>' +
-    detailingProducts.map(p => `<option value="${escapeHtml(p.name)}" ${p.name === visit.sampleProduct ? 'selected' : ''}>${escapeHtml(p.name)} (${p.brand})</option>`).join('');
+    detailingProducts.map(p => {
+      const displayName = getDetailingProductDisplayName(p);
+      const bardDistinctive = getBardDistinctiveName(p.code || p.name);
+      const isSelected = visit.sampleProduct && (
+        visit.sampleProduct === displayName ||
+        visit.sampleProduct === p.name ||
+        (bardDistinctive && getBardDistinctiveName(visit.sampleProduct) === bardDistinctive)
+      );
+      const brandLabel = bardDistinctive ? 'BARD' : p.brand;
+      return `<option value="${escapeHtml(displayName)}" ${isSelected ? 'selected' : ''}>${escapeHtml(displayName)} (${escapeHtml(brandLabel)})</option>`;
+    }).join('');
 
   const prodContainer = document.getElementById('plannedProductCheckboxes');
   prodContainer.innerHTML = renderDetailingProductCheckboxes(detailingProducts, visit.productsDetailed || [], 'sky');
@@ -3985,7 +4029,12 @@ window.openUnplannedVisitModal = function(defaultRep = null, defaultClient = nul
 
   const sampleSelect = document.getElementById('unplannedSampleProduct');
   sampleSelect.innerHTML = '<option value="">No sample given</option>' +
-    detailingProducts.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} (${p.brand})</option>`).join('');
+    detailingProducts.map(p => {
+      const displayName = getDetailingProductDisplayName(p);
+      const bardDistinctive = getBardDistinctiveName(p.code || p.name);
+      const brandLabel = bardDistinctive ? 'BARD' : p.brand;
+      return `<option value="${escapeHtml(displayName)}">${escapeHtml(displayName)} (${escapeHtml(brandLabel)})</option>`;
+    }).join('');
 
   const prodContainer = document.getElementById('unplannedProductCheckboxes');
   prodContainer.innerHTML = renderDetailingProductCheckboxes(detailingProducts, [], 'amber');
@@ -5137,7 +5186,7 @@ function renderReportsTable() {
           `}
         </td>
         <td class="py-3 px-3 text-slate-400 text-[11px] max-w-xs truncate">
-          ${Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 ? v.productsDetailed.join(', ') : '-'}
+          ${Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join(', ') : '-'}
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold ${getSentimentBadgeClass(v.doctorSentiment)}">
@@ -5182,7 +5231,7 @@ window.exportReportsCSV = function() {
     `"${(v.doctorName || '').replace(/"/g, '""')}"`,
     `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
     `"${v.doctorSentiment || ''}"`,
-    `"${(Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ') : '').replace(/"/g, '""')}"`,
+    `"${(Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join('; ') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '')).replace(/"/g, '""')}"`,
     v.samplesDropped || 0,
     v.orderPlaced ? 'YES' : 'NO',
     v.orderValueAed || 0,
@@ -9082,7 +9131,7 @@ window.exportAllDataCSVs = function() {
     `"${(v.doctorName || '').replace(/"/g, '""')}"`,
     `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
     `"${v.doctorSentiment || ''}"`,
-    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join('; ').replace(/"/g, '""') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '')}"`,
     v.samplesDropped || 0,
     `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
     v.orderPlaced ? 'YES' : 'NO',
@@ -9450,8 +9499,9 @@ function computeRepPeriodReportData(repFilter, dateFrom, dateTo) {
       ? v.productsDetailed
       : (v.productsDetailed ? String(v.productsDetailed).split(';') : []);
     prods.forEach(raw => {
-      const pName = String(raw || '').trim();
+      let pName = String(raw || '').trim();
       if (!pName) return;
+      pName = getBardDistinctiveName(pName) || pName;
       productDetailCounts[pName] = (productDetailCounts[pName] || 0) + 1;
     });
   });
@@ -9472,7 +9522,8 @@ function computeRepPeriodReportData(repFilter, dateFrom, dateTo) {
     if (qty > 0) {
       totalSamplesDropped += qty;
       callsWithSamples++;
-      const sProd = (v.sampleProduct || 'General Sample').trim();
+      const rawProd = (v.sampleProduct || 'General Sample').trim();
+      const sProd = getBardDistinctiveName(rawProd) || rawProd;
       sampleProductTotals[sProd] = (sampleProductTotals[sProd] || 0) + qty;
     }
   });
@@ -9858,7 +9909,7 @@ function exportCustomPeriodReportCSV() {
       `"${(v.doctorName || '').replace(/"/g, '""')}"`,
       `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
       `"${v.doctorSentiment || ''}"`,
-      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join('; ').replace(/"/g, '""') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '')}"`,
       v.samplesDropped || 0,
       `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
       v.orderPlaced ? 'YES' : 'NO',
@@ -10028,7 +10079,7 @@ function printWeeklyMeetingReport() {
           <td>${escapeHtml(v.visitCategory || 'Planned')} (${escapeHtml(v.status || 'Planned')})</td>
           <td>${escapeHtml(v.doctorName || '-')}</td>
           <td>${escapeHtml(v.doctorSentiment || '-')}</td>
-          <td>${escapeHtml(Array.isArray(v.productsDetailed) ? v.productsDetailed.join(', ') : (v.productsDetailed || '-'))}</td>
+          <td>${escapeHtml(Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join(', ') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '-'))}</td>
           <td>${Number(v.samplesDropped) || 0}</td>
           <td>${escapeHtml(v.outcome || v.purpose || '-')}</td>
         </tr>
@@ -10160,7 +10211,7 @@ function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
     `"${(v.doctorName || '').replace(/"/g, '""')}"`,
     `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
     `"${v.doctorSentiment || ''}"`,
-    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+    `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join('; ').replace(/"/g, '""') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '')}"`,
     v.samplesDropped || 0,
     `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
     v.orderPlaced ? 'YES' : 'NO',
@@ -10239,7 +10290,7 @@ function exportMonthlyPlanCSV(monthStr = getSyncedTodayDate().substring(0, 7), r
       `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
       `"${v.visitCategory || 'Planned'}"`,
       `"${v.status || 'Planned'}"`,
-      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.map(p => getBardDistinctiveName(p) || p).join('; ').replace(/"/g, '""') : (getBardDistinctiveName(v.productsDetailed) || v.productsDetailed || '')}"`,
       `"${(v.doctorName || clinic.contactPerson || '').replace(/"/g, '""')}"`,
       `"${(v.purpose || '').replace(/"/g, '""')}"`,
       `"${(v.outcome || '').replace(/"/g, '""')}"`
