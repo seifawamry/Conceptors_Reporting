@@ -741,6 +741,8 @@ const state = {
   timeZone: 'Asia/Dubai', // UAE Standard Time (GST, UTC+4)
   dailyDate: getSyncedTodayDate(),
   dailyReportDate: getSyncedTodayDate(),
+  dailyReportViewMode: 'day', // 'day' or 'month'
+  dailyReportMonth: getSyncedTodayDate().substring(0, 7), // '2026-10'
   plannerView: 'calendar', // 'calendar' or 'table'
   plannerCalendarMonth: parseInt(getSyncedTodayDate().split('-')[1], 10),
   plannerCalendarYear: parseInt(getSyncedTodayDate().split('-')[0], 10),
@@ -768,6 +770,7 @@ const state = {
     dailyReportRep: 'ALL',
     dailyReportStatus: 'ALL',
     dailyReportSearch: '',
+    dailyReportDayInMonth: '',
     plannerSearch: '',
     plannerStatus: 'Planned',
     reportsSearch: '',
@@ -780,9 +783,9 @@ const state = {
     accountsTerritory: 'ALL',
     accountsMonthFilter: 'CURRENT',
     analyticsRepFilter: 'ALL',
-    analyticsTimeframe: 'SEP_2026',
-    analyticsDateFrom: '2026-09-01',
-    analyticsDateTo: '2026-09-30',
+    analyticsTimeframe: 'OCT_2026',
+    analyticsDateFrom: '2026-10-01',
+    analyticsDateTo: '2026-10-31',
     analyticsRosterSearch: '',
     analyticsRosterFilter: 'ALL'
   }
@@ -915,6 +918,21 @@ function loadStoredData() {
     state.visits = [...(window.INITIAL_VISITS || [])];
     localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits));
   }
+  // Guarantee October 2026 visits and any newly seeded visits are present in existing browser sessions
+  if (Array.isArray(window.INITIAL_VISITS) && window.INITIAL_VISITS.length > 0) {
+    const existingVisitIds = new Set((state.visits || []).map(v => v.id));
+    let addedVisits = false;
+    window.INITIAL_VISITS.forEach(iv => {
+      if (iv && iv.id && !existingVisitIds.has(iv.id)) {
+        state.visits.push(iv);
+        existingVisitIds.add(iv.id);
+        addedVisits = true;
+      }
+    });
+    if (addedVisits) {
+      try { localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits)); } catch(e) {}
+    }
+  }
 
   const storedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
   if (storedOrders !== null) {
@@ -927,6 +945,22 @@ function loadStoredData() {
     state.orders = [...(window.INITIAL_ORDERS || [])];
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders));
   }
+  // Guarantee October 2026 commercial sales orders are present
+  if (Array.isArray(window.INITIAL_ORDERS) && window.INITIAL_ORDERS.length > 0) {
+    const existingOrderKeys = new Set((state.orders || []).map(o => o.invoiceNumber || o.orderNumber || o.id));
+    let addedOrders = false;
+    window.INITIAL_ORDERS.forEach(io => {
+      const key = io ? (io.invoiceNumber || io.orderNumber || io.id) : null;
+      if (key && !existingOrderKeys.has(key)) {
+        state.orders.push(io);
+        existingOrderKeys.add(key);
+        addedOrders = true;
+      }
+    });
+    if (addedOrders) {
+      try { localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders)); } catch(e) {}
+    }
+  }
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
   if (storedPlans !== null) {
@@ -938,6 +972,21 @@ function loadStoredData() {
   } else {
     state.monthlyPlans = [...(window.INITIAL_MONTHLY_PLANS || [])];
     localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(state.monthlyPlans));
+  }
+  // Guarantee October 2026 plans are present
+  if (Array.isArray(window.INITIAL_MONTHLY_PLANS) && window.INITIAL_MONTHLY_PLANS.length > 0) {
+    const existingPlanIds = new Set((state.monthlyPlans || []).map(p => p.id));
+    let addedPlans = false;
+    window.INITIAL_MONTHLY_PLANS.forEach(ip => {
+      if (ip && ip.id && !existingPlanIds.has(ip.id)) {
+        state.monthlyPlans.push(ip);
+        existingPlanIds.add(ip.id);
+        addedPlans = true;
+      }
+    });
+    if (addedPlans) {
+      try { localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(state.monthlyPlans)); } catch(e) {}
+    }
   }
 
   const storedNotifs = localStorage.getItem(STORAGE_KEY_NOTIFS);
@@ -1910,6 +1959,8 @@ function getRepTerritoryStr(repId) {
 
 window.setDailyReportDateToday = function() {
   state.dailyReportDate = getSyncedTodayDate();
+  state.dailyReportViewMode = 'day';
+  state.filters.dailyReportDayInMonth = '';
   const input = document.getElementById('dailyReportDateInput');
   if (input) input.value = state.dailyReportDate;
   renderDailyReport();
@@ -1917,6 +1968,8 @@ window.setDailyReportDateToday = function() {
 };
 
 window.setDailyReportDateOffset = function(days) {
+  state.dailyReportViewMode = 'day';
+  state.filters.dailyReportDayInMonth = '';
   const base = state.dailyReportDate || getSyncedTodayDate();
   const parts = base.split('-').map(Number);
   const cur = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
@@ -1930,6 +1983,30 @@ window.setDailyReportDateOffset = function(days) {
 window.handleDailyReportDateChange = function(newDate) {
   if (!newDate) return;
   state.dailyReportDate = newDate;
+  state.dailyReportViewMode = 'day';
+  state.filters.dailyReportDayInMonth = '';
+  renderDailyReport();
+};
+
+window.handleDailyReportScopeChange = function(scope) {
+  state.dailyReportViewMode = scope === 'month' ? 'month' : 'day';
+  state.filters.dailyReportDayInMonth = '';
+  renderDailyReport();
+};
+
+window.handleDailyReportMonthSelect = function(val) {
+  if (!val) return;
+  state.dailyReportMonth = val;
+  state.filters.dailyReportDayInMonth = '';
+  renderDailyReport();
+};
+
+window.filterDailyReportDayInMonth = function(dayStr) {
+  if (state.filters.dailyReportDayInMonth === dayStr) {
+    state.filters.dailyReportDayInMonth = '';
+  } else {
+    state.filters.dailyReportDayInMonth = dayStr;
+  }
   renderDailyReport();
 };
 
@@ -1971,13 +2048,14 @@ window.resetDailyReportFilters = function() {
   state.filters.dailyReportRep = 'ALL';
   state.filters.dailyReportStatus = 'ALL';
   state.filters.dailyReportSearch = '';
+  state.filters.dailyReportDayInMonth = '';
   const searchInput = document.getElementById('dailyReportSearch');
   if (searchInput) searchInput.value = '';
   const repFilter = document.getElementById('dailyReportRepFilter');
   if (repFilter) repFilter.value = 'ALL';
   handleDailyReportStatusFilter('ALL');
   renderDailyReport();
-  showToast('Filters Reset', 'Showing all medical rep visits for selected date.', 'info');
+  showToast('Filters Reset', 'Showing all medical rep visits for selected view.', 'info');
 };
 
 // =========================================================================
@@ -1995,8 +2073,56 @@ function renderDailyReportDateRibbon() {
   const container = document.getElementById('dailyReportDateRibbon');
   if (!container) return;
 
+  const isMonth = state.dailyReportViewMode === 'month';
+  const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const activeDate = state.dailyReportDate || getSyncedTodayDate();
   const todayStr = getSyncedTodayDate();
+
+  if (isMonth) {
+    const scopedVisits = getScopedVisits();
+    const monthVisits = activeMonth === 'ALL'
+      ? scopedVisits
+      : scopedVisits.filter(v => (v.date || '').startsWith(activeMonth));
+    const datesInMonth = Array.from(new Set(monthVisits.map(v => v.date))).filter(Boolean).sort();
+
+    if (datesInMonth.length === 0) {
+      container.innerHTML = `<span class="text-xs text-slate-500 italic py-1">No activity dates recorded yet for ${activeMonth}.</span>`;
+      return;
+    }
+
+    const allSelected = !state.filters.dailyReportDayInMonth;
+    let html = `
+      <button type="button" onclick="filterDailyReportDayInMonth('')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation ${
+        allSelected
+          ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30 border border-cyan-400 ring-2 ring-cyan-500/20'
+          : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80 hover:text-white'
+      }">
+        Full Month (${datesInMonth.length} Days)
+      </button>
+    `;
+
+    html += datesInMonth.map(d => {
+      const isSelected = state.filters.dailyReportDayInMonth === d;
+      const parts = d.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const mIdx = parseInt(parts[1], 10) - 1;
+      const dayNum = parseInt(parts[2], 10);
+      const label = `${monthNames[mIdx] || ''} ${dayNum}${d === todayStr ? ' (Today)' : ''}`;
+
+      return `
+        <button type="button" onclick="filterDailyReportDayInMonth('${d}')" class="px-2.5 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap touch-manipulation ${
+          isSelected
+            ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30 border border-cyan-400 ring-2 ring-cyan-500/20'
+            : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80 hover:text-white'
+        }">
+          ${label}
+        </button>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+    return;
+  }
 
   // Get list of historical dates that have visits, plus recent days
   const recordedDates = new Set((state.visits || []).map(v => v.date));
@@ -2008,7 +2134,7 @@ function renderDailyReportDateRibbon() {
   }
 
   // Sort descending
-  const sortedDates = Array.from(recordedDates).sort().reverse().slice(0, 12);
+  const sortedDates = Array.from(recordedDates).filter(Boolean).sort().reverse().slice(0, 14);
 
   container.innerHTML = sortedDates.map(d => {
     const isSelected = d === activeDate;
@@ -2038,10 +2164,39 @@ function renderDailyReportDateRibbon() {
 }
 
 function renderDailyReport() {
+  const isMonth = state.dailyReportViewMode === 'month';
+  const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
 
+  // Sync Scope Toggle Controls
+  const scopeDayBtn = document.getElementById('dailyReportScopeDayBtn');
+  const scopeMonthBtn = document.getElementById('dailyReportScopeMonthBtn');
+  const dayNavGroup = document.getElementById('dailyReportDayNavGroup');
+  const dateInputWrapper = document.getElementById('dailyReportDateInputWrapper');
+  const monthSelectWrapper = document.getElementById('dailyReportMonthSelectWrapper');
+  const monthSelect = document.getElementById('dailyReportMonthSelect');
+
+  if (scopeDayBtn && scopeMonthBtn) {
+    if (isMonth) {
+      scopeMonthBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all';
+      scopeDayBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all';
+      if (dayNavGroup) dayNavGroup.classList.add('hidden');
+      if (dateInputWrapper) dateInputWrapper.classList.add('hidden');
+      if (monthSelectWrapper) monthSelectWrapper.classList.remove('hidden');
+      if (monthSelect) monthSelect.value = activeMonth;
+    } else {
+      scopeDayBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all';
+      scopeMonthBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all';
+      if (dayNavGroup) dayNavGroup.classList.remove('hidden');
+      if (dateInputWrapper) dateInputWrapper.classList.remove('hidden');
+      if (monthSelectWrapper) monthSelectWrapper.classList.add('hidden');
+    }
+  }
+
   // 1. GUARANTEE COMPLETE MEDICAL REP REPORTING HISTORY FOR ANY CHOSEN DATE
-  ensureDailyReportDataForDate(dateStr);
+  if (!isMonth) {
+    ensureDailyReportDataForDate(dateStr);
+  }
 
   // 2. RENDER INTERACTIVE DATE HISTORY RIBBON
   renderDailyReportDateRibbon();
@@ -2091,8 +2246,24 @@ function renderDailyReport() {
   const scopedVisits = getScopedVisits();
   const scopedOrders = getScopedOrders();
 
-  let dayVisits = scopedVisits.filter(v => v.date === dateStr);
-  let dayOrders = scopedOrders.filter(o => o.date === dateStr);
+  let dayVisits;
+  let dayOrders;
+
+  if (isMonth) {
+    if (state.filters.dailyReportDayInMonth) {
+      dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
+      dayOrders = scopedOrders.filter(o => o.date === state.filters.dailyReportDayInMonth);
+    } else if (activeMonth === 'ALL') {
+      dayVisits = [...scopedVisits];
+      dayOrders = [...scopedOrders];
+    } else {
+      dayVisits = scopedVisits.filter(v => (v.date || '').startsWith(activeMonth));
+      dayOrders = scopedOrders.filter(o => (o.date || '').startsWith(activeMonth));
+    }
+  } else {
+    dayVisits = scopedVisits.filter(v => v.date === dateStr);
+    dayOrders = scopedOrders.filter(o => o.date === dateStr);
+  }
 
   // If Senior Manager chose a specific representative in the filter, scope accordingly
   if (isManager && state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
@@ -2103,13 +2274,13 @@ function renderDailyReport() {
   const dayOrdersVal = dayOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
 
   // Group Visits by User's Defined Categories:
-  // 1. Planned Visits for this day
+  // 1. Planned Visits for this day/month
   const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
   // 2. Visited (Planned Visits Completed)
   const visitedPlanned = plannedVisits.filter(v => v.status === 'Completed');
   // 3. Unvisited (Planned Visits Not Completed / Pending / Missed)
   const unvisitedPlanned = plannedVisits.filter(v => v.status !== 'Completed');
-  // 4. Unplanned Visits (Spontaneous visits submitted on that day beside planned ones)
+  // 4. Unplanned Visits (Spontaneous visits submitted beside planned ones)
   const unplannedVisits = dayVisits.filter(v => v.visitCategory === 'Unplanned');
 
   // Total Field Execution
@@ -2121,7 +2292,19 @@ function renderDailyReport() {
   // Update Header Banner
   const bannerDate = document.getElementById('dailyReportBannerDate');
   if (bannerDate) {
-    bannerDate.textContent = `Daily Field Audit for ${formatDisplayDate(dateStr)}`;
+    if (isMonth) {
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const parts = activeMonth.split('-');
+      const mName = parts.length === 2 ? (monthNames[parseInt(parts[1], 10) - 1] || activeMonth) : activeMonth;
+      const isCurrent = activeMonth === getSyncedTodayDate().substring(0, 7);
+      if (state.filters.dailyReportDayInMonth) {
+        bannerDate.textContent = `Daily Field Audit for ${formatDisplayDate(state.filters.dailyReportDayInMonth)} (${mName} ${parts[0] || ''})`;
+      } else {
+        bannerDate.textContent = `Monthly Field Audit: ${mName} ${parts[0] || ''} ${isCurrent ? '(Current Live Month)' : ''}`;
+      }
+    } else {
+      bannerDate.textContent = `Daily Field Audit for ${formatDisplayDate(dateStr)}`;
+    }
   }
 
   const bannerPills = document.getElementById('dailyReportBannerSummaryPills');
@@ -2403,9 +2586,23 @@ function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
 }
 
 function renderDailyReportTableAndCards() {
+  const isMonth = state.dailyReportViewMode === 'month';
+  const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
   const scopedVisits = getScopedVisits();
-  const dayVisits = scopedVisits.filter(v => v.date === dateStr);
+
+  let dayVisits;
+  if (isMonth) {
+    if (state.filters.dailyReportDayInMonth) {
+      dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
+    } else if (activeMonth === 'ALL') {
+      dayVisits = [...scopedVisits];
+    } else {
+      dayVisits = scopedVisits.filter(v => (v.date || '').startsWith(activeMonth));
+    }
+  } else {
+    dayVisits = scopedVisits.filter(v => v.date === dateStr);
+  }
 
   const isManager = (state.currentUser && state.currentUser.role === 'manager');
   const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
@@ -2704,93 +2901,7 @@ function renderDailyReportTableAndCards() {
   safeLucide();
 }
 
-window.exportDailyReportCSV = function() {
-  const dateStr = state.dailyReportDate || getSyncedTodayDate();
-  const isManager = (state.currentUser && state.currentUser.role === 'manager');
-  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
 
-  let visits = getScopedVisits().filter(v => v.date === dateStr);
-  if (!isManager) {
-    visits = visits.filter(v => v.repId === userTerritory || v.territory === userTerritory);
-  } else if (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL') {
-    visits = visits.filter(v => v.repId === state.filters.dailyReportRep || v.territory === state.filters.dailyReportRep);
-  }
-
-  if (visits.length === 0) {
-    showToast('No Data to Export', `There are no visit records for date ${dateStr}.`, 'warning');
-    return;
-  }
-
-  const headers = [
-    'Date',
-    'Medical Rep',
-    'Territory',
-    'Clinic Code',
-    'Clinic Name',
-    'Location',
-    'Visit Category',
-    'Status',
-    'Time Slot',
-    'Doctor Met',
-    'Doctor Role',
-    'Doctor Sentiment',
-    'Products Detailed',
-    'Samples Dropped',
-    'Sample Product',
-    'Order Placed',
-    'Order Ref',
-    'Order Value AED',
-    'Purpose',
-    'Outcome / Notes',
-    'Next Follow Up Date'
-  ];
-
-  const csvRows = [headers.join(',')];
-
-  visits.forEach(v => {
-    const isUnplanned = v.visitCategory === 'Unplanned';
-    const categoryLabel = isUnplanned ? 'Unplanned' : 'Planned';
-    const statusLabel = isUnplanned ? 'Completed' : (v.status === 'Completed' ? 'Visited (Completed)' : `Unvisited (${v.status || 'Pending'})`);
-    const repName = getRepName(v.repId);
-    const row = [
-      `"${v.date || dateStr}"`,
-      `"${repName}"`,
-      `"${v.repId || ''}"`,
-      `"${v.clientCode || ''}"`,
-      `"${(v.clientName || '').replace(/"/g, '""')}"`,
-      `"${v.location || ''}"`,
-      `"${categoryLabel}"`,
-      `"${statusLabel}"`,
-      `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
-      `"${(v.doctorName || '').replace(/"/g, '""')}"`,
-      `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
-      `"${v.doctorSentiment || ''}"`,
-      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : ''}"`,
-      v.samplesDropped || 0,
-      `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
-      v.orderPlaced ? 'YES' : 'NO',
-      `"${v.orderRef || ''}"`,
-      v.orderValueAed || 0,
-      `"${(v.purpose || '').replace(/"/g, '""')}"`,
-      `"${(v.outcome || '').replace(/"/g, '""')}"`,
-      `"${v.nextFollowUp || ''}"`
-    ];
-    csvRows.push(row.join(','));
-  });
-
-  const csvString = '\uFEFF' + csvRows.join('\r\n');
-  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `Conceptors_Daily_Report_${dateStr}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-
-  showToast('Daily Report Exported', `Downloaded CSV spreadsheet for ${dateStr} (${visits.length} records).`, 'success');
-};
 
 window.openDailyReportVisitModal = function(visitId) {
   const visit = (state.visits || []).find(v => v.id === visitId);
@@ -3725,22 +3836,32 @@ function renderMonthlyPlanner() {
                  { id: targetRep, name: targetRep === 'T1' ? 'Shaimaa' : 'Marsel', emirates: ['Dubai', 'Abu Dhabi'] };
   const repName = state.currentUser.role === 'manager' ? 'All Territories (Executive)' : repObj.name;
 
-  let plan = state.monthlyPlans.find(p => p.repId === targetRep && p.month === 'SEP' && p.year === 2026);
+  const curYmParts = getSyncedTodayDate().split('-');
+  const curYear = parseInt(curYmParts[0], 10);
+  const curMonthNum = parseInt(curYmParts[1], 10);
+  const monthAbbrs = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const activeMonthAbbr = monthAbbrs[curMonthNum - 1] || 'OCT';
+  const activeMonthFull = monthNames[curMonthNum - 1] || 'October';
+
+  let plan = state.monthlyPlans.find(p => p.repId === targetRep && p.month === activeMonthAbbr && p.year === curYear);
   if (!plan) {
-    plan = {
-      id: `PLAN-2026-09-${targetRep}`,
+    plan = state.monthlyPlans.find(p => p.repId === targetRep) || {
+      id: `PLAN-${curYear}-${curYmParts[1]}-${targetRep}`,
       repId: targetRep,
       repName: repObj.name,
-      year: 2026,
-      month: 'SEP',
+      year: curYear,
+      month: activeMonthAbbr,
       targetVisits: 100,
       status: 'Approved'
     };
-    state.monthlyPlans.push(plan);
+    if (!state.monthlyPlans.some(p => p.id === plan.id)) {
+      state.monthlyPlans.push(plan);
+    }
   }
 
   const heading = document.getElementById('plannerMonthHeading');
-  if (heading) heading.textContent = `September 2026 Monthly Field Plan`;
+  if (heading) heading.textContent = `${activeMonthFull} ${curYear} Monthly Field Plan`;
 
   const repHead = document.getElementById('plannerRepHeading');
   if (repHead) {
@@ -3811,7 +3932,7 @@ function renderMonthlyPlanner() {
   setPlannerView(state.plannerView || 'calendar');
 }
 
-window.setPlannerView = function(mode) {
+function setPlannerView(mode) {
   state.plannerView = mode;
   const calContainer = document.getElementById('plannerCalendarContainer');
   const agendaContainer = document.getElementById('plannerAgendaContainer');
@@ -3846,9 +3967,10 @@ window.setPlannerView = function(mode) {
     renderPlannerCalendar();
   }
   safeLucide();
-};
+}
+window.setPlannerView = setPlannerView;
 
-window.renderPlannerCalendar = function() {
+function renderPlannerCalendar() {
   const container = document.getElementById('plannerCalendarDaysGrid');
   if (!container) return;
 
@@ -4156,9 +4278,10 @@ window.renderPlannerSelectedDayDrawer = function(dateStr) {
 
   drawer.innerHTML = html;
   safeLucide();
-};
+}
+window.renderPlannerCalendar = renderPlannerCalendar;
 
-window.renderPlannerAgenda = function() {
+function renderPlannerAgenda() {
   const container = document.getElementById('plannerAgendaList');
   if (!container) return;
 
@@ -4296,9 +4419,10 @@ window.renderPlannerAgenda = function() {
 
   container.innerHTML = html;
   safeLucide();
-};
+}
+window.renderPlannerAgenda = renderPlannerAgenda;
 
-window.renderPlannerTable = function() {
+function renderPlannerTable() {
   const tbody = document.getElementById('plannerTableBody');
   const cardsContainer = document.getElementById('plannerTableCards');
   if (!tbody) return;
@@ -4418,7 +4542,8 @@ window.renderPlannerTable = function() {
     `;
   }).join('');
   safeLucide();
-};
+}
+window.renderPlannerTable = renderPlannerTable;
 
 window.handlePlannerSearch = function(q) {
   state.filters.plannerSearch = q || '';
@@ -4454,7 +4579,7 @@ window.submitPlanToManager = function(planId) {
     timestamp: new Date().toISOString(),
     read: false,
     approvalStatus: 'Pending',
-    itemsSummary: `Rep ${plan.repName} submitted the September 2026 monthly plan (${plan.targetVisits || 100} targets) for review.`
+    itemsSummary: `Rep ${plan.repName} submitted the ${plan.month} ${plan.year} monthly plan (${plan.targetVisits || 100} targets) for review.`
   };
   state.notifications.unshift(notif);
 
@@ -5067,20 +5192,28 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
   const row = document.createElement('tr');
   row.className = 'order-line-item';
 
-  const optionsHtml = state.products.map(p => `
-    <option value="${p.code}" data-price="${p.unitPrice}" ${p.code === defaultCode ? 'selected' : ''}>
-      ${p.code} - ${escapeHtml(p.name)} (${p.unitPrice} AED)
-    </option>
-  `).join('');
+  const defaultProd = (state.products || []).find(p => p.code === defaultCode) || null;
+  const initialPrice = defaultProd ? (defaultProd.unitPrice || 0) : 0;
+  const initialSearchVal = defaultProd ? `${defaultProd.code} - ${defaultProd.name}` : (defaultCode || '');
 
   row.innerHTML = `
-    <td class="py-2 px-3">
-      <select class="item-prod-select w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-slate-200 outline-none">
-        ${optionsHtml}
-      </select>
+    <td class="py-2 px-3 relative product-autocomplete-wrapper">
+      <input type="hidden" class="item-prod-code item-prod-select" value="${defaultProd ? defaultProd.code : (defaultCode || '')}">
+      <div class="relative flex items-center">
+        <input type="text"
+          class="item-prod-search w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-3 pr-8 text-xs font-semibold text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+          placeholder="🔍 Type SKU code or product name..."
+          autocomplete="off"
+          value="${escapeHtml(initialSearchVal)}">
+        <button type="button" class="btn-clear-prod absolute right-2 text-slate-500 hover:text-slate-300 ${defaultProd || defaultCode ? '' : 'hidden'}" title="Clear product selection">
+          <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+      </div>
+      <div class="prod-autocomplete-dropdown hidden absolute left-2 right-2 top-full mt-1 max-h-56 overflow-y-auto rounded-xl bg-slate-900 border border-slate-700 shadow-2xl z-50 py-1 scrollbar-thin">
+      </div>
     </td>
     <td class="py-2 px-2 text-right">
-      <input type="number" step="0.01" class="item-price-input w-20 bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-slate-300 text-right outline-none" readonly>
+      <input type="number" step="0.01" value="${initialPrice.toFixed(2)}" class="item-price-input w-20 bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-slate-300 text-right outline-none" readonly>
     </td>
     <td class="py-2 px-2 text-center">
       <input type="number" min="1" value="${defaultSales}" class="item-sales-input w-16 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-100 text-center font-bold outline-none focus:border-indigo-500">
@@ -5092,7 +5225,7 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
       0.00 AED
     </td>
     <td class="py-2 px-2 text-center">
-      <button type="button" class="btn-remove-line p-1 text-slate-500 hover:text-rose-400">
+      <button type="button" class="btn-remove-line p-1 text-slate-500 hover:text-rose-400 transition-colors" title="Remove line item">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
     </td>
@@ -5100,27 +5233,171 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
 
   tbody.appendChild(row);
 
-  const prodSelect = row.querySelector('.item-prod-select');
+  const hiddenCodeInput = row.querySelector('.item-prod-code');
+  const searchInput = row.querySelector('.item-prod-search');
+  const clearBtn = row.querySelector('.btn-clear-prod');
+  const dropdown = row.querySelector('.prod-autocomplete-dropdown');
   const priceInput = row.querySelector('.item-price-input');
   const salesInput = row.querySelector('.item-sales-input');
   const focInput = row.querySelector('.item-foc-input');
   const removeBtn = row.querySelector('.btn-remove-line');
 
-  function updatePrice() {
-    const selectedOpt = prodSelect.options[prodSelect.selectedIndex];
-    const price = parseFloat(selectedOpt.getAttribute('data-price')) || 0;
-    priceInput.value = price.toFixed(2);
+  function renderDropdown(items) {
+    if (!dropdown) return;
+    if (items.length === 0) {
+      dropdown.innerHTML = `
+        <div class="p-3 text-center text-xs text-slate-400 flex flex-col items-center gap-1">
+          <i data-lucide="search-x" class="w-4 h-4 text-slate-500"></i>
+          <span>No products found matching query</span>
+        </div>
+      `;
+      dropdown.classList.remove('hidden');
+      safeLucide();
+      return;
+    }
+
+    dropdown.innerHTML = items.map(p => {
+      const isSelected = p.code === hiddenCodeInput.value;
+      const stockBadge = p.currentStock !== undefined 
+        ? `<span class="text-[10px] text-slate-400">• Stock: <strong class="${p.currentStock > 50 ? 'text-emerald-400' : 'text-amber-400'}">${p.currentStock}</strong></span>` 
+        : '';
+      const bonusBadge = p.bonusDeal 
+        ? `<span class="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Deal ${p.bonusDeal}</span>`
+        : '';
+
+      return `
+        <div class="prod-autocomplete-item p-2.5 cursor-pointer flex items-center justify-between gap-2 border-b border-slate-800/80 hover:bg-slate-800/90 transition-all ${isSelected ? 'active bg-cyan-950/40 border-l-2 border-cyan-400' : ''}" data-code="${p.code}">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">${escapeHtml(p.code)}</span>
+              <span class="text-xs font-bold text-slate-200 truncate">${escapeHtml(p.name)}</span>
+              ${bonusBadge}
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+              <span>${escapeHtml(p.category || 'Veterinary Product')}</span>
+              ${stockBadge}
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-xs font-extrabold text-cyan-400 font-mono">${(p.unitPrice || 0).toFixed(2)} AED</div>
+            <div class="text-[9px] text-slate-400">excl. VAT</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    dropdown.querySelectorAll('.prod-autocomplete-item').forEach(itemEl => {
+      itemEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const code = itemEl.getAttribute('data-code');
+        selectProduct(code);
+      });
+    });
+
+    dropdown.classList.remove('hidden');
+    safeLucide();
   }
 
-  updatePrice();
+  function filterProducts() {
+    const q = (searchInput.value || '').toLowerCase().trim();
+    if (!q) {
+      renderDropdown((state.products || []).slice(0, 25));
+      return;
+    }
+    const filtered = (state.products || []).filter(p => {
+      const code = (p.code || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const cat = (p.category || '').toLowerCase();
+      const brand = (p.brand || '').toLowerCase();
+      return code.includes(q) || name.includes(q) || cat.includes(q) || brand.includes(q);
+    });
+    renderDropdown(filtered);
+  }
 
-  prodSelect.addEventListener('change', () => {
-    updatePrice();
+  function selectProduct(code) {
+    const prod = (state.products || []).find(p => p.code === code);
+    if (!prod) return;
+    hiddenCodeInput.value = prod.code;
+    searchInput.value = `${prod.code} - ${prod.name}`;
+    priceInput.value = (prod.unitPrice || 0).toFixed(2);
+    if (clearBtn) clearBtn.classList.remove('hidden');
+    if (dropdown) dropdown.classList.add('hidden');
+
+    const curSales = parseInt(salesInput.value) || 0;
+    if (curSales > 0 && (!focInput.value || focInput.value === '0' || focInput.value === '2')) {
+      const suggestedFoc = Math.floor(curSales / 5);
+      if (suggestedFoc > 0) {
+        focInput.value = suggestedFoc;
+      }
+    }
+
+    recalculateOrderTotals();
+  }
+
+  function clearSelection() {
+    hiddenCodeInput.value = '';
+    searchInput.value = '';
+    priceInput.value = '0.00';
+    focInput.value = '0';
+    if (clearBtn) clearBtn.classList.add('hidden');
+    if (dropdown) dropdown.classList.add('hidden');
+    recalculateOrderTotals();
+  }
+
+  searchInput.addEventListener('focus', () => {
+    filterProducts();
+  });
+
+  searchInput.addEventListener('input', () => {
+    if (clearBtn) {
+      if (searchInput.value.trim().length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+    }
+    filterProducts();
+  });
+
+  searchInput.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (dropdown) dropdown.classList.add('hidden');
+      const val = (searchInput.value || '').trim();
+      if (val && !hiddenCodeInput.value) {
+        const exact = (state.products || []).find(p => 
+          p.code.toLowerCase() === val.toLowerCase() || 
+          p.name.toLowerCase() === val.toLowerCase()
+        );
+        if (exact) {
+          selectProduct(exact.code);
+        } else {
+          const prev = (state.products || []).find(p => p.code === hiddenCodeInput.value);
+          if (prev) {
+            searchInput.value = `${prev.code} - ${prev.name}`;
+          } else {
+            clearSelection();
+          }
+        }
+      }
+    }, 250);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearSelection();
+      searchInput.focus();
+    });
+  }
+
+  salesInput.addEventListener('input', () => {
+    const sQty = parseInt(salesInput.value) || 0;
+    if (hiddenCodeInput.value) {
+      focInput.value = Math.floor(sQty / 5);
+    }
     recalculateOrderTotals();
   });
 
-  priceInput.addEventListener('input', recalculateOrderTotals);
-  salesInput.addEventListener('input', recalculateOrderTotals);
   focInput.addEventListener('input', recalculateOrderTotals);
 
   removeBtn.addEventListener('click', () => {
@@ -5173,9 +5450,10 @@ window.handleOrderSubmit = function(e) {
   let subtotal = 0;
 
   rows.forEach(row => {
-    const prodCode = row.querySelector('.item-prod-select').value;
+    const prodCode = (row.querySelector('.item-prod-code')?.value || row.querySelector('.item-prod-select')?.value || '').trim();
+    if (!prodCode) return;
     const prodObj = state.products.find(p => p.code === prodCode);
-    const price = parseFloat(row.querySelector('.item-price-input').value) || 0;
+    const price = parseFloat(row.querySelector('.item-price-input').value) || (prodObj ? prodObj.unitPrice : 0);
     const salesQty = parseInt(row.querySelector('.item-sales-input').value) || 0;
     const focQty = parseInt(row.querySelector('.item-foc-input').value) || 0;
     const lineTotal = price * salesQty;
@@ -6679,9 +6957,9 @@ function renderAnalyticsDashboard() {
   }
 
   const activeRep = isManager ? (state.filters.analyticsRepFilter || 'ALL') : userTerritory;
-  const activeTimeframe = state.filters.analyticsTimeframe || 'SEP_2026';
-  const curFrom = state.filters.analyticsDateFrom || '2026-09-01';
-  const curTo = state.filters.analyticsDateTo || '2026-09-30';
+  const activeTimeframe = state.filters.analyticsTimeframe || 'OCT_2026';
+  const curFrom = state.filters.analyticsDateFrom || '2026-10-01';
+  const curTo = state.filters.analyticsDateTo || '2026-10-31';
 
   // Synchronize Calendar Inputs & Preset Dropdown if not currently focused
   const dateFromInput = document.getElementById('analyticsDateFrom');
@@ -8432,6 +8710,26 @@ window.closeMobileMoreDrawer = closeMobileMoreDrawer;
 function openExportCenterModal(initialSection = 'all') {
   const modal = document.getElementById('exportCenterModal');
   if (!modal) return;
+
+  const currentYm = getSyncedTodayDate().substring(0, 7);
+  const currentMonthOption = document.querySelector('#exportDailyDateRange option[value="current_month"]');
+  if (currentMonthOption) {
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const parts = currentYm.split('-');
+    const mName = monthNames[parseInt(parts[1], 10) - 1] || 'Current';
+    currentMonthOption.textContent = `🗓️ Current Month (${mName} ${parts[0]})`;
+  }
+
+  const dailyMonthSelect = document.getElementById('exportDailyMonth');
+  if (dailyMonthSelect && (!dailyMonthSelect.value || dailyMonthSelect.value === '2026-09')) {
+    dailyMonthSelect.value = currentYm;
+  }
+
+  const planningMonthSelect = document.getElementById('exportPlanningMonth');
+  if (planningMonthSelect && (!planningMonthSelect.value || planningMonthSelect.value === '2026-09')) {
+    planningMonthSelect.value = currentYm;
+  }
+
   modal.classList.remove('hidden');
   safeLucide();
 }
@@ -8442,34 +8740,79 @@ function closeExportCenterModal() {
 window.openExportCenterModal = openExportCenterModal;
 window.closeExportCenterModal = closeExportCenterModal;
 
+function handleExportDailyDateRangeChange(val) {
+  const monthWrap = document.getElementById('exportDailyMonthWrapper');
+  if (!monthWrap) return;
+  if (val === 'month') {
+    monthWrap.classList.remove('hidden');
+  } else {
+    monthWrap.classList.add('hidden');
+  }
+}
+window.handleExportDailyDateRangeChange = handleExportDailyDateRangeChange;
+
 // 1. Export Daily Visit Reports
 function handleExportDailyReports() {
-  const range = document.getElementById('exportDailyDateRange')?.value || 'today';
+  const range = document.getElementById('exportDailyDateRange')?.value || 'current_month';
   const rep = document.getElementById('exportDailyRepFilter')?.value || 'ALL';
-  exportDailyReportCSV(range, rep);
+  const chosenMonth = document.getElementById('exportDailyMonth')?.value || getSyncedTodayDate().substring(0, 7);
+  exportDailyReportCSV(range, rep, chosenMonth);
 }
 window.handleExportDailyReports = handleExportDailyReports;
 
-function exportDailyReportCSV(rangeMode = 'today', repFilter = 'ALL') {
+function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
   const today = getSyncedTodayDate();
-  let targetDate = state.dailyReportDate || today;
-  let visitsToExport = state.visits || [];
+  const currentYm = today.substring(0, 7);
 
-  if (rangeMode === 'today') {
+  // If called without arguments (e.g. from Tab 2 header button):
+  if (!rangeMode) {
+    if (state.dailyReportViewMode === 'month') {
+      rangeMode = 'month';
+      chosenMonth = state.dailyReportMonth || currentYm;
+    } else {
+      rangeMode = 'selected';
+    }
+  }
+
+  if (!repFilter) {
+    repFilter = state.filters.dailyReportRep || 'ALL';
+  }
+
+  // Enforce rep isolation if user is a medical rep
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+  if (!isManager) {
+    repFilter = userTerritory;
+  }
+
+  let targetDate = state.dailyReportDate || today;
+  let targetMonth = chosenMonth || state.dailyReportMonth || currentYm;
+  let visitsToExport = getScopedVisits();
+
+  if (rangeMode === 'current_month') {
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(currentYm));
+  } else if (rangeMode === 'month') {
+    if (targetMonth && targetMonth !== 'ALL') {
+      visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(targetMonth));
+    }
+  } else if (rangeMode === 'today') {
     visitsToExport = visitsToExport.filter(v => v.date === today);
   } else if (rangeMode === 'selected') {
     visitsToExport = visitsToExport.filter(v => v.date === targetDate);
-  } else if (rangeMode === 'month') {
-    const ym = targetDate.substring(0, 7);
-    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(ym));
+  } else if (rangeMode === 'all') {
+    // Keep all historical visits
+  } else if (/^\d{4}-\d{2}$/.test(rangeMode)) {
+    visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(rangeMode));
+  } else {
+    visitsToExport = visitsToExport.filter(v => v.date === today);
   }
 
   if (repFilter && repFilter !== 'ALL') {
-    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter || v.territory === repFilter);
   }
 
   if (visitsToExport.length === 0) {
-    showToast('No Visits Found', 'No visit records match the selected date and representative filters.', 'warning');
+    showToast('No Visits Found', 'No visit records match the selected date/month and representative filters.', 'warning');
     return;
   }
 
@@ -8508,34 +8851,45 @@ function exportDailyReportCSV(rangeMode = 'today', repFilter = 'ALL') {
     `"${v.nextFollowUp || ''}"`
   ]);
 
-  const fileLabel = rangeMode === 'today' ? `Today_${today}` : (rangeMode === 'month' ? `Month_${targetDate.substring(0, 7)}` : targetDate);
+  let fileLabel = 'Today_' + today;
+  if (rangeMode === 'current_month') {
+    fileLabel = `Month_${currentYm}`;
+  } else if (rangeMode === 'month') {
+    fileLabel = `Month_${targetMonth}`;
+  } else if (rangeMode === 'selected') {
+    fileLabel = `Date_${targetDate}`;
+  } else if (rangeMode === 'all') {
+    fileLabel = 'All_History';
+  }
+
   const repLabel = repFilter !== 'ALL' ? `_${repFilter}` : '_AllReps';
   downloadCsvFile(`Conceptors_Visits_Report_${fileLabel}${repLabel}.csv`, [visitHeaders.join(','), ...visitRows.map(r => r.join(','))].join('\r\n'));
-  showToast('Visits CSV Exported', `Downloaded ${visitsToExport.length} visit record(s).`, 'success');
+  showToast('Visits CSV Exported', `Downloaded ${visitsToExport.length} visit record(s) for ${fileLabel.replace(/_/g, ' ')}.`, 'success');
 }
 window.exportDailyReportCSV = exportDailyReportCSV;
 
 // 2. Export Monthly Planning
 function handleExportPlanning() {
-  const month = document.getElementById('exportPlanningMonth')?.value || '2026-09';
+  const currentYm = getSyncedTodayDate().substring(0, 7);
+  const month = document.getElementById('exportPlanningMonth')?.value || currentYm;
   const rep = document.getElementById('exportPlanningRep')?.value || 'ALL';
   exportMonthlyPlanCSV(month, rep);
 }
 window.handleExportPlanning = handleExportPlanning;
 
-function exportMonthlyPlanCSV(monthStr = '2026-09', repFilter = 'ALL') {
-  let visitsToExport = state.visits || [];
+function exportMonthlyPlanCSV(monthStr = getSyncedTodayDate().substring(0, 7), repFilter = 'ALL') {
+  let visitsToExport = getScopedVisits();
 
   if (monthStr && monthStr !== 'ALL') {
     visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(monthStr));
   }
 
   if (repFilter && repFilter !== 'ALL') {
-    visitsToExport = visitsToExport.filter(v => v.repId === repFilter);
+    visitsToExport = visitsToExport.filter(v => v.repId === repFilter || v.territory === repFilter);
   }
 
   if (visitsToExport.length === 0) {
-    showToast('No Planned Calls Found', 'No call records match the selected month and rep.', 'warning');
+    showToast('No Planned Calls Found', `No call records match the selected month (${monthStr}) and rep.`, 'warning');
     return;
   }
 

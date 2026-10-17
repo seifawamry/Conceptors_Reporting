@@ -2217,3 +2217,64 @@ html:not(.dark) #managerPurgeDataModal .border-b,
 html:not(.dark) #managerPurgeDataModal .border-t {
   border-color: #e2e8f0 !important;
 }
+
+/* ================= PRODUCT AUTOCOMPLETE COMBOBOX ================= */
+.product-autocomplete-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.prod-autocomplete-dropdown {
+  background-color: #0b1329;
+  border: 1px solid #334155;
+  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.6), 0 8px 16px -6px rgba(0, 0, 0, 0.4);
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+
+.prod-autocomplete-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.prod-autocomplete-dropdown::-webkit-scrollbar-thumb {
+  background-color: #475569;
+  border-radius: 9999px;
+}
+
+.prod-autocomplete-item {
+  transition: all 0.15s ease;
+}
+.prod-autocomplete-item:hover,
+.prod-autocomplete-item.active {
+  background-color: rgba(30, 41, 59, 0.95);
+}
+
+/* Day Mode / Bright Mode Overrides */
+html:not(.dark) .product-autocomplete-wrapper input.item-prod-search {
+  background-color: #ffffff !important;
+  border: 1.5px solid #94a3b8 !important;
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+html:not(.dark) .prod-autocomplete-dropdown {
+  background-color: #ffffff !important;
+  border: 2px solid #cbd5e1 !important;
+  box-shadow: 0 20px 45px -4px rgba(15, 23, 42, 0.22) !important;
+}
+
+html:not(.dark) .prod-autocomplete-item {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+html:not(.dark) .prod-autocomplete-item:hover,
+html:not(.dark) .prod-autocomplete-item.active {
+  background-color: #e0f2fe !important;
+}
+
+html:not(.dark) .prod-autocomplete-item .text-slate-200 {
+  color: #0f172a !important;
+}
+
+html:not(.dark) .prod-autocomplete-item .text-slate-400 {
+  color: #64748b !important;
+}

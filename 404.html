@@ -360,16 +360,32 @@
 
         <!-- Date Controls & Rep Filter Bar -->
         <div class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-          <!-- Quick Day Offset Buttons -->
+          <!-- Scope Toggle: Day vs Month -->
           <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1 text-xs">
+            <button type="button" id="dailyReportScopeDayBtn" onclick="handleDailyReportScopeChange('day')" class="px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all" title="View Single Day Records">Day</button>
+            <button type="button" id="dailyReportScopeMonthBtn" onclick="handleDailyReportScopeChange('month')" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all" title="View Full Month Records">Month</button>
+          </div>
+
+          <!-- Quick Day Offset Buttons (Shown in Day View) -->
+          <div id="dailyReportDayNavGroup" class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1 text-xs">
             <button type="button" onclick="setDailyReportDateOffset(-1)" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Previous Day">‹ Prev</button>
             <button type="button" onclick="setDailyReportDateToday()" class="px-3 py-1.5 rounded-lg font-bold bg-brand-600 text-white shadow-sm" title="Jump to Today (UAE Live)">Today</button>
             <button type="button" onclick="setDailyReportDateOffset(1)" class="px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white transition-colors" title="Next Day">Next ›</button>
           </div>
 
-          <!-- HTML5 Date Picker -->
-          <div class="relative flex items-center">
+          <!-- HTML5 Date Picker (Shown in Day View) -->
+          <div id="dailyReportDateInputWrapper" class="relative flex items-center">
             <input type="date" id="dailyReportDateInput" onchange="handleDailyReportDateChange(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-cyan-500 shadow-inner" title="Choose any date to retrieve all daily records">
+          </div>
+
+          <!-- Month Selector (Shown in Month View) -->
+          <div id="dailyReportMonthSelectWrapper" class="hidden relative flex items-center">
+            <select id="dailyReportMonthSelect" onchange="handleDailyReportMonthSelect(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl px-3 py-2 outline-none focus:border-cyan-500 shadow-inner" title="Choose month to retrieve full monthly activity">
+              <option value="2026-10" selected>🗓️ October 2026 (Current Live Month)</option>
+              <option value="2026-09">🗓️ September 2026 (Previous Month)</option>
+              <option value="2026-08">🗓️ August 2026</option>
+              <option value="ALL">🌐 All Available Months Combined</option>
+            </select>
           </div>
 
           <!-- Medical Rep Filter Dropdown -->
@@ -381,11 +397,11 @@
 
           <!-- Export CSV & Print Actions -->
           <div class="flex items-center gap-1.5">
-            <button type="button" onclick="exportDailyReportCSV()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Export this day's report as CSV spreadsheet">
+            <button type="button" onclick="exportDailyReportCSV()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Export report as CSV spreadsheet">
               <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
               <span class="hidden sm:inline">Export CSV</span>
             </button>
-            <button type="button" onclick="window.print()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-sm" title="Print this day's field report">
+            <button type="button" onclick="window.print()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-sm" title="Print this field report">
               <i data-lucide="printer" class="w-3.5 h-3.5"></i>
             </button>
             <button type="button" id="dailyReportManagerPurgeBtn" onclick="openManagerPurgeModal()" class="hidden px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 touch-manipulation" title="Manager Tool: Reset pilot test data or delete records for chosen dates/reps">
@@ -568,7 +584,7 @@
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h2 class="text-base font-extrabold text-white" id="plannerMonthHeading">September 2026 Monthly Field Plan</h2>
+              <h2 class="text-base font-extrabold text-white" id="plannerMonthHeading">October 2026 Monthly Field Plan</h2>
               <span id="plannerStatusPill" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Approved</span>
             </div>
             <p class="text-xs text-slate-400" id="plannerRepHeading">Representative: Shaimaa (Territory 1)</p>
@@ -619,7 +635,7 @@
             <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Previous Month">
               <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
-            <h3 id="plannerCalendarMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[150px]">September 2026</h3>
+            <h3 id="plannerCalendarMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[150px]">October 2026</h3>
             <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Next Month">
               <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
@@ -671,7 +687,7 @@
             <button type="button" onclick="navigatePlannerMonth(-1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Previous Month">
               <i data-lucide="chevron-left" class="w-4 h-4"></i>
             </button>
-            <h3 id="plannerAgendaMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[140px]">September 2026</h3>
+            <h3 id="plannerAgendaMonthTitle" class="text-sm sm:text-base font-black text-white px-2 text-center flex-1 sm:min-w-[140px]">October 2026</h3>
             <button type="button" onclick="navigatePlannerMonth(1)" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors shrink-0 active:scale-95 touch-manipulation" title="Next Month">
               <i data-lucide="chevron-right" class="w-4 h-4"></i>
             </button>
@@ -1080,8 +1096,8 @@
           <div class="analytics-filter-box flex items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5">
             <label for="analyticsTimeframeSelect" class="text-[10px] uppercase font-bold text-slate-400">Preset:</label>
             <select id="analyticsTimeframeSelect" onchange="handleAnalyticsPresetChange(this.value)" class="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer">
-              <option value="SEP_2026" selected>September 2026 (Pilot Cycle)</option>
-              <option value="OCT_2026">October 2026</option>
+              <option value="OCT_2026" selected>October 2026 (Current Month)</option>
+              <option value="SEP_2026">September 2026 (Previous Cycle)</option>
               <option value="THIS_MONTH">This Month</option>
               <option value="LAST_30">Last 30 Days</option>
               <option value="TODAY">Today</option>
@@ -1094,11 +1110,11 @@
           <div class="analytics-filter-box flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-300">
             <div class="flex items-center gap-1.5">
               <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From:</span>
-              <input type="date" id="analyticsDateFrom" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
+              <input type="date" id="analyticsDateFrom" value="2026-10-01" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
             </div>
             <div class="flex items-center gap-1.5">
               <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">To:</span>
-              <input type="date" id="analyticsDateTo" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
+              <input type="date" id="analyticsDateTo" value="2026-10-31" onchange="handleAnalyticsDateRangeChange()" class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-brand-500 font-mono">
             </div>
           </div>
 
@@ -1989,16 +2005,16 @@
             </button>
           </div>
 
-          <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40">
+          <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40 min-h-[220px]">
             <table class="w-full text-left text-xs">
               <thead class="text-slate-400 uppercase bg-slate-950/80 border-b border-slate-800">
                 <tr>
-                  <th class="py-2.5 px-3">Product SKU</th>
-                  <th class="py-2.5 px-2 text-right">Price (AED)</th>
-                  <th class="py-2.5 px-2 text-center">Sales Qty</th>
-                  <th class="py-2.5 px-2 text-center">Bonus FOC</th>
-                  <th class="py-2.5 px-3 text-right">Line Total (AED)</th>
-                  <th class="py-2.5 px-2 text-center"></th>
+                  <th class="py-2.5 px-3 min-w-[280px]">Product SKU (Auto-Complete Search)</th>
+                  <th class="py-2.5 px-2 text-right w-24">Price (AED)</th>
+                  <th class="py-2.5 px-2 text-center w-20">Sales Qty</th>
+                  <th class="py-2.5 px-2 text-center w-20">Bonus FOC</th>
+                  <th class="py-2.5 px-3 text-right w-28">Line Total (AED)</th>
+                  <th class="py-2.5 px-2 text-center w-10"></th>
                 </tr>
               </thead>
               <tbody id="orderLineItemsBody" class="divide-y divide-slate-800/60">
@@ -2955,12 +2971,21 @@
               <!-- Date Range & Rep Filters -->
               <div class="space-y-1.5 pt-1">
                 <div class="flex items-center gap-2">
-                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Date:</label>
-                  <select id="exportDailyDateRange" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
-                    <option value="today">Today's Visits Only</option>
-                    <option value="selected">Currently Selected Daily Report Date</option>
-                    <option value="month">Current Month (September 2026)</option>
-                    <option value="all">All-Time Historical Visits</option>
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Scope:</label>
+                  <select id="exportDailyDateRange" onchange="handleExportDailyDateRangeChange(this.value)" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
+                    <option value="current_month" selected>🗓️ Current Month (October 2026)</option>
+                    <option value="month">📅 Specific Month...</option>
+                    <option value="today">☀️ Today's Visits Only</option>
+                    <option value="selected">🎯 Currently Selected Daily Report Date</option>
+                    <option value="all">🌐 All-Time Historical Visits</option>
+                  </select>
+                </div>
+                <div id="exportDailyMonthWrapper" class="hidden flex items-center gap-2">
+                  <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Month:</label>
+                  <select id="exportDailyMonth" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
+                    <option value="2026-10" selected>October 2026 (Current Live Month)</option>
+                    <option value="2026-09">September 2026 (Previous Month)</option>
+                    <option value="2026-08">August 2026</option>
                   </select>
                 </div>
                 <div class="flex items-center gap-2">
@@ -3001,8 +3026,8 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Month:</label>
                   <select id="exportPlanningMonth" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500">
+                    <option value="2026-10" selected>October 2026 (Current Month)</option>
                     <option value="2026-09">September 2026</option>
-                    <option value="2026-10">October 2026</option>
                     <option value="2026-08">August 2026</option>
                     <option value="ALL">All Planning Cycles</option>
                   </select>
