@@ -1693,11 +1693,14 @@ button, a, input, select, textarea, [role="button"], label {
   transition: all 0.15s ease;
   user-select: none;
   -webkit-user-select: none;
+  border-radius: 0.75rem;
+  border: 1px solid transparent;
 }
 
 .mobile-nav-btn.active {
   color: #38bdf8 !important;
-  background-color: rgba(14, 165, 233, 0.12);
+  background-color: rgba(14, 165, 233, 0.14) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
 }
 
 /* Bright Mode Support for Mobile Bottom Nav */
@@ -1713,7 +1716,8 @@ html:not(.dark) .mobile-nav-btn {
 
 html:not(.dark) .mobile-nav-btn.active {
   color: #0284c7 !important;
-  background-color: rgba(2, 132, 199, 0.1) !important;
+  background-color: rgba(2, 132, 199, 0.12) !important;
+  border-color: rgba(2, 132, 199, 0.3) !important;
 }
 
 /* Calendar Compact View on Phones (<640px) */
@@ -2108,6 +2112,16 @@ html:not(.dark) #tab-reports .bg-gradient-to-r p {
   object-fit: contain;
   display: block;
 }
+@media (max-width: 639px) {
+  .brand-logo-pill {
+    padding: 2.5px 6px !important;
+    border-radius: 9px !important;
+  }
+  .brand-logo-img {
+    height: 24px !important;
+    max-width: 78px !important;
+  }
+}
 @media (min-width: 640px) {
   .brand-logo-img {
     height: 38px;
@@ -2154,6 +2168,25 @@ html:not(.dark) .brand-logo-pill {
   }
   .glass-panel, .glass-card {
     border-radius: 1.25rem !important;
+  }
+  /* Clean high-contrast outlines for mobile screens */
+  .glass-card {
+    border-width: 1px !important;
+    border-color: rgba(148, 163, 184, 0.22) !important;
+    box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4) !important;
+  }
+  .glass-panel {
+    border-width: 1px !important;
+    border-color: rgba(148, 163, 184, 0.25) !important;
+    box-shadow: 0 6px 20px -2px rgba(0, 0, 0, 0.45) !important;
+  }
+  html:not(.dark) .glass-card {
+    border-color: rgba(100, 116, 139, 0.25) !important;
+    box-shadow: 0 2px 12px -2px rgba(15, 23, 42, 0.08) !important;
+  }
+  html:not(.dark) .glass-panel {
+    border-color: rgba(100, 116, 139, 0.3) !important;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.08) !important;
   }
 }
 

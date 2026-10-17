@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.7.0">
+  <link rel="stylesheet" href="./styles.css?v=3.8.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -81,11 +81,11 @@
   </div>
 
   <!-- ================= TOP HEADER NAVIGATION ================= -->
-  <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full overflow-hidden">
-    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16 gap-2 sm:gap-3">
+  <header class="sticky top-0 z-40 bg-[#0c1322]/95 backdrop-blur-md border-b border-slate-800 shadow-xl w-full max-w-full">
+    <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-14 sm:h-16 gap-1 sm:gap-3">
         <!-- Logo & Branding -->
-        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div class="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink-0">
           <div class="brand-logo-pill" onclick="switchTab('daily')" title="The Conceptors for Animal Health">
             <img src="conceptors_logo.png" alt="Conceptors Animal Health" class="brand-logo-img">
           </div>
@@ -99,21 +99,21 @@
         </div>
 
         <!-- Header Actions & Controls -->
-        <div class="flex items-center gap-1.5 sm:gap-2">
+        <div class="flex items-center gap-1 sm:gap-2 shrink-0">
           <!-- Live UAE Time & Timezone Sync Pill (hidden on small phones) -->
           <div id="uaeTimezonePill" class="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm" title="Synchronized with UAE Standard Time (GST, UTC+4)">
             <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
             <span id="uaeLiveClock" class="font-mono text-emerald-300">UAE --:-- GST</span>
           </div>
 
-          <!-- Cloud Sync Badge (compact on mobile) -->
-          <div id="cloudSyncBadge" class="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0 touch-manipulation" onclick="openCloudSyncModal()" title="Cloud Synchronization Status">
+          <!-- Cloud Sync Badge (compact on mobile, full on sm+) -->
+          <div id="cloudSyncBadge" class="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0 touch-manipulation" onclick="openCloudSyncModal()" title="Cloud Synchronization Status">
             <span id="cloudSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-            <span id="cloudSyncText" class="font-mono text-emerald-300 text-[10px] sm:text-xs">⚡ Synced</span>
+            <span id="cloudSyncText" class="font-mono text-emerald-300 text-[10px] sm:text-xs hidden sm:inline">⚡ Synced</span>
           </div>
 
-          <!-- Central Export Data Button -->
-          <button type="button" onclick="openExportCenterModal()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 hover:text-white text-[11px] sm:text-xs font-bold transition-all shadow-sm touch-manipulation" title="Export Reports, Planning & Orders Data (CSV / Excel)">
+          <!-- Central Export Data Button (hidden on phone, available in bottom More drawer) -->
+          <button type="button" onclick="openExportCenterModal()" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 hover:text-white text-[11px] sm:text-xs font-bold transition-all shadow-sm touch-manipulation" title="Export Reports, Planning & Orders Data (CSV / Excel)">
             <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i>
             <span class="hidden md:inline">Export Data</span>
           </button>
@@ -125,44 +125,39 @@
           </button>
 
           <!-- Senior Manager Order Notifications Bell -->
-          <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm touch-manipulation shrink-0" title="Order Notifications & Alerts">
-            <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
-            <span id="notificationBadge" class="absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">2</span>
+          <button type="button" onclick="openNotificationsModal()" class="relative p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm touch-manipulation shrink-0" title="Order Notifications & Alerts">
+            <i data-lucide="bell" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400"></i>
+            <span id="notificationBadge" class="absolute -top-1 -right-1 px-1 min-w-[16px] text-[9px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">0</span>
           </button>
 
           <!-- Quick Action: + Unplanned Visit Today -->
-          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-2.5 sm:px-3 py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation" title="Add Unplanned Visit for Today">
-            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200"></i>
+          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Add Unplanned Visit for Today">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200 shrink-0"></i>
             <span class="hidden sm:inline">⚡ + Unplanned Visit</span>
-            <span class="sm:hidden text-[11px]">⚡ Visit</span>
+            <span class="sm:hidden text-[10px] font-extrabold">Visit</span>
           </button>
 
           <!-- Quick Action: New Field Order -->
-          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-2.5 sm:px-3.5 py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation" title="Book New Field Order">
-            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Book New Field Order">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5 shrink-0"></i>
             <span class="hidden sm:inline">New Order</span>
-            <span class="sm:hidden text-[11px]">+ Order</span>
+            <span class="sm:hidden text-[10px] font-extrabold">Order</span>
           </button>
 
           <!-- Authenticated User Profile Badge & Fast Switcher (Accessible across Desktop, Tablet & Mobile) -->
-          <div class="flex items-center gap-1.5">
-            <button type="button" onclick="openProfileSwitcherModal()" id="userProfileWidget" class="flex items-center gap-1.5 sm:gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/90 rounded-xl px-2 py-1 text-xs shadow-inner transition-all hover:border-sky-500/40 active:scale-95 touch-manipulation cursor-pointer" title="Click to Switch Profile or Log Out">
-              <div id="userAvatarBadge" class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-[11px] sm:text-xs border border-sky-500/30 shrink-0">SH</div>
-              <div class="text-left max-w-[80px] sm:max-w-[110px]">
+          <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <button type="button" onclick="openProfileSwitcherModal()" id="userProfileWidget" class="flex items-center gap-1 sm:gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl p-1 sm:px-2 sm:py-1 text-xs shadow-inner transition-all hover:border-sky-500/40 active:scale-95 touch-manipulation cursor-pointer" title="Click to Switch Profile or Log Out">
+              <div id="userAvatarBadge" class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-[10px] sm:text-xs border border-sky-500/30 shrink-0">SH</div>
+              <div class="text-left hidden sm:block max-w-[80px] sm:max-w-[110px]">
                 <div id="userNameDisplay" class="font-bold text-white text-[10px] sm:text-[11px] leading-tight truncate">Shaimaa</div>
                 <div id="userRolePill" class="text-[8px] sm:text-[9px] text-sky-400 font-bold uppercase truncate">Rep T1</div>
               </div>
-              <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 shrink-0"></i>
+              <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 shrink-0 hidden sm:block"></i>
             </button>
-            <button type="button" onclick="handleLogout()" class="p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors touch-manipulation" title="Log Out & Lock CRM">
+            <button type="button" onclick="handleLogout()" class="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors touch-manipulation" title="Log Out & Lock CRM">
               <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
             </button>
           </div>
-
-          <!-- Mobile More Trigger Button (< md) -->
-          <button type="button" onclick="toggleMobileMoreDrawer()" class="md:hidden p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all touch-manipulation" aria-label="Open Mobile Menu" title="Menu & Shortcuts">
-            <i data-lucide="more-vertical" class="w-4 h-4"></i>
-          </button>
         </div>
       </div>
 
@@ -1637,11 +1632,6 @@
           </div>
         </div>
 
-        <div>
-          <label class="block text-slate-400 mb-1 font-semibold">Clinical Discussion & Doctor Feedback Outcome *</label>
-          <textarea id="plannedOutcome" required rows="2" placeholder="Record key topics discussed, cases reviewed, physician questions..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-brand-500"></textarea>
-        </div>
-
         <!-- Order Placed Link Toggle -->
         <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
           <label class="flex items-center gap-2 cursor-pointer">
@@ -1877,11 +1867,6 @@
             <label class="block text-slate-400 mb-1 font-semibold">Sample Units Given</label>
             <input type="number" id="unplannedSampleUnits" min="0" value="0" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 font-bold outline-none">
           </div>
-        </div>
-
-        <div>
-          <label class="block text-slate-400 mb-1 font-semibold">Clinical Discussion & Outcome *</label>
-          <textarea id="unplannedOutcome" required rows="2" placeholder="Record reason for drop-in, products detailed, doctor questions, treatment observations..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-amber-500"></textarea>
         </div>
 
         <!-- Order Placed Link Toggle -->
@@ -3499,7 +3484,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.7.0"></script>
-  <script src="./crm_app.js?v=3.7.0"></script>
+  <script src="./crm_data.js?v=3.8.0"></script>
+  <script src="./crm_app.js?v=3.8.0"></script>
 </body>
 </html>

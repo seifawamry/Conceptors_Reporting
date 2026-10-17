@@ -1912,7 +1912,7 @@ function renderDailyWorkspace() {
               </p>
             </div>
 
-            <!-- Detail Box (Doctor Met & Detailing Purpose) -->
+            <!-- Detail Box (Doctor Met, Goal & Products Pitched) -->
             <div class="visit-detail-box bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
               <div class="text-slate-300 font-semibold">
                 <span class="text-slate-500 font-medium">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Lead Veterinarian')} ${v.doctorRole ? `(${escapeHtml(v.doctorRole)})` : ''}
@@ -1920,9 +1920,10 @@ function renderDailyWorkspace() {
               <div class="text-slate-400">
                 <span class="text-slate-500 font-medium">Goal:</span> ${escapeHtml(v.purpose || 'Clinical Detailing')}
               </div>
-              ${isCompleted && v.outcome ? `
-                <div class="text-emerald-300/90 font-medium pt-1 border-t border-slate-800/80">
-                  <span class="text-slate-500 font-medium">Outcome:</span> ${escapeHtml(v.outcome)}
+              ${isCompleted && Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 ? `
+                <div class="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1 items-center">
+                  <span class="text-slate-500 font-medium text-[10px]">Pitched:</span>
+                  ${v.productsDetailed.map(p => `<span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 text-[10px] text-cyan-300">${escapeHtml(getBardDistinctiveName(p) || p)}</span>`).join('')}
                 </div>
               ` : ''}
             </div>
@@ -2005,14 +2006,20 @@ function renderDailyWorkspace() {
               </p>
             </div>
 
-            <!-- Detail Box -->
+            <!-- Detail Box (Doctor Met, Goal & Products Pitched) -->
             <div class="visit-detail-box bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 text-[11px] space-y-1">
               <div class="text-slate-300 font-semibold">
                 <span class="text-slate-500 font-medium">Doctor Met:</span> ${escapeHtml(v.doctorName || 'Veterinarian')} (${escapeHtml(v.doctorRole || 'Doctor')})
               </div>
-              <div class="text-slate-300/90 pt-1 border-t border-slate-800/80">
-                <span class="text-slate-500 font-medium">Outcome:</span> ${escapeHtml(v.outcome || 'Detailed doctor on clinical protocols.')}
+              <div class="text-slate-400">
+                <span class="text-slate-500 font-medium">Goal:</span> ${escapeHtml(v.purpose || 'Clinical Detailing')}
               </div>
+              ${Array.isArray(v.productsDetailed) && v.productsDetailed.length > 0 ? `
+                <div class="pt-1 border-t border-slate-800/80 flex flex-wrap gap-1 items-center">
+                  <span class="text-slate-500 font-medium text-[10px]">Pitched:</span>
+                  ${v.productsDetailed.map(p => `<span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/80 text-[10px] text-cyan-300">${escapeHtml(getBardDistinctiveName(p) || p)}</span>`).join('')}
+                </div>
+              ` : ''}
             </div>
 
             <!-- Card Footer: Dedicated Action Row -->
@@ -3725,7 +3732,8 @@ window.openSubmitPlannedModal = function(visitId) {
   document.getElementById('plannedDoctorName').value = visit.doctorName || '';
   document.getElementById('plannedDoctorRole').value = visit.doctorRole || 'Lead Veterinarian & Director';
   setPurposeControlsValue('planned', visit.purpose || 'Detailing');
-  document.getElementById('plannedOutcome').value = visit.outcome || '';
+  const plannedOutcomeEl = document.getElementById('plannedOutcome');
+  if (plannedOutcomeEl) plannedOutcomeEl.value = visit.outcome || '';
   document.getElementById('plannedSampleUnits').value = visit.samplesDropped || 0;
   document.getElementById('plannedOrderPlaced').checked = !!visit.orderPlaced;
 
@@ -3769,7 +3777,8 @@ window.handlePlannedVisitSubmit = function(e) {
   const doctorName = document.getElementById('plannedDoctorName').value.trim();
   const doctorRole = document.getElementById('plannedDoctorRole').value;
   const purpose = getPurposeControlsValue('planned');
-  const outcome = document.getElementById('plannedOutcome').value.trim();
+  const plannedOutcomeEl = document.getElementById('plannedOutcome');
+  const outcome = plannedOutcomeEl ? plannedOutcomeEl.value.trim() : (visit.outcome || '');
   const sampleProduct = document.getElementById('plannedSampleProduct').value;
   const sampleUnits = parseInt(document.getElementById('plannedSampleUnits').value) || 0;
   const orderPlaced = document.getElementById('plannedOrderPlaced').checked;
@@ -4021,7 +4030,8 @@ window.openUnplannedVisitModal = function(defaultRep = null, defaultClient = nul
 
   document.getElementById('unplannedDoctorName').value = '';
   setPurposeControlsValue('unplanned', 'Detailing');
-  document.getElementById('unplannedOutcome').value = '';
+  const unplannedOutcomeEl = document.getElementById('unplannedOutcome');
+  if (unplannedOutcomeEl) unplannedOutcomeEl.value = '';
   document.getElementById('unplannedSampleUnits').value = 0;
   document.getElementById('unplannedOrderPlaced').checked = false;
 
@@ -4092,7 +4102,8 @@ window.handleUnplannedVisitSubmit = function(e) {
   const selectedPurpose = getPurposeControlsValue('unplanned');
   const doctorName = document.getElementById('unplannedDoctorName').value.trim();
   const doctorRole = document.getElementById('unplannedDoctorRole').value;
-  const outcome = document.getElementById('unplannedOutcome').value.trim();
+  const unplannedOutcomeEl = document.getElementById('unplannedOutcome');
+  const outcome = unplannedOutcomeEl ? unplannedOutcomeEl.value.trim() : '';
   const sampleProduct = document.getElementById('unplannedSampleProduct').value;
   const sampleUnits = parseInt(document.getElementById('unplannedSampleUnits').value) || 0;
   const orderPlaced = document.getElementById('unplannedOrderPlaced').checked;
