@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.3.0">
+  <link rel="stylesheet" href="./styles.css?v=3.4.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -1531,6 +1531,54 @@
           </div>
         </div>
 
+        <!-- Detailing Purpose & Clinical Goals -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <label class="block text-slate-300 font-bold text-xs">Detailing Purpose & Clinical Goals *</label>
+            <span class="text-[10px] text-sky-400 font-semibold">Tick options or choose from dropdown</span>
+          </div>
+          <div id="plannedPurposeCheckboxes" class="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 cursor-pointer has-[:checked]:border-sky-500 has-[:checked]:bg-sky-500/15 transition-all">
+              <input type="checkbox" value="Detailing" checked onchange="handlePurposeCheckboxChange('planned')" class="w-4 h-4 rounded accent-sky-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Detailing</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 cursor-pointer has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/15 transition-all">
+              <input type="checkbox" value="Orders" onchange="handlePurposeCheckboxChange('planned')" class="w-4 h-4 rounded accent-emerald-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Orders</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/15 transition-all">
+              <input type="checkbox" value="Collection" onchange="handlePurposeCheckboxChange('planned')" class="w-4 h-4 rounded accent-amber-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Collection</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-500/15 transition-all">
+              <input type="checkbox" value="Follow up" onchange="handlePurposeCheckboxChange('planned')" class="w-4 h-4 rounded accent-indigo-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Follow up</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 cursor-pointer has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/15 transition-all col-span-2 sm:col-span-1">
+              <input type="checkbox" value="Group Meeting" onchange="handlePurposeCheckboxChange('planned')" class="w-4 h-4 rounded accent-purple-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Group Meeting</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <select id="plannedPurposeSelect" onchange="handlePurposeDropdownChange('planned', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-sky-500 font-semibold text-xs">
+                <option value="">-- Quick Select from Dropdown List --</option>
+                <option value="Detailing" selected>Detailing</option>
+                <option value="Orders">Orders</option>
+                <option value="Collection">Collection</option>
+                <option value="Follow up">Follow up</option>
+                <option value="Group Meeting">Group Meeting</option>
+                <option value="Detailing - Orders">Detailing - Orders</option>
+                <option value="Detailing - Follow up">Detailing - Follow up</option>
+                <option value="Orders - Collection">Orders - Collection</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="plannedPurpose" required value="Detailing" placeholder="Selected purpose(s) or clinical goal notes..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sky-300 font-bold outline-none focus:border-sky-500 text-xs">
+            </div>
+          </div>
+        </div>
+
         <!-- Products Pitched Checkboxes -->
         <div>
           <label class="block text-slate-400 mb-1.5 font-semibold">Products Pitched & Detailed (Select applicable)</label>
@@ -1722,6 +1770,54 @@
           </div>
         </div>
 
+        <!-- Detailing Purpose & Clinical Goals -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <label class="block text-slate-300 font-bold text-xs">Detailing Purpose & Clinical Goals *</label>
+            <span class="text-[10px] text-amber-400 font-semibold">Tick options or choose from dropdown</span>
+          </div>
+          <div id="unplannedPurposeCheckboxes" class="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/15 transition-all">
+              <input type="checkbox" value="Detailing" checked onchange="handlePurposeCheckboxChange('unplanned')" class="w-4 h-4 rounded accent-amber-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Detailing</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 cursor-pointer has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/15 transition-all">
+              <input type="checkbox" value="Orders" onchange="handlePurposeCheckboxChange('unplanned')" class="w-4 h-4 rounded accent-emerald-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Orders</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/15 transition-all">
+              <input type="checkbox" value="Collection" onchange="handlePurposeCheckboxChange('unplanned')" class="w-4 h-4 rounded accent-amber-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Collection</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-500/15 transition-all">
+              <input type="checkbox" value="Follow up" onchange="handlePurposeCheckboxChange('unplanned')" class="w-4 h-4 rounded accent-indigo-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Follow up</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 cursor-pointer has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/15 transition-all col-span-2 sm:col-span-1">
+              <input type="checkbox" value="Group Meeting" onchange="handlePurposeCheckboxChange('unplanned')" class="w-4 h-4 rounded accent-purple-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Group Meeting</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <select id="unplannedPurposeSelect" onchange="handlePurposeDropdownChange('unplanned', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-amber-500 font-semibold text-xs">
+                <option value="">-- Quick Select from Dropdown List --</option>
+                <option value="Detailing" selected>Detailing</option>
+                <option value="Orders">Orders</option>
+                <option value="Collection">Collection</option>
+                <option value="Follow up">Follow up</option>
+                <option value="Group Meeting">Group Meeting</option>
+                <option value="Detailing - Orders">Detailing - Orders</option>
+                <option value="Detailing - Follow up">Detailing - Follow up</option>
+                <option value="Orders - Collection">Orders - Collection</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="unplannedPurpose" required value="Detailing" placeholder="Selected purpose(s) or clinical goal notes..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-amber-300 font-bold outline-none focus:border-amber-500 text-xs">
+            </div>
+          </div>
+        </div>
+
         <!-- Detailing Products -->
         <div>
           <label class="block text-slate-400 mb-1.5 font-semibold">Products Pitched / Detailed (Select applicable)</label>
@@ -1886,9 +1982,55 @@
           <input type="text" id="planDoctorName" placeholder="e.g. Dr. Samir / Dr. Elena" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
         </div>
 
-        <div>
-          <label class="block text-slate-400 mb-1 font-semibold">Detailing Purpose & Clinical Goals *</label>
-          <textarea id="planPurpose" required rows="2" placeholder="e.g. Virulys launch detailing & clinical comparison with competitor lysine pastes" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none"></textarea>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <label class="block text-slate-300 font-bold text-xs">Detailing Purpose & Clinical Goals *</label>
+            <span class="text-[10px] text-sky-400 font-semibold">Tick one or more options or choose from dropdown</span>
+          </div>
+
+          <!-- Tickable Checkbox Options right in front of the user -->
+          <div id="planPurposeCheckboxes" class="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-sky-500/50 cursor-pointer has-[:checked]:border-sky-500 has-[:checked]:bg-sky-500/15 transition-all">
+              <input type="checkbox" value="Detailing" checked onchange="handlePurposeCheckboxChange('plan')" class="w-4 h-4 rounded accent-sky-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Detailing</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 cursor-pointer has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/15 transition-all">
+              <input type="checkbox" value="Orders" onchange="handlePurposeCheckboxChange('plan')" class="w-4 h-4 rounded accent-emerald-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Orders</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/15 transition-all">
+              <input type="checkbox" value="Collection" onchange="handlePurposeCheckboxChange('plan')" class="w-4 h-4 rounded accent-amber-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Collection</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-500/15 transition-all">
+              <input type="checkbox" value="Follow up" onchange="handlePurposeCheckboxChange('plan')" class="w-4 h-4 rounded accent-indigo-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Follow up</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 cursor-pointer has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/15 transition-all col-span-2 sm:col-span-1">
+              <input type="checkbox" value="Group Meeting" onchange="handlePurposeCheckboxChange('plan')" class="w-4 h-4 rounded accent-purple-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Group Meeting</span>
+            </label>
+          </div>
+
+          <!-- Dropdown List + Synced Purpose Value -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <select id="planPurposeSelect" onchange="handlePurposeDropdownChange('plan', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-sky-500 font-semibold text-xs">
+                <option value="">-- Quick Select from Dropdown List --</option>
+                <option value="Detailing" selected>Detailing</option>
+                <option value="Orders">Orders</option>
+                <option value="Collection">Collection</option>
+                <option value="Follow up">Follow up</option>
+                <option value="Group Meeting">Group Meeting</option>
+                <option value="Detailing - Orders">Detailing - Orders</option>
+                <option value="Detailing - Follow up">Detailing - Follow up</option>
+                <option value="Orders - Collection">Orders - Collection</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="planPurpose" required value="Detailing" placeholder="Selected purpose(s) or clinical goal notes..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sky-300 font-bold outline-none focus:border-sky-500 text-xs">
+            </div>
+          </div>
         </div>
 
         <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
@@ -1957,9 +2099,53 @@
           <input type="text" id="amendDoctorName" placeholder="e.g. Dr. Samir / Dr. Elena" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none">
         </div>
 
-        <div>
-          <label class="block text-slate-400 mb-1 font-semibold">Detailing Purpose & Clinical Goals</label>
-          <textarea id="amendPurpose" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none"></textarea>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <label class="block text-slate-300 font-bold text-xs">Detailing Purpose & Clinical Goals *</label>
+            <span class="text-[10px] text-cyan-400 font-semibold">Tick options or choose from dropdown</span>
+          </div>
+
+          <div id="amendPurposeCheckboxes" class="grid grid-cols-2 sm:grid-cols-5 gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-cyan-500/50 cursor-pointer has-[:checked]:border-cyan-500 has-[:checked]:bg-cyan-500/15 transition-all">
+              <input type="checkbox" value="Detailing" checked onchange="handlePurposeCheckboxChange('amend')" class="w-4 h-4 rounded accent-cyan-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Detailing</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-emerald-500/50 cursor-pointer has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-500/15 transition-all">
+              <input type="checkbox" value="Orders" onchange="handlePurposeCheckboxChange('amend')" class="w-4 h-4 rounded accent-emerald-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Orders</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-amber-500/50 cursor-pointer has-[:checked]:border-amber-500 has-[:checked]:bg-amber-500/15 transition-all">
+              <input type="checkbox" value="Collection" onchange="handlePurposeCheckboxChange('amend')" class="w-4 h-4 rounded accent-amber-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Collection</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-500/15 transition-all">
+              <input type="checkbox" value="Follow up" onchange="handlePurposeCheckboxChange('amend')" class="w-4 h-4 rounded accent-indigo-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Follow up</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 hover:border-purple-500/50 cursor-pointer has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/15 transition-all col-span-2 sm:col-span-1">
+              <input type="checkbox" value="Group Meeting" onchange="handlePurposeCheckboxChange('amend')" class="w-4 h-4 rounded accent-purple-500 shrink-0">
+              <span class="font-bold text-slate-200 text-[11px] leading-tight">Group Meeting</span>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <select id="amendPurposeSelect" onchange="handlePurposeDropdownChange('amend', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-slate-200 outline-none focus:border-cyan-500 font-semibold text-xs">
+                <option value="">-- Quick Select from Dropdown List --</option>
+                <option value="Detailing">Detailing</option>
+                <option value="Orders">Orders</option>
+                <option value="Collection">Collection</option>
+                <option value="Follow up">Follow up</option>
+                <option value="Group Meeting">Group Meeting</option>
+                <option value="Detailing - Orders">Detailing - Orders</option>
+                <option value="Detailing - Follow up">Detailing - Follow up</option>
+                <option value="Orders - Collection">Orders - Collection</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="amendPurpose" required value="Detailing" placeholder="Selected purpose(s) or clinical goal notes..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-cyan-300 font-bold outline-none focus:border-cyan-500 text-xs">
+            </div>
+          </div>
         </div>
 
         <div>
@@ -3303,7 +3489,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.3.0"></script>
-  <script src="./crm_app.js?v=3.3.0"></script>
+  <script src="./crm_data.js?v=3.4.0"></script>
+  <script src="./crm_app.js?v=3.4.0"></script>
 </body>
 </html>

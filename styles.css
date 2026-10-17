@@ -2336,3 +2336,31 @@ html:not(.dark) #exportPeriodLiveSummaryBox {
   border: 1.5px solid #cbd5e1 !important;
 }
 
+/* Detailing Purpose & Clinical Goals Tickable Checkboxes in Bright Mode */
+html:not(.dark) #planPurposeCheckboxes,
+html:not(.dark) #amendPurposeCheckboxes,
+html:not(.dark) #plannedPurposeCheckboxes,
+html:not(.dark) #unplannedPurposeCheckboxes {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #planPurposeCheckboxes label,
+html:not(.dark) #amendPurposeCheckboxes label,
+html:not(.dark) #plannedPurposeCheckboxes label,
+html:not(.dark) #unplannedPurposeCheckboxes label {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) #planPurposeCheckboxes label:hover,
+html:not(.dark) #amendPurposeCheckboxes label:hover,
+html:not(.dark) #plannedPurposeCheckboxes label:hover,
+html:not(.dark) #unplannedPurposeCheckboxes label:hover {
+  background-color: #f0f9ff !important;
+  border-color: #38bdf8 !important;
+}
+
+

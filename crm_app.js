@@ -517,6 +517,41 @@ function mapNotifToDb(n) {
   };
 }
 
+const STORAGE_KEY_SEEN_NOTIFS = 'conceptors_crm_seen_notifs_v2';
+let hasInitialCloudNotifSyncCompleted = false;
+const alertedOrderNumbersInSession = new Set();
+
+function getSeenNotificationIds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SEEN_NOTIFS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return new Set(parsed);
+    }
+  } catch (_) {}
+  return new Set();
+}
+
+function markNotificationIdsAsSeen(ids) {
+  if (!ids || ids.length === 0) return;
+  const seen = getSeenNotificationIds();
+  ids.forEach(id => {
+    if (id) seen.add(id);
+  });
+  try {
+    const arr = Array.from(seen).slice(-500);
+    localStorage.setItem(STORAGE_KEY_SEEN_NOTIFS, JSON.stringify(arr));
+  } catch (_) {}
+}
+
+function isNotificationFresh(timestampStr, maxAgeMinutes = 10) {
+  if (!timestampStr) return false;
+  const ts = new Date(timestampStr).getTime();
+  if (isNaN(ts)) return false;
+  const ageMs = Date.now() - ts;
+  return ageMs >= -60000 && ageMs <= maxAgeMinutes * 60 * 1000;
+}
+
 async function syncWithSupabase(force = false) {
   updateSupabaseSyncBadge('syncing', 'Syncing Cloud...');
   try {
@@ -590,15 +625,54 @@ async function syncWithSupabase(force = false) {
     const notifRes = await supabaseRest('notifications?select=*&order=timestamp.desc');
     if (notifRes.data && Array.isArray(notifRes.data) && notifRes.data.length > 0) {
       const prevIds = new Set((state.notifications || []).map(n => n.id));
+      const seenIds = getSeenNotificationIds();
       const freshNotifs = notifRes.data.map(mapNotifFromDb);
-      const newAlerts = freshNotifs.filter(n => !n.read && !prevIds.has(n.id));
-      state.notifications = freshNotifs;
+      const staleUnreadIdsToMarkRead = [];
 
-      // If new unread alerts arrived while Senior Manager is in the app
-      if (newAlerts.length > 0 && state.currentUser && state.currentUser.role === 'manager') {
-        if (state.managerSettings.soundAlert) playNotificationChime();
-        if (state.managerSettings.toastAlert) {
-          showToast(`🚨 ${newAlerts[0].title}`, newAlerts[0].itemsSummary || 'New field alert received.', 'info');
+      // Automatically mark any old notifications (> 2 hours old) or already approved/rejected notifications as read
+      // so old notifications never pop up again
+      freshNotifs.forEach(n => {
+        if (!n.read) {
+          const isStale = !isNotificationFresh(n.timestamp, 120);
+          const isResolved = n.approvalStatus === 'Approved' || n.approvalStatus === 'Rejected';
+          if (isStale || isResolved) {
+            n.read = true;
+            staleUnreadIdsToMarkRead.push(n.id);
+          }
+        }
+      });
+
+      if (staleUnreadIdsToMarkRead.length > 0) {
+        for (let i = 0; i < staleUnreadIdsToMarkRead.length; i += 25) {
+          const chunk = staleUnreadIdsToMarkRead.slice(i, i + 25);
+          supabaseRest(`notifications?id=in.(${chunk.map(id => encodeURIComponent(id)).join(',')})`, {
+            method: 'PATCH',
+            body: { read: true }
+          }).catch(() => {});
+        }
+      }
+
+      if (!hasInitialCloudNotifSyncCompleted) {
+        // First sync on app load: silently hydrate and mark all current notifications as seen
+        hasInitialCloudNotifSyncCompleted = true;
+        markNotificationIdsAsSeen(freshNotifs.map(n => n.id));
+        state.notifications = freshNotifs;
+      } else {
+        // Subsequent live sync: only alert for genuinely NEW, UNREAD, FRESH (< 10 mins old) notifications
+        const newAlerts = freshNotifs.filter(n =>
+          !n.read &&
+          !prevIds.has(n.id) &&
+          !seenIds.has(n.id) &&
+          isNotificationFresh(n.timestamp, 10)
+        );
+        state.notifications = freshNotifs;
+        markNotificationIdsAsSeen(freshNotifs.map(n => n.id));
+
+        if (newAlerts.length > 0 && state.currentUser && state.currentUser.role === 'manager') {
+          if (state.managerSettings.soundAlert) playNotificationChime();
+          if (state.managerSettings.toastAlert) {
+            showToast(`🚨 ${newAlerts[0].title}`, newAlerts[0].itemsSummary || 'New field alert received.', 'info');
+          }
         }
       }
     }
@@ -673,14 +747,16 @@ function initSupabaseRealtime() {
         { event: '*', schema: 'public' },
         (payload) => {
           console.info('[Supabase Realtime] Event detected:', payload.table, payload.eventType);
-          if (payload.table === 'orders' && payload.eventType === 'INSERT') {
-            if (typeof triggerManagerOrderAlert === 'function') {
-              triggerManagerOrderAlert(payload.new || {});
-            }
-          } else if (payload.table === 'notifications' && payload.eventType === 'INSERT') {
-            if (payload.new && payload.new.type === 'ORDER_SUBMITTED') {
-              if (typeof triggerManagerOrderAlert === 'function') {
-                triggerManagerOrderAlert(payload.new || {});
+          if (payload.table === 'notifications' && payload.eventType === 'INSERT') {
+            const newRow = payload.new || {};
+            if (newRow.id) markNotificationIdsAsSeen([newRow.id]);
+            if (newRow.type === 'ORDER_SUBMITTED' && !newRow.read && isNotificationFresh(newRow.timestamp, 10)) {
+              const ordNum = newRow.order_number || newRow.orderNumber;
+              if (ordNum && !alertedOrderNumbersInSession.has(ordNum)) {
+                alertedOrderNumbersInSession.add(ordNum);
+                if (typeof triggerManagerOrderAlert === 'function') {
+                  triggerManagerOrderAlert(newRow);
+                }
               }
             }
           }
@@ -3483,8 +3559,83 @@ window.handleManagerPurgeSubmit = async function() {
 };
 
 // =========================================================================
-// 8. SUBMIT PLANNED VISIT REPORT MODAL
+// 8. SUBMIT PLANNED VISIT REPORT MODAL & PURPOSE / CLINICAL GOALS SYNC
 // =========================================================================
+
+const STANDARD_VISIT_PURPOSES = ['Detailing', 'Orders', 'Collection', 'Follow up', 'Group Meeting'];
+
+window.handlePurposeCheckboxChange = function(prefix) {
+  const container = document.getElementById(`${prefix}PurposeCheckboxes`);
+  const inputEl = document.getElementById(`${prefix}Purpose`);
+  const selectEl = document.getElementById(`${prefix}PurposeSelect`);
+  if (!container) return;
+
+  const checkedVals = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
+  const combined = checkedVals.join(' - ');
+
+  if (inputEl) {
+    inputEl.value = combined;
+  }
+  if (selectEl) {
+    const matchOpt = Array.from(selectEl.options).find(o => o.value === combined);
+    selectEl.value = matchOpt ? combined : '';
+  }
+};
+
+window.handlePurposeDropdownChange = function(prefix, selectedVal) {
+  if (!selectedVal) return;
+  const container = document.getElementById(`${prefix}PurposeCheckboxes`);
+  const inputEl = document.getElementById(`${prefix}Purpose`);
+  if (inputEl) {
+    inputEl.value = selectedVal;
+  }
+  if (container) {
+    const parts = selectedVal.split(/\s*-\s*|\s*,\s*/).map(s => s.trim().toLowerCase());
+    container.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+      chk.checked = parts.includes(chk.value.toLowerCase());
+    });
+  }
+};
+
+window.setPurposeControlsValue = function(prefix, rawVal = 'Detailing') {
+  const cleanVal = (rawVal || 'Detailing').trim() || 'Detailing';
+  const container = document.getElementById(`${prefix}PurposeCheckboxes`);
+  const inputEl = document.getElementById(`${prefix}Purpose`);
+  const selectEl = document.getElementById(`${prefix}PurposeSelect`);
+
+  if (inputEl) inputEl.value = cleanVal;
+
+  if (container) {
+    const lowerVal = cleanVal.toLowerCase();
+    let anyMatched = false;
+    container.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+      const isMatch = lowerVal.includes(chk.value.toLowerCase());
+      chk.checked = isMatch;
+      if (isMatch) anyMatched = true;
+    });
+    if (!anyMatched && cleanVal === 'Detailing') {
+      const firstChk = container.querySelector('input[value="Detailing"]');
+      if (firstChk) firstChk.checked = true;
+    }
+  }
+
+  if (selectEl) {
+    const matchOpt = Array.from(selectEl.options).find(o => o.value.toLowerCase() === cleanVal.toLowerCase());
+    selectEl.value = matchOpt ? matchOpt.value : '';
+  }
+};
+
+window.getPurposeControlsValue = function(prefix) {
+  const inputEl = document.getElementById(`${prefix}Purpose`);
+  const container = document.getElementById(`${prefix}PurposeCheckboxes`);
+  const checkedVals = container
+    ? Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value)
+    : [];
+  const typedVal = inputEl ? inputEl.value.trim() : '';
+  if (typedVal) return typedVal;
+  if (checkedVals.length > 0) return checkedVals.join(' - ');
+  return 'Detailing';
+};
 
 window.openSubmitPlannedModal = function(visitId) {
   const visit = state.visits.find(v => v.id === visitId);
@@ -3494,6 +3645,7 @@ window.openSubmitPlannedModal = function(visitId) {
   document.getElementById('plannedModalSubtitle').textContent = `Submitting Visit: ${visit.clientName} (${visit.location}) • Rep ${visit.repId}`;
   document.getElementById('plannedDoctorName').value = visit.doctorName || '';
   document.getElementById('plannedDoctorRole').value = visit.doctorRole || 'Lead Veterinarian & Director';
+  setPurposeControlsValue('planned', visit.purpose || 'Detailing');
   document.getElementById('plannedOutcome').value = visit.outcome || '';
   document.getElementById('plannedSampleUnits').value = visit.samplesDropped || 0;
   document.getElementById('plannedOrderPlaced').checked = !!visit.orderPlaced;
@@ -3533,6 +3685,7 @@ window.handlePlannedVisitSubmit = function(e) {
 
   const doctorName = document.getElementById('plannedDoctorName').value.trim();
   const doctorRole = document.getElementById('plannedDoctorRole').value;
+  const purpose = getPurposeControlsValue('planned');
   const outcome = document.getElementById('plannedOutcome').value.trim();
   const sampleProduct = document.getElementById('plannedSampleProduct').value;
   const sampleUnits = parseInt(document.getElementById('plannedSampleUnits').value) || 0;
@@ -3547,6 +3700,7 @@ window.handlePlannedVisitSubmit = function(e) {
   visit.status = 'Completed';
   visit.doctorName = doctorName;
   visit.doctorRole = doctorRole;
+  visit.purpose = purpose || visit.purpose || 'Detailing';
   visit.outcome = outcome;
   visit.doctorSentiment = doctorSentiment;
   visit.sampleProduct = sampleProduct;
@@ -3628,8 +3782,7 @@ window.openAmendPlannedModal = function(visitId) {
   if (slotInput) slotInput.value = visit.timeSlot || 'Morning Round (09:00 - 12:00)';
   const docInput = document.getElementById('amendDoctorName');
   if (docInput) docInput.value = visit.doctorName || '';
-  const purpInput = document.getElementById('amendPurpose');
-  if (purpInput) purpInput.value = visit.purpose || '';
+  setPurposeControlsValue('amend', visit.purpose || 'Detailing');
   const reasonInput = document.getElementById('amendReason');
   if (reasonInput) reasonInput.value = visit.amendmentReason || '';
 
@@ -3687,7 +3840,7 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
   const oldTimeSlot = visit.timeSlot;
   const newTimeSlot = document.getElementById('amendTimeSlot').value;
   const newDoctor = document.getElementById('amendDoctorName').value.trim();
-  const newPurpose = document.getElementById('amendPurpose').value.trim();
+  const newPurpose = getPurposeControlsValue('amend');
   const reason = document.getElementById('amendReason').value.trim();
 
   // Update in-memory visit
@@ -3723,9 +3876,10 @@ window.handleAmendPlannedVisitSubmit = async function(e) {
     timestamp: new Date().toISOString(),
     read: false,
     approvalStatus: 'Updated',
-    itemsSummary: `${repName} updated planned call to ${visit.clientName} on ${newDate} (${newTimeSlot}). Doctor: ${newDoctor || visit.doctorName || 'Doctor'}.${reason ? ` Notes: ${reason}` : ''}`
+    itemsSummary: `${repName} updated planned call to ${visit.clientName} on ${newDate} (${newTimeSlot}). Purpose: ${newPurpose || 'Detailing'}. Doctor: ${newDoctor || visit.doctorName || 'Doctor'}.${reason ? ` Notes: ${reason}` : ''}`
   };
   state.notifications.unshift(notif);
+  markNotificationIdsAsSeen([notif.id]);
   persistData();
 
   supabaseRest('notifications', {
@@ -3783,6 +3937,7 @@ window.openUnplannedVisitModal = function(defaultRep = null, defaultClient = nul
   }
 
   document.getElementById('unplannedDoctorName').value = '';
+  setPurposeControlsValue('unplanned', 'Detailing');
   document.getElementById('unplannedOutcome').value = '';
   document.getElementById('unplannedSampleUnits').value = 0;
   document.getElementById('unplannedOrderPlaced').checked = false;
@@ -3851,6 +4006,7 @@ window.handleUnplannedVisitSubmit = function(e) {
 
   const client = state.customers.find(c => c.code === clientCode);
   const unplannedReason = document.getElementById('unplannedReasonSelect').value;
+  const selectedPurpose = getPurposeControlsValue('unplanned');
   const doctorName = document.getElementById('unplannedDoctorName').value.trim();
   const doctorRole = document.getElementById('unplannedDoctorRole').value;
   const outcome = document.getElementById('unplannedOutcome').value.trim();
@@ -3885,7 +4041,7 @@ window.handleUnplannedVisitSubmit = function(e) {
     orderPlaced,
     orderRef: '',
     orderValueAed: 0,
-    purpose: `[⚡ Unplanned] ${unplannedReason}`,
+    purpose: selectedPurpose ? `${selectedPurpose} ([⚡ Unplanned] ${unplannedReason})` : `[⚡ Unplanned] ${unplannedReason}`,
     outcome
   };
 
@@ -4767,7 +4923,7 @@ window.openPlanVisitModal = function(preferredDate = null) {
   }
 
   document.getElementById('planDoctorName').value = '';
-  document.getElementById('planPurpose').value = '';
+  setPurposeControlsValue('plan', 'Detailing');
 
   document.getElementById('planVisitModal').classList.remove('hidden');
   safeLucide();
@@ -4820,7 +4976,11 @@ window.handlePlanVisitSubmit = function(e) {
   const client = state.customers.find(c => c.code === clientCode);
   const timeSlot = document.getElementById('planTimeSlot').value;
   const doctorName = document.getElementById('planDoctorName').value.trim();
-  const purpose = document.getElementById('planPurpose').value.trim();
+  const purpose = getPurposeControlsValue('plan');
+  if (!purpose) {
+    showToast('Purpose Required', 'Please select or tick at least one Detailing Purpose & Clinical Goal.', 'warning');
+    return;
+  }
 
   const newPlannedVisit = {
     id: `VIS-${date.replace(/-/g, '')}-${Date.now().toString().slice(-4)}`,
@@ -5166,7 +5326,7 @@ window.openOrderModal = function(defaultClient = null, defaultRep = null) {
 
   const linesBody = document.getElementById('orderLineItemsBody');
   linesBody.innerHTML = '';
-  addOrderLineItem('VR030', 25, 5);
+  addOrderLineItem('VR030', 0, 0);
 
   recalculateOrderTotals();
 
@@ -5226,7 +5386,7 @@ window.openAmendOrderModal = function(orderNum) {
         addOrderLineItem(it.productCode, it.salesQty, it.focQty);
       });
     } else {
-      addOrderLineItem('VR030', 10, 2);
+      addOrderLineItem('VR030', 0, 0);
     }
   }
 
@@ -5284,7 +5444,7 @@ window.filterOrderClinics = function() {
   }
 };
 
-window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultFoc = 2) {
+window.addOrderLineItem = function(defaultCode = '', defaultSales = 0, defaultFoc = 0) {
   const tbody = document.getElementById('orderLineItemsBody');
   if (!tbody) return;
 
@@ -5315,7 +5475,7 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
       <input type="number" step="0.01" value="${initialPrice.toFixed(2)}" class="item-price-input w-20 bg-slate-950 border border-slate-800 rounded-lg p-1.5 text-slate-300 text-right outline-none" readonly>
     </td>
     <td class="py-2 px-2 text-center">
-      <input type="number" min="1" value="${defaultSales}" class="item-sales-input w-16 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-100 text-center font-bold outline-none focus:border-indigo-500">
+      <input type="number" min="0" value="${defaultSales}" class="item-sales-input w-16 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-100 text-center font-bold outline-none focus:border-indigo-500">
     </td>
     <td class="py-2 px-2 text-center">
       <input type="number" min="0" value="${defaultFoc}" class="item-foc-input w-16 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-amber-300 text-center font-bold outline-none focus:border-amber-500">
@@ -5421,15 +5581,6 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
     priceInput.value = (prod.unitPrice || 0).toFixed(2);
     if (clearBtn) clearBtn.classList.remove('hidden');
     if (dropdown) dropdown.classList.add('hidden');
-
-    const curSales = parseInt(salesInput.value) || 0;
-    if (curSales > 0 && (!focInput.value || focInput.value === '0' || focInput.value === '2')) {
-      const suggestedFoc = Math.floor(curSales / 5);
-      if (suggestedFoc > 0) {
-        focInput.value = suggestedFoc;
-      }
-    }
-
     recalculateOrderTotals();
   }
 
@@ -5437,6 +5588,7 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
     hiddenCodeInput.value = '';
     searchInput.value = '';
     priceInput.value = '0.00';
+    salesInput.value = '0';
     focInput.value = '0';
     if (clearBtn) clearBtn.classList.add('hidden');
     if (dropdown) dropdown.classList.add('hidden');
@@ -5490,10 +5642,6 @@ window.addOrderLineItem = function(defaultCode = '', defaultSales = 10, defaultF
   }
 
   salesInput.addEventListener('input', () => {
-    const sQty = parseInt(salesInput.value) || 0;
-    if (hiddenCodeInput.value) {
-      focInput.value = Math.floor(sQty / 5);
-    }
     recalculateOrderTotals();
   });
 
@@ -6240,6 +6388,18 @@ window.viewNotificationEmailByOrder = function(orderNum) {
     }
   }
 
+  if (notif && !notif.read) {
+    notif.read = true;
+    markNotificationIdsAsSeen([notif.id]);
+    persistData();
+    supabaseRest(`notifications?id=eq.${encodeURIComponent(notif.id)}`, {
+      method: 'PATCH',
+      body: { read: true }
+    }).catch(() => {});
+    updateNotificationBell();
+    renderManagerNotifications();
+  }
+
   const modal = document.getElementById('viewEmailModal');
   if (modal) modal.classList.remove('hidden');
   safeLucide();
@@ -6248,6 +6408,17 @@ window.viewNotificationEmailByOrder = function(orderNum) {
 window.viewNotificationEmail = function(notifId) {
   const notif = state.notifications.find(n => n.id === notifId);
   if (!notif) return;
+  if (!notif.read) {
+    notif.read = true;
+    markNotificationIdsAsSeen([notif.id]);
+    persistData();
+    supabaseRest(`notifications?id=eq.${encodeURIComponent(notif.id)}`, {
+      method: 'PATCH',
+      body: { read: true }
+    }).catch(() => {});
+    updateNotificationBell();
+    renderManagerNotifications();
+  }
   viewNotificationEmailByOrder(notif.orderNumber);
 };
 
@@ -8200,6 +8371,7 @@ window.sendWebhookOrderAlert = async function(orderData, items = []) {
 };
 
 let activeWakeupOrderNumber = null;
+let activeWakeupNotifId = null;
 
 window.showWakeupOrderBanner = function(notif) {
   const banner = document.getElementById('wakeupOrderAlertBanner');
@@ -8207,6 +8379,8 @@ window.showWakeupOrderBanner = function(notif) {
   if (!banner || !notif) return;
 
   activeWakeupOrderNumber = notif.orderNumber;
+  activeWakeupNotifId = notif.id || null;
+  if (notif.id) markNotificationIdsAsSeen([notif.id]);
   if (textEl) {
     const totalStr = notif.totalIncVat ? `${formatCurrency(notif.totalIncVat)} AED` : '';
     const accountCode = notif.accountCode || notif.clientCode || '';
@@ -8220,6 +8394,20 @@ window.showWakeupOrderBanner = function(notif) {
 window.dismissWakeupOrderBanner = function() {
   const banner = document.getElementById('wakeupOrderAlertBanner');
   if (banner) banner.classList.add('hidden');
+  if (activeWakeupNotifId) {
+    markNotificationIdsAsSeen([activeWakeupNotifId]);
+    const notif = (state.notifications || []).find(n => n.id === activeWakeupNotifId);
+    if (notif && !notif.read) {
+      notif.read = true;
+      persistData();
+      supabaseRest(`notifications?id=eq.${encodeURIComponent(activeWakeupNotifId)}`, {
+        method: 'PATCH',
+        body: { read: true }
+      }).catch(() => {});
+      updateNotificationBell();
+      renderManagerNotifications();
+    }
+  }
 };
 
 window.inspectWakeupOrder = function() {
@@ -10048,12 +10236,24 @@ async function checkForegroundOrders() {
     } catch (_) {}
   }
 
-  // Check for unread orders
-  const unreadOrders = (state.notifications || []).filter(n => !n.read && (n.type === 'ORDER_SUBMITTED' || n.title?.includes('Order')));
-  if (unreadOrders.length > 0) {
-    const latest = unreadOrders[0];
+  // Only show wakeup order alerts for Senior Manager and only for genuinely fresh (< 10 min old) unseen orders
+  if (!state.currentUser || state.currentUser.role !== 'manager') return;
+
+  const seenIds = getSeenNotificationIds();
+  const unreadFreshOrders = (state.notifications || []).filter(n =>
+    !n.read &&
+    n.approvalStatus !== 'Approved' &&
+    n.approvalStatus !== 'Rejected' &&
+    (n.type === 'ORDER_SUBMITTED' || n.title?.includes('Order')) &&
+    !seenIds.has(n.id) &&
+    isNotificationFresh(n.timestamp, 10)
+  );
+
+  if (unreadFreshOrders.length > 0) {
+    const latest = unreadFreshOrders[0];
     if (latest.id !== lastAlertedWakeupId) {
       lastAlertedWakeupId = latest.id;
+      markNotificationIdsAsSeen([latest.id]);
       if (typeof showWakeupOrderBanner === 'function') {
         showWakeupOrderBanner(latest);
       }
