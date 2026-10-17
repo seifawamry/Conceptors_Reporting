@@ -2278,3 +2278,61 @@ html:not(.dark) .prod-autocomplete-item .text-slate-200 {
 html:not(.dark) .prod-autocomplete-item .text-slate-400 {
   color: #64748b !important;
 }
+
+/* ================= SENIOR MANAGER EXECUTIVE CONTROL CENTER & WEEKLY MEETING CARD OVERRIDES ================= */
+html:not(.dark) button[class*="bg-rose-500/20"],
+html:not(.dark) button[class*="bg-rose-500/25"],
+html:not(.dark) .manager-action-rose {
+  background-color: #ffe4e6 !important;
+  color: #be123c !important;
+  border: 1.5px solid #fda4af !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-rose-500/20"] i,
+html:not(.dark) button[class*="bg-rose-500/25"] i,
+html:not(.dark) .manager-action-rose i {
+  color: #e11d48 !important;
+}
+
+html:not(.dark) button[class*="bg-amber-500/20"],
+html:not(.dark) button[class*="bg-amber-500/25"],
+html:not(.dark) .manager-action-amber {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  border: 1.5px solid #fcd34d !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-amber-500/20"] i,
+html:not(.dark) button[class*="bg-amber-500/25"] i,
+html:not(.dark) .manager-action-amber i {
+  color: #d97706 !important;
+}
+
+html:not(.dark) button[class*="bg-indigo-500/20"],
+html:not(.dark) .manager-action-indigo {
+  background-color: #e0e7ff !important;
+  color: #3730a3 !important;
+  border: 1.5px solid #a5b4fc !important;
+  font-weight: 800 !important;
+}
+html:not(.dark) button[class*="bg-indigo-500/20"] i,
+html:not(.dark) .manager-action-indigo i {
+  color: #4f46e5 !important;
+}
+
+html:not(.dark) #dailyManagerQuickBar,
+html:not(.dark) #mobileDrawerManagerSection {
+  background-color: #eef2ff !important;
+  border: 1.5px solid #a5b4fc !important;
+}
+
+html:not(.dark) #weeklyMeetingExportCard {
+  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 55%, #ecfdf5 100%) !important;
+  border: 2px solid #0284c7 !important;
+}
+
+html:not(.dark) #exportPeriodLiveSummaryBox {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+

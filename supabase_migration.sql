@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 -- CONCEPTORS ANIMAL HEALTH LLC - SUPABASE POSTGRESQL MASTER DATABASE MIGRATION
 -- Project: conceptors-rep-crm (pywtpdnhomommitlidqo)
 -- Distribution: Catalysis Spain, BARD Czech, Vitasigna, Ringbio across UAE
@@ -395,10 +395,11 @@ INSERT INTO products (code, sku_id, brand, name, unit_price, current_stock, cate
 ('BFB00', 'BRD-04', 'BARD', 'BARD Pythie Pets Fresh Breath', 53, 365, 'Oral Care'),
 ('BPE00', 'BRD-05', 'BARD', 'BARD Pythie Pets Ear cleaner', 58, 317, 'Ear Care'),
 ('VR030', 'VIT-01', 'VITASIGNA', 'VIRULYS Paste 30ml', 33, 2039, 'Feline Lysine / Immunity'),
-('TOX015', 'RING-01', 'RINGBIO', 'Toxoplasma Antibody Rapid 15 Test Card', 270, 45, 'Diagnostics'),
+('TOX015', 'RING-01', 'RINGBIO', 'Toxoplasma Antibody Rapid 15 Test Card', 300, 45, 'Diagnostics'),
 ('CPV015', 'RING-02', 'RINGBIO', 'Canine Parvovirus (CPV) 15 Test Card', 225, 60, 'Diagnostics'),
-('FPV015', 'RING-03', 'RINGBIO', 'Feline Panleukopenia Virus (FPV) 15 Test Card', 225, 55, 'Diagnostics')
-ON CONFLICT (code) DO NOTHING;
+('FPV015', 'RING-03', 'RINGBIO', 'Feline Panleukopenia Virus (FPV) 15 Test Card', 225, 55, 'Diagnostics'),
+('FCV15', 'RING-04', 'RINGBIO', 'Feline Coronavirus (FoV) 15 Test Card', 225, 50, 'Diagnostics')
+ON CONFLICT (code) DO UPDATE SET unit_price = EXCLUDED.unit_price, name = EXCLUDED.name, updated_at = NOW();
 
 -- 5.4 SEED CLINICS / CUSTOMERS (All 260 Accounts across UAE)
 INSERT INTO customers (code, name, location, territory, rep_id, tier, contact_person, phone) VALUES

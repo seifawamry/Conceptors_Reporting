@@ -39,9 +39,10 @@ window.INITIAL_PRODUCTS = [
   { code: 'VR030', id: 'VIT-01', brand: 'VITASIGNA', name: 'VIRULYS Paste 30ml', unitPrice: 33, currentStock: 2039, category: 'Feline Lysine / Immunity' },
 
   // RINGBIO RAPID TESTS
-  { code: 'TOX015', id: 'RING-01', brand: 'RINGBIO', name: 'Toxoplasma Antibody Rapid 15 Test Card', unitPrice: 270, currentStock: 45, category: 'Diagnostics' },
+  { code: 'TOX015', id: 'RING-01', brand: 'RINGBIO', name: 'Toxoplasma Antibody Rapid 15 Test Card', unitPrice: 300, currentStock: 45, category: 'Diagnostics' },
   { code: 'CPV015', id: 'RING-02', brand: 'RINGBIO', name: 'Canine Parvovirus (CPV) 15 Test Card', unitPrice: 225, currentStock: 60, category: 'Diagnostics' },
-  { code: 'FPV015', id: 'RING-03', brand: 'RINGBIO', name: 'Feline Panleukopenia Virus (FPV) 15 Test Card', unitPrice: 225, currentStock: 55, category: 'Diagnostics' }
+  { code: 'FPV015', id: 'RING-03', brand: 'RINGBIO', name: 'Feline Panleukopenia Virus (FPV) 15 Test Card', unitPrice: 225, currentStock: 55, category: 'Diagnostics' },
+  { code: 'FCV15', id: 'RING-04', brand: 'RINGBIO', name: 'Feline Coronavirus (FoV) 15 Test Card', unitPrice: 225, currentStock: 50, category: 'Diagnostics' }
 ];
 
 window.INITIAL_SENIOR_MANAGERS = [

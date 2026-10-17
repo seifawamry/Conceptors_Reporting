@@ -58,7 +58,17 @@ try {
   console.warn('Supabase JS Client SDK init:', e);
 }
 
-async function supabaseRest(endpoint, options = {}) {
+async function supabaseRest(endpoint, optionsOrMethod = {}, bodyArg = null, preferArg = null) {
+  let options = {};
+  if (typeof optionsOrMethod === 'string') {
+    options = {
+      method: optionsOrMethod,
+      body: bodyArg,
+      prefer: preferArg
+    };
+  } else if (optionsOrMethod && typeof optionsOrMethod === 'object') {
+    options = optionsOrMethod;
+  }
   const url = `${SUPABASE_URL}/rest/v1/${endpoint.replace(/^\//, '')}`;
   const headers = {
     'apikey': SUPABASE_ANON_KEY,
@@ -384,6 +394,22 @@ function mapPlanFromDb(row) {
   };
 }
 
+function mapPlanToDb(p) {
+  return {
+    id: p.id,
+    rep_id: p.repId,
+    rep_name: p.repName,
+    year: Number(p.year) || 2026,
+    month: Number(p.month) || 10,
+    target_visits: Number(p.targetVisits) || 100,
+    status: p.status || 'Draft',
+    submitted_at: p.submittedAt || null,
+    approved_at: p.approvedAt || null,
+    approved_by: p.approvedBy || null,
+    manager_notes: p.managerNotes || ''
+  };
+}
+
 function mapCustomerFromDb(row) {
   return {
     code: row.code,
@@ -417,14 +443,30 @@ function mapCustomerToDb(c) {
 }
 
 function mapProductFromDb(row) {
+  const code = String(row.code || '').trim();
+  let unitPrice = Number(row.unit_price) || 0;
+  if (code === 'TOX015') unitPrice = 300;
+  if (code === 'FCV15' && !unitPrice) unitPrice = 225;
   return {
-    code: row.code,
-    id: row.sku_id || row.code,
+    code: code,
+    id: row.sku_id || code,
     brand: row.brand,
     name: row.name,
-    unitPrice: Number(row.unit_price) || 0,
+    unitPrice: unitPrice,
     currentStock: Number(row.current_stock) || 0,
     category: row.category
+  };
+}
+
+function mapProductToDb(p) {
+  return {
+    code: p.code,
+    sku_id: p.id || p.code,
+    brand: p.brand || 'RINGBIO',
+    name: p.name,
+    unit_price: p.code === 'TOX015' ? 300 : (Number(p.unitPrice) || 0),
+    current_stock: Number(p.currentStock) || 50,
+    category: p.category || 'Diagnostics'
   };
 }
 
@@ -524,7 +566,25 @@ async function syncWithSupabase(force = false) {
 
     const prodRes = await supabaseRest('products?select=*');
     if (prodRes.data && Array.isArray(prodRes.data) && prodRes.data.length > 0) {
-      state.products = prodRes.data.map(mapProductFromDb);
+      const dbProducts = prodRes.data.map(mapProductFromDb);
+      const byCode = new Map();
+      dbProducts.forEach(p => { if (p && p.code) byCode.set(p.code, p); });
+      const missingOrUpdatedForDb = [];
+      (window.INITIAL_PRODUCTS || []).forEach(ip => {
+        if (!ip || !ip.code) return;
+        const existing = byCode.get(ip.code);
+        if (!existing) {
+          byCode.set(ip.code, { ...ip });
+          missingOrUpdatedForDb.push(mapProductToDb(ip));
+        } else if (ip.code === 'TOX015' && Number(existing.unitPrice) !== 300) {
+          existing.unitPrice = 300;
+          missingOrUpdatedForDb.push(mapProductToDb(ip));
+        }
+      });
+      state.products = Array.from(byCode.values());
+      if (missingOrUpdatedForDb.length > 0) {
+        supabaseRest('products', 'POST', missingOrUpdatedForDb, 'resolution=merge-duplicates').catch(() => {});
+      }
     }
 
     const notifRes = await supabaseRest('notifications?select=*&order=timestamp.desc');
@@ -741,8 +801,10 @@ const state = {
   timeZone: 'Asia/Dubai', // UAE Standard Time (GST, UTC+4)
   dailyDate: getSyncedTodayDate(),
   dailyReportDate: getSyncedTodayDate(),
-  dailyReportViewMode: 'day', // 'day' or 'month'
+  dailyReportViewMode: 'day', // 'day', 'period', or 'month'
   dailyReportMonth: getSyncedTodayDate().substring(0, 7), // '2026-10'
+  dailyReportPeriodFrom: '2026-10-01',
+  dailyReportPeriodTo: getSyncedTodayDate(),
   plannerView: 'calendar', // 'calendar' or 'table'
   plannerCalendarMonth: parseInt(getSyncedTodayDate().split('-')[1], 10),
   plannerCalendarYear: parseInt(getSyncedTodayDate().split('-')[0], 10),
@@ -862,7 +924,7 @@ function safeLucide() {
 }
 
 function loadStoredData() {
-  state.products = [...(window.INITIAL_PRODUCTS || [])];
+  state.products = [...(window.INITIAL_PRODUCTS || [])].map(p => p.code === 'TOX015' ? { ...p, unitPrice: 300 } : { ...p });
   state.customers = [...(window.INITIAL_CUSTOMERS || [])];
   state.reps = [...(window.INITIAL_REPS || [])];
   state.managers = [...(window.INITIAL_SENIOR_MANAGERS || [])];
@@ -903,6 +965,7 @@ function loadStoredData() {
     state.dailyDate = storedDate;
   }
   state.dailyReportDate = todayStr;
+  state.dailyReportPeriodTo = todayStr;
   const dateParts = state.dailyDate.split('-');
   state.plannerCalendarYear = parseInt(dateParts[0], 10);
   state.plannerCalendarMonth = parseInt(dateParts[1], 10);
@@ -918,21 +981,6 @@ function loadStoredData() {
     state.visits = [...(window.INITIAL_VISITS || [])];
     localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits));
   }
-  // Guarantee October 2026 visits and any newly seeded visits are present in existing browser sessions
-  if (Array.isArray(window.INITIAL_VISITS) && window.INITIAL_VISITS.length > 0) {
-    const existingVisitIds = new Set((state.visits || []).map(v => v.id));
-    let addedVisits = false;
-    window.INITIAL_VISITS.forEach(iv => {
-      if (iv && iv.id && !existingVisitIds.has(iv.id)) {
-        state.visits.push(iv);
-        existingVisitIds.add(iv.id);
-        addedVisits = true;
-      }
-    });
-    if (addedVisits) {
-      try { localStorage.setItem(STORAGE_KEY_VISITS, JSON.stringify(state.visits)); } catch(e) {}
-    }
-  }
 
   const storedOrders = localStorage.getItem(STORAGE_KEY_ORDERS);
   if (storedOrders !== null) {
@@ -944,22 +992,6 @@ function loadStoredData() {
   } else {
     state.orders = [...(window.INITIAL_ORDERS || [])];
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders));
-  }
-  // Guarantee October 2026 commercial sales orders are present
-  if (Array.isArray(window.INITIAL_ORDERS) && window.INITIAL_ORDERS.length > 0) {
-    const existingOrderKeys = new Set((state.orders || []).map(o => o.invoiceNumber || o.orderNumber || o.id));
-    let addedOrders = false;
-    window.INITIAL_ORDERS.forEach(io => {
-      const key = io ? (io.invoiceNumber || io.orderNumber || io.id) : null;
-      if (key && !existingOrderKeys.has(key)) {
-        state.orders.push(io);
-        existingOrderKeys.add(key);
-        addedOrders = true;
-      }
-    });
-    if (addedOrders) {
-      try { localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(state.orders)); } catch(e) {}
-    }
   }
 
   const storedPlans = localStorage.getItem(STORAGE_KEY_PLANS);
@@ -1306,15 +1338,30 @@ function updateUserProfileDisplay() {
     }
   }
 
-  // Hide or Show Senior Manager Tab based on authenticated role
+  // Hide or Show Senior Manager Tab, Mobile Bottom Nav Manager Button & Executive Quick Bars based on role
   const managerTabBtn = document.getElementById('tabBtn-manager');
   const mobileManagerBtn = document.getElementById('mobileNavBtn-manager');
+  const mobileBottomNav = document.getElementById('mobileBottomNav');
+  const dailyManagerQuickBar = document.getElementById('dailyManagerQuickBar');
+  const mobileDrawerManagerSection = document.getElementById('mobileDrawerManagerSection');
   if (state.currentUser && state.currentUser.role === 'manager') {
     if (managerTabBtn) managerTabBtn.classList.remove('hidden');
     if (mobileManagerBtn) mobileManagerBtn.classList.remove('hidden');
+    if (mobileBottomNav) {
+      mobileBottomNav.classList.remove('grid-cols-5');
+      mobileBottomNav.classList.add('grid-cols-6');
+    }
+    if (dailyManagerQuickBar) dailyManagerQuickBar.classList.remove('hidden');
+    if (mobileDrawerManagerSection) mobileDrawerManagerSection.classList.remove('hidden');
   } else {
     if (managerTabBtn) managerTabBtn.classList.add('hidden');
     if (mobileManagerBtn) mobileManagerBtn.classList.add('hidden');
+    if (mobileBottomNav) {
+      mobileBottomNav.classList.remove('grid-cols-6');
+      mobileBottomNav.classList.add('grid-cols-5');
+    }
+    if (dailyManagerQuickBar) dailyManagerQuickBar.classList.add('hidden');
+    if (mobileDrawerManagerSection) mobileDrawerManagerSection.classList.add('hidden');
   }
 
   // Update Daily Cockpit Greeting
@@ -1989,7 +2036,25 @@ window.handleDailyReportDateChange = function(newDate) {
 };
 
 window.handleDailyReportScopeChange = function(scope) {
-  state.dailyReportViewMode = scope === 'month' ? 'month' : 'day';
+  if (scope === 'month') {
+    state.dailyReportViewMode = 'month';
+  } else if (scope === 'period') {
+    state.dailyReportViewMode = 'period';
+    if (!state.dailyReportPeriodFrom) state.dailyReportPeriodFrom = '2026-10-01';
+    if (!state.dailyReportPeriodTo) state.dailyReportPeriodTo = getSyncedTodayDate();
+  } else {
+    state.dailyReportViewMode = 'day';
+  }
+  state.filters.dailyReportDayInMonth = '';
+  renderDailyReport();
+};
+
+window.handleDailyReportPeriodChange = function() {
+  const fromEl = document.getElementById('dailyReportPeriodFrom');
+  const toEl = document.getElementById('dailyReportPeriodTo');
+  if (fromEl && fromEl.value) state.dailyReportPeriodFrom = fromEl.value;
+  if (toEl && toEl.value) state.dailyReportPeriodTo = toEl.value;
+  state.dailyReportViewMode = 'period';
   state.filters.dailyReportDayInMonth = '';
   renderDailyReport();
 };
@@ -2064,8 +2129,6 @@ window.resetDailyReportFilters = function() {
 
 function ensureDailyReportDataForDate(dateStr) {
   if (!dateStr) dateStr = getSyncedTodayDate();
-  // Strictly return only real visits recorded for this date.
-  // NEVER synthesize, fabricate, or inject artificial visits or orders into state or cloud.
   return (state.visits || []).filter(v => v.date === dateStr);
 }
 
@@ -2074,19 +2137,27 @@ function renderDailyReportDateRibbon() {
   if (!container) return;
 
   const isMonth = state.dailyReportViewMode === 'month';
+  const isPeriod = state.dailyReportViewMode === 'period';
   const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const activeDate = state.dailyReportDate || getSyncedTodayDate();
   const todayStr = getSyncedTodayDate();
 
-  if (isMonth) {
+  if (isMonth || isPeriod) {
     const scopedVisits = getScopedVisits();
-    const monthVisits = activeMonth === 'ALL'
-      ? scopedVisits
-      : scopedVisits.filter(v => (v.date || '').startsWith(activeMonth));
-    const datesInMonth = Array.from(new Set(monthVisits.map(v => v.date))).filter(Boolean).sort();
+    let rangeVisits;
+    if (isPeriod) {
+      const pFrom = state.dailyReportPeriodFrom || '2026-10-01';
+      const pTo = state.dailyReportPeriodTo || todayStr;
+      rangeVisits = scopedVisits.filter(v => v.date && v.date >= pFrom && v.date <= pTo);
+    } else {
+      rangeVisits = activeMonth === 'ALL'
+        ? scopedVisits
+        : scopedVisits.filter(v => (v.date || '').startsWith(activeMonth));
+    }
+    const datesInMonth = Array.from(new Set(rangeVisits.map(v => v.date))).filter(Boolean).sort();
 
     if (datesInMonth.length === 0) {
-      container.innerHTML = `<span class="text-xs text-slate-500 italic py-1">No activity dates recorded yet for ${activeMonth}.</span>`;
+      container.innerHTML = `<span class="text-xs text-slate-500 italic py-1">No activity dates recorded yet for ${isPeriod ? `${state.dailyReportPeriodFrom} to ${state.dailyReportPeriodTo}` : activeMonth}.</span>`;
       return;
     }
 
@@ -2097,7 +2168,7 @@ function renderDailyReportDateRibbon() {
           ? 'bg-cyan-600 text-white shadow-md shadow-cyan-600/30 border border-cyan-400 ring-2 ring-cyan-500/20'
           : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/80 hover:text-white'
       }">
-        Full Month (${datesInMonth.length} Days)
+        ${isPeriod ? `Full Period (${datesInMonth.length} Days)` : `Full Month (${datesInMonth.length} Days)`}
       </button>
     `;
 
@@ -2165,36 +2236,45 @@ function renderDailyReportDateRibbon() {
 
 function renderDailyReport() {
   const isMonth = state.dailyReportViewMode === 'month';
+  const isPeriod = state.dailyReportViewMode === 'period';
   const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
+  const periodFrom = state.dailyReportPeriodFrom || '2026-10-01';
+  const periodTo = state.dailyReportPeriodTo || getSyncedTodayDate();
 
   // Sync Scope Toggle Controls
   const scopeDayBtn = document.getElementById('dailyReportScopeDayBtn');
+  const scopePeriodBtn = document.getElementById('dailyReportScopePeriodBtn');
   const scopeMonthBtn = document.getElementById('dailyReportScopeMonthBtn');
   const dayNavGroup = document.getElementById('dailyReportDayNavGroup');
   const dateInputWrapper = document.getElementById('dailyReportDateInputWrapper');
+  const periodWrapper = document.getElementById('dailyReportPeriodWrapper');
   const monthSelectWrapper = document.getElementById('dailyReportMonthSelectWrapper');
   const monthSelect = document.getElementById('dailyReportMonthSelect');
+  const periodFromInput = document.getElementById('dailyReportPeriodFrom');
+  const periodToInput = document.getElementById('dailyReportPeriodTo');
+
+  const activeScopeClass = 'px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all';
+  const inactiveScopeClass = 'px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all';
 
   if (scopeDayBtn && scopeMonthBtn) {
-    if (isMonth) {
-      scopeMonthBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all';
-      scopeDayBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all';
-      if (dayNavGroup) dayNavGroup.classList.add('hidden');
-      if (dateInputWrapper) dateInputWrapper.classList.add('hidden');
-      if (monthSelectWrapper) monthSelectWrapper.classList.remove('hidden');
-      if (monthSelect) monthSelect.value = activeMonth;
-    } else {
-      scopeDayBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all';
-      scopeMonthBtn.className = 'px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all';
-      if (dayNavGroup) dayNavGroup.classList.remove('hidden');
-      if (dateInputWrapper) dateInputWrapper.classList.remove('hidden');
-      if (monthSelectWrapper) monthSelectWrapper.classList.add('hidden');
+    scopeDayBtn.className = (!isMonth && !isPeriod) ? activeScopeClass : inactiveScopeClass;
+    if (scopePeriodBtn) scopePeriodBtn.className = isPeriod ? activeScopeClass : inactiveScopeClass;
+    scopeMonthBtn.className = isMonth ? activeScopeClass : inactiveScopeClass;
+
+    if (dayNavGroup) dayNavGroup.classList.toggle('hidden', isMonth || isPeriod);
+    if (dateInputWrapper) dateInputWrapper.classList.toggle('hidden', isMonth || isPeriod);
+    if (periodWrapper) periodWrapper.classList.toggle('hidden', !isPeriod);
+    if (monthSelectWrapper) monthSelectWrapper.classList.toggle('hidden', !isMonth);
+    if (isMonth && monthSelect) monthSelect.value = activeMonth;
+    if (isPeriod) {
+      if (periodFromInput && periodFromInput.value !== periodFrom) periodFromInput.value = periodFrom;
+      if (periodToInput && periodToInput.value !== periodTo) periodToInput.value = periodTo;
     }
   }
 
   // 1. GUARANTEE COMPLETE MEDICAL REP REPORTING HISTORY FOR ANY CHOSEN DATE
-  if (!isMonth) {
+  if (!isMonth && !isPeriod) {
     ensureDailyReportDataForDate(dateStr);
   }
 
@@ -2214,7 +2294,6 @@ function renderDailyReport() {
 
   if (repFilter) {
     if (!isManager) {
-      // Rep is strictly restricted to their own territory; cannot view peer reports
       state.filters.dailyReportRep = userTerritory;
       const repObj = (state.reps || []).find(r => r.id === userTerritory);
       const repLabel = repObj ? `Dr. ${repObj.name} (Territory ${repObj.territory})` : `My Territory (${userTerritory})`;
@@ -2222,7 +2301,6 @@ function renderDailyReport() {
       repFilter.disabled = true;
       repFilter.value = userTerritory;
     } else {
-      // Senior Sales Manager has company-wide visibility across all representatives
       repFilter.disabled = false;
       repFilter.innerHTML = `
         <option value="ALL">👥 All Medical Representatives (Company-wide)</option>
@@ -2249,7 +2327,15 @@ function renderDailyReport() {
   let dayVisits;
   let dayOrders;
 
-  if (isMonth) {
+  if (isPeriod) {
+    if (state.filters.dailyReportDayInMonth) {
+      dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
+      dayOrders = scopedOrders.filter(o => o.date === state.filters.dailyReportDayInMonth);
+    } else {
+      dayVisits = scopedVisits.filter(v => v.date && v.date >= periodFrom && v.date <= periodTo);
+      dayOrders = scopedOrders.filter(o => o.date && o.date >= periodFrom && o.date <= periodTo);
+    }
+  } else if (isMonth) {
     if (state.filters.dailyReportDayInMonth) {
       dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
       dayOrders = scopedOrders.filter(o => o.date === state.filters.dailyReportDayInMonth);
@@ -2274,13 +2360,9 @@ function renderDailyReport() {
   const dayOrdersVal = dayOrders.reduce((sum, o) => sum + (o.totalIncVat || 0), 0);
 
   // Group Visits by User's Defined Categories:
-  // 1. Planned Visits for this day/month
   const plannedVisits = dayVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
-  // 2. Visited (Planned Visits Completed)
   const visitedPlanned = plannedVisits.filter(v => v.status === 'Completed');
-  // 3. Unvisited (Planned Visits Not Completed / Pending / Missed)
   const unvisitedPlanned = plannedVisits.filter(v => v.status !== 'Completed');
-  // 4. Unplanned Visits (Spontaneous visits submitted beside planned ones)
   const unplannedVisits = dayVisits.filter(v => v.visitCategory === 'Unplanned');
 
   // Total Field Execution
@@ -2292,7 +2374,13 @@ function renderDailyReport() {
   // Update Header Banner
   const bannerDate = document.getElementById('dailyReportBannerDate');
   if (bannerDate) {
-    if (isMonth) {
+    if (isPeriod) {
+      if (state.filters.dailyReportDayInMonth) {
+        bannerDate.textContent = `Daily Field Audit for ${formatDisplayDate(state.filters.dailyReportDayInMonth)} (Period: ${periodFrom} → ${periodTo})`;
+      } else {
+        bannerDate.textContent = `Custom Period Field Audit: ${formatDisplayDate(periodFrom)} → ${formatDisplayDate(periodTo)}`;
+      }
+    } else if (isMonth) {
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const parts = activeMonth.split('-');
       const mName = parts.length === 2 ? (monthNames[parseInt(parts[1], 10) - 1] || activeMonth) : activeMonth;
@@ -2587,12 +2675,21 @@ function renderDailyReportUnvisitedAlert(unvisitedPlanned, plannedTotal) {
 
 function renderDailyReportTableAndCards() {
   const isMonth = state.dailyReportViewMode === 'month';
+  const isPeriod = state.dailyReportViewMode === 'period';
   const activeMonth = state.dailyReportMonth || getSyncedTodayDate().substring(0, 7);
   const dateStr = state.dailyReportDate || getSyncedTodayDate();
+  const periodFrom = state.dailyReportPeriodFrom || '2026-10-01';
+  const periodTo = state.dailyReportPeriodTo || getSyncedTodayDate();
   const scopedVisits = getScopedVisits();
 
   let dayVisits;
-  if (isMonth) {
+  if (isPeriod) {
+    if (state.filters.dailyReportDayInMonth) {
+      dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
+    } else {
+      dayVisits = scopedVisits.filter(v => v.date && v.date >= periodFrom && v.date <= periodTo);
+    }
+  } else if (isMonth) {
     if (state.filters.dailyReportDayInMonth) {
       dayVisits = scopedVisits.filter(v => v.date === state.filters.dailyReportDayInMonth);
     } else if (activeMonth === 'ALL') {
@@ -4589,9 +4686,10 @@ window.submitPlanToManager = function(planId) {
   pushToGoogleDrive('SAVE_PLAN', { plan, user: (state.currentUser && state.currentUser.name) || 'Representative' });
 
   // Cloud write-through to Supabase
-  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
-    method: 'PATCH',
-    body: { status: 'Submitted', submitted_at: plan.submittedAt, updated_at: new Date().toISOString() }
+  supabaseRest('monthly_plans', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapPlanToDb(plan)
   });
   supabaseRest('notifications', {
     method: 'POST',
@@ -4618,9 +4716,10 @@ window.approveMonthlyPlan = function(planId) {
   pushToGoogleDrive('SAVE_PLAN', { plan, user: 'Dr. Sameh Ageez (Senior Sales Manager)' });
 
   // Cloud write-through to Supabase
-  supabaseRest(`monthly_plans?id=eq.${encodeURIComponent(planId)}`, {
-    method: 'PATCH',
-    body: { status: 'Approved', approved_at: plan.approvedAt, approved_by: plan.approvedBy, updated_at: new Date().toISOString() }
+  supabaseRest('monthly_plans', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapPlanToDb(plan)
   });
 
   showToast('Monthly Plan Approved!', `Plan for ${plan.repName} approved and released for field execution.`, 'success');
@@ -5532,27 +5631,34 @@ window.handleOrderSubmit = function(e) {
     // Cloud write-through to Supabase
     (async () => {
       try {
-        await supabaseRest(`orders?invoice_number=eq.${encodeURIComponent(amendedOrder.invoiceNumber)}`, {
-          method: 'PATCH',
+        await supabaseRest('orders', {
+          method: 'POST',
+          prefer: 'resolution=merge-duplicates',
           body: mapOrderToDb(amendedOrder)
         });
-        await supabaseRest(`order_items?order_invoice_number=eq.${encodeURIComponent(amendedOrder.invoiceNumber)}`, {
+        await supabaseRest(`order_items?order_number=eq.${encodeURIComponent(amendedOrder.invoiceNumber)}`, {
           method: 'DELETE'
         });
-        for (const it of items) {
+        const itemsPayload = items.map(it => ({
+          order_number: amendedOrder.invoiceNumber,
+          product_code: it.productCode,
+          product_name: it.productName,
+          unit_price: Number(it.unitPrice) || 0,
+          sales_qty: Number(it.salesQty) || 0,
+          foc_qty: Number(it.focQty) || 0,
+          line_total: Number(it.total) || 0
+        }));
+        if (itemsPayload.length > 0) {
           await supabaseRest('order_items', {
             method: 'POST',
-            body: {
-              order_invoice_number: amendedOrder.invoiceNumber,
-              order_number: amendedOrder.invoiceNumber,
-              product_code: it.productCode,
-              product_name: it.productName,
-              unit_price: it.unitPrice,
-              sales_qty: it.salesQty,
-              foc_qty: it.focQty,
-              line_total: it.total,
-              total_price: it.total
-            }
+            body: itemsPayload
+          });
+        }
+        if (notif) {
+          await supabaseRest('notifications', {
+            method: 'POST',
+            prefer: 'resolution=merge-duplicates',
+            body: mapNotifToDb(notif)
           });
         }
         updateCloudSyncBadge('connected', '⚡ Cloud Synced');
@@ -7803,17 +7909,15 @@ window.handleSaveManagerSettings = function(e) {
 
   persistData();
 
-  // Cloud write-through to Supabase
+  // Cloud write-through to Supabase (send only valid schema columns)
   supabaseRest('manager_settings', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates',
     body: {
       id: 'default',
       manager_emails: state.managerSettings.managerEmails,
-      manager_cc_emails: state.managerSettings.managerCcEmails,
       sound_alert: state.managerSettings.soundAlert,
       toast_alert: state.managerSettings.toastAlert,
-      whatsapp_phone: state.managerSettings.whatsappPhone,
       updated_at: new Date().toISOString()
     }
   });
@@ -8120,7 +8224,7 @@ window.dismissWakeupOrderBanner = function() {
 
 window.inspectWakeupOrder = function() {
   dismissWakeupOrderBanner();
-  switchTab('executive');
+  switchTab('manager');
   if (activeWakeupOrderNumber) {
     const notif = (state.notifications || []).find(n => n.orderNumber === activeWakeupOrderNumber);
     if (notif && typeof viewNotificationEmail === 'function') viewNotificationEmail(notif.id);
@@ -8157,6 +8261,13 @@ window.triggerTestOrderNotification = function() {
 
   state.notifications.unshift(notif);
   persistData();
+
+  // Persist test alert to Supabase notifications table so it syncs across devices
+  supabaseRest('notifications', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: mapNotifToDb(notif)
+  }).catch(() => {});
 
   if (typeof triggerManagerOrderAlert === 'function') {
     triggerManagerOrderAlert(notif);
@@ -8685,12 +8796,17 @@ function toggleMobileMoreDrawer() {
     const roleEl = document.getElementById('mobileDrawerRole');
     const avatarEl = document.getElementById('mobileDrawerAvatar');
     const mgrBtn = document.getElementById('mobileDrawerBtnManager');
+    const mgrSection = document.getElementById('mobileDrawerManagerSection');
     if (nameEl) nameEl.textContent = u.name;
     if (roleEl) roleEl.textContent = u.role === 'manager' ? 'Senior Sales Manager' : `Rep ${u.territory || 'T1'} (${u.territory === 'T2' ? 'Northern Emirates' : 'DXB/AUH'})`;
     if (avatarEl) avatarEl.textContent = u.avatar || (u.name ? u.name.substring(0, 2).toUpperCase() : 'SH');
     if (mgrBtn) {
       if (u.role === 'manager') mgrBtn.classList.remove('hidden');
       else mgrBtn.classList.add('hidden');
+    }
+    if (mgrSection) {
+      if (u.role === 'manager') mgrSection.classList.remove('hidden');
+      else mgrSection.classList.add('hidden');
     }
   } else {
     drawer.classList.add('hidden');
@@ -8704,14 +8820,17 @@ window.toggleMobileMoreDrawer = toggleMobileMoreDrawer;
 window.closeMobileMoreDrawer = closeMobileMoreDrawer;
 
 // =========================================================================
-// DATA EXPORT CENTER CONTROLLER & INDIVIDUAL EXPORTERS
+// DATA EXPORT CENTER CONTROLLER & WEEKLY MEETING CUSTOM PERIOD REPORT ENGINE
 // =========================================================================
+
+let periodDetailedPreviewExpanded = false;
 
 function openExportCenterModal(initialSection = 'all') {
   const modal = document.getElementById('exportCenterModal');
   if (!modal) return;
 
-  const currentYm = getSyncedTodayDate().substring(0, 7);
+  const today = getSyncedTodayDate();
+  const currentYm = today.substring(0, 7);
   const currentMonthOption = document.querySelector('#exportDailyDateRange option[value="current_month"]');
   if (currentMonthOption) {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -8730,7 +8849,102 @@ function openExportCenterModal(initialSection = 'all') {
     planningMonthSelect.value = currentYm;
   }
 
+  // Enforce role-based rep scoping across all Export Center dropdowns
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+  const repLabel = userTerritory === 'T1' ? 'Dr. Shaimaa (Rep T1 - DXB/AUH)' : 'Dr. Marsel (Rep T2 - Northern)';
+
+  const periodRepSelect = document.getElementById('exportPeriodRepSelect');
+  const dailyRepSelect = document.getElementById('exportDailyRepFilter');
+  const planningRepSelect = document.getElementById('exportPlanningRep');
+  const clinicsTerritorySelect = document.getElementById('exportClinicsTerritory');
+
+  if (!isManager) {
+    if (periodRepSelect) {
+      periodRepSelect.innerHTML = `<option value="${userTerritory}">${repLabel}</option>`;
+      periodRepSelect.value = userTerritory;
+      periodRepSelect.disabled = true;
+    }
+    if (dailyRepSelect) {
+      dailyRepSelect.innerHTML = `<option value="${userTerritory}">${repLabel}</option>`;
+      dailyRepSelect.value = userTerritory;
+      dailyRepSelect.disabled = true;
+    }
+    if (planningRepSelect) {
+      planningRepSelect.innerHTML = `<option value="${userTerritory}">${repLabel}</option>`;
+      planningRepSelect.value = userTerritory;
+      planningRepSelect.disabled = true;
+    }
+    if (clinicsTerritorySelect) {
+      clinicsTerritorySelect.innerHTML = `<option value="${userTerritory}">Territory ${userTerritory} (${userTerritory === 'T1' ? 'Dubai, Abu Dhabi, Al Ain' : 'Sharjah, Ajman, RAK, Fujairah'})</option>`;
+      clinicsTerritorySelect.value = userTerritory;
+      clinicsTerritorySelect.disabled = true;
+    }
+  } else {
+    if (periodRepSelect) {
+      periodRepSelect.disabled = false;
+      const defaultRep = (state.filters.dailyReportRep && state.filters.dailyReportRep !== 'ALL')
+        ? state.filters.dailyReportRep
+        : (state.filters.analyticsRepFilter && state.filters.analyticsRepFilter !== 'ALL' ? state.filters.analyticsRepFilter : 'T1');
+      periodRepSelect.innerHTML = `
+        <option value="T1">Dr. Shaimaa (Rep T1 - DXB/AUH)</option>
+        <option value="T2">Dr. Marsel (Rep T2 - Northern)</option>
+        <option value="ALL">All Representatives (T1 + T2 Combined)</option>
+      `;
+      periodRepSelect.value = defaultRep;
+    }
+    if (dailyRepSelect) {
+      dailyRepSelect.disabled = false;
+      dailyRepSelect.innerHTML = `
+        <option value="ALL">All Representatives (T1 &amp; T2)</option>
+        <option value="T1">Dr. Shaimaa (Rep T1)</option>
+        <option value="T2">Dr. Marsel (Rep T2)</option>
+      `;
+      dailyRepSelect.value = state.filters.dailyReportRep || 'ALL';
+    }
+    if (planningRepSelect) {
+      planningRepSelect.disabled = false;
+      planningRepSelect.innerHTML = `
+        <option value="ALL">All Representatives (T1 &amp; T2)</option>
+        <option value="T1">Dr. Shaimaa (Rep T1)</option>
+        <option value="T2">Dr. Marsel (Rep T2)</option>
+      `;
+    }
+    if (clinicsTerritorySelect) {
+      clinicsTerritorySelect.disabled = false;
+      clinicsTerritorySelect.innerHTML = `
+        <option value="ALL">All Emirates (T1 + T2)</option>
+        <option value="T1">Territory 1 (Dubai, Abu Dhabi, Al Ain)</option>
+        <option value="T2">Territory 2 (Sharjah, Ajman, RAK, Fujairah)</option>
+      `;
+    }
+  }
+
+  // Initialize Period Dates in the Weekly Meeting & Custom Period Card
+  const presetSelect = document.getElementById('exportPeriodPresetSelect');
+  const fromInput = document.getElementById('exportPeriodDateFrom');
+  const toInput = document.getElementById('exportPeriodDateTo');
+
+  if (state.dailyReportViewMode === 'period' && state.dailyReportPeriodFrom && state.dailyReportPeriodTo) {
+    if (presetSelect) presetSelect.value = 'custom';
+    if (fromInput) fromInput.value = state.dailyReportPeriodFrom;
+    if (toInput) toInput.value = state.dailyReportPeriodTo;
+  } else if (presetSelect) {
+    handleExportPeriodPresetChange(presetSelect.value || 'this_week', false);
+  }
+
+  periodDetailedPreviewExpanded = (initialSection === 'period');
+  renderExportPeriodLiveSummary(periodDetailedPreviewExpanded);
+
   modal.classList.remove('hidden');
+  if (initialSection === 'period') {
+    const card = document.getElementById('weeklyMeetingExportCard');
+    if (card) {
+      setTimeout(() => {
+        try { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(e) {}
+      }, 60);
+    }
+  }
   safeLucide();
 }
 function closeExportCenterModal() {
@@ -8740,13 +8954,736 @@ function closeExportCenterModal() {
 window.openExportCenterModal = openExportCenterModal;
 window.closeExportCenterModal = closeExportCenterModal;
 
+function handleExportPeriodPresetChange(preset, shouldRender = true) {
+  const today = getSyncedTodayDate();
+  const currentYm = today.substring(0, 7);
+  const fromInput = document.getElementById('exportPeriodDateFrom');
+  const toInput = document.getElementById('exportPeriodDateTo');
+  if (!fromInput || !toInput) return;
+
+  if (preset === 'this_week') {
+    // Last 7 days ending today (or if no visits in last 7 days, Oct 1 to today)
+    const sevenDaysAgo = getOffsetDateStr(today, -6);
+    const visitsInLast7 = (state.visits || []).filter(v => v.date && v.date >= sevenDaysAgo && v.date <= today);
+    if (visitsInLast7.length > 0) {
+      fromInput.value = sevenDaysAgo;
+      toInput.value = today;
+    } else {
+      fromInput.value = `${currentYm}-01`;
+      toInput.value = today;
+    }
+  } else if (preset === 'prev_week') {
+    fromInput.value = getOffsetDateStr(today, -13);
+    toInput.value = getOffsetDateStr(today, -7);
+  } else if (preset === 'mtd') {
+    fromInput.value = `${currentYm}-01`;
+    toInput.value = today;
+  } else if (preset === 'current_month') {
+    fromInput.value = `${currentYm}-01`;
+    toInput.value = `${currentYm}-31`;
+  } else if (preset === 'prev_month') {
+    fromInput.value = '2026-09-01';
+    toInput.value = '2026-09-30';
+  }
+  if (shouldRender) {
+    renderExportPeriodLiveSummary(periodDetailedPreviewExpanded);
+  }
+}
+window.handleExportPeriodPresetChange = handleExportPeriodPresetChange;
+
+/**
+ * Computes all reporting parameters for a medical representative (or ALL) over a custom date period [dateFrom, dateTo]
+ * for weekly manager-rep review meetings and exports.
+ */
+function computeRepPeriodReportData(repFilter, dateFrom, dateTo) {
+  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2')) : 'ALL';
+  const effectiveRep = !isManager ? userTerritory : (repFilter || 'T1');
+
+  const today = getSyncedTodayDate();
+  let start = dateFrom || '2026-10-01';
+  let end = dateTo || today;
+  if (start > end) {
+    const tmp = start;
+    start = end;
+    end = tmp;
+  }
+
+  const allCustomers = (state.customers || []).filter(c => c.isActive !== false);
+  const territoryCustomers = effectiveRep === 'ALL'
+    ? allCustomers
+    : allCustomers.filter(c => (c.repId || c.territory) === effectiveRep);
+
+  const periodVisits = (state.visits || []).filter(v => {
+    if (!v || !v.date) return false;
+    if (v.date < start || v.date > end) return false;
+    if (effectiveRep !== 'ALL' && (v.repId || v.territory) !== effectiveRep) return false;
+    return true;
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const periodOrders = (state.orders || []).filter(o => {
+    if (!o || !o.date) return false;
+    if (o.date < start || o.date > end) return false;
+    if (effectiveRep !== 'ALL' && (o.repId || o.territory) !== effectiveRep) return false;
+    return true;
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const plannedVisits = periodVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory);
+  const completedPlanned = plannedVisits.filter(v => v.status === 'Completed');
+  const unvisitedPlanned = plannedVisits.filter(v => v.status !== 'Completed');
+  const unplannedVisits = periodVisits.filter(v => v.visitCategory === 'Unplanned');
+  const executedVisits = [...completedPlanned, ...unplannedVisits];
+
+  const totalCallsExecuted = executedVisits.length;
+  const planAdherencePct = plannedVisits.length > 0
+    ? Number(((completedPlanned.length / plannedVisits.length) * 100).toFixed(1))
+    : (totalCallsExecuted > 0 ? 100 : 0);
+  const unplannedRatioPct = totalCallsExecuted > 0
+    ? Number(((unplannedVisits.length / totalCallsExecuted) * 100).toFixed(1))
+    : 0;
+
+  const uniqueClinicsVisitedSet = new Set(executedVisits.map(v => v.clientCode).filter(Boolean));
+  const uniqueClinicsVisited = uniqueClinicsVisitedSet.size;
+  const universeCount = territoryCustomers.length || 1;
+  const coveragePct = Number(((uniqueClinicsVisited / universeCount) * 100).toFixed(1));
+  const callFrequency = uniqueClinicsVisited > 0
+    ? Number((totalCallsExecuted / uniqueClinicsVisited).toFixed(2))
+    : 0;
+
+  const activeFieldDays = new Set(executedVisits.map(v => v.date).filter(Boolean)).size;
+  const avgCallsPerActiveDay = activeFieldDays > 0
+    ? Number((totalCallsExecuted / activeFieldDays).toFixed(1))
+    : 0;
+
+  // Doctors met & sentiment breakdown
+  const uniqueDoctorsSet = new Set(executedVisits.map(v => (v.doctorName || '').trim()).filter(Boolean));
+  const sentiments = { Positive: 0, Neutral: 0, Negative: 0, Pending: 0 };
+  executedVisits.forEach(v => {
+    const s = (v.doctorSentiment || 'Pending').trim();
+    if (s === 'Positive') sentiments.Positive++;
+    else if (s === 'Neutral') sentiments.Neutral++;
+    else if (s === 'Negative') sentiments.Negative++;
+    else sentiments.Pending++;
+  });
+  const positiveSentimentPct = totalCallsExecuted > 0
+    ? Number(((sentiments.Positive / totalCallsExecuted) * 100).toFixed(1))
+    : 0;
+
+  // Products detailed breakdown
+  const productDetailCounts = {};
+  executedVisits.forEach(v => {
+    const prods = Array.isArray(v.productsDetailed)
+      ? v.productsDetailed
+      : (v.productsDetailed ? String(v.productsDetailed).split(';') : []);
+    prods.forEach(raw => {
+      const pName = String(raw || '').trim();
+      if (!pName) return;
+      productDetailCounts[pName] = (productDetailCounts[pName] || 0) + 1;
+    });
+  });
+  const productsDetailedBreakdown = Object.entries(productDetailCounts)
+    .map(([product, calls]) => ({
+      product,
+      calls,
+      sharePct: totalCallsExecuted > 0 ? Number(((calls / totalCallsExecuted) * 100).toFixed(1)) : 0
+    }))
+    .sort((a, b) => b.calls - a.calls);
+
+  // Sampling metrics
+  let totalSamplesDropped = 0;
+  let callsWithSamples = 0;
+  const sampleProductTotals = {};
+  executedVisits.forEach(v => {
+    const qty = Number(v.samplesDropped) || 0;
+    if (qty > 0) {
+      totalSamplesDropped += qty;
+      callsWithSamples++;
+      const sProd = (v.sampleProduct || 'General Sample').trim();
+      sampleProductTotals[sProd] = (sampleProductTotals[sProd] || 0) + qty;
+    }
+  });
+  const samplingStrikeRatePct = totalCallsExecuted > 0
+    ? Number(((callsWithSamples / totalCallsExecuted) * 100).toFixed(1))
+    : 0;
+
+  // Commercial Orders & Revenue metrics
+  const ordersSubtotalExcVat = periodOrders.reduce((s, o) => s + (Number(o.totalExcVat) || 0), 0);
+  const ordersVatAmount = periodOrders.reduce((s, o) => s + (Number(o.vatAmount) || 0), 0);
+  const ordersTotalIncVat = periodOrders.reduce((s, o) => s + (Number(o.totalIncVat) || 0), 0);
+  const approvedOrders = periodOrders.filter(o => o.approvalStatus === 'Approved');
+  const pendingOrders = periodOrders.filter(o => o.approvalStatus === 'Pending' || !o.approvalStatus);
+  const rejectedOrders = periodOrders.filter(o => o.approvalStatus === 'Rejected');
+
+  let totalSalesUnits = 0;
+  let totalFocUnits = 0;
+  const orderProductBreakdownMap = {};
+  periodOrders.forEach(o => {
+    const items = Array.isArray(o.items) ? o.items : [];
+    items.forEach(it => {
+      const sQty = Number(it.salesQty) || 0;
+      const fQty = Number(it.focQty) || 0;
+      const lTotal = Number(it.total) || 0;
+      totalSalesUnits += sQty;
+      totalFocUnits += fQty;
+      const key = it.productCode || it.productName || 'ITEM';
+      if (!orderProductBreakdownMap[key]) {
+        orderProductBreakdownMap[key] = {
+          productCode: it.productCode || '-',
+          productName: it.productName || key,
+          unitPrice: Number(it.unitPrice) || 0,
+          salesQty: 0,
+          focQty: 0,
+          revenueExcVat: 0
+        };
+      }
+      orderProductBreakdownMap[key].salesQty += sQty;
+      orderProductBreakdownMap[key].focQty += fQty;
+      orderProductBreakdownMap[key].revenueExcVat += lTotal;
+    });
+  });
+  const orderProductBreakdown = Object.values(orderProductBreakdownMap).sort((a, b) => b.revenueExcVat - a.revenueExcVat);
+  const orderStrikeRatePct = totalCallsExecuted > 0
+    ? Number(((periodOrders.length / totalCallsExecuted) * 100).toFixed(1))
+    : 0;
+
+  const repTitle = effectiveRep === 'ALL'
+    ? 'All Medical Representatives (Dr. Shaimaa T1 & Dr. Marsel T2)'
+    : (effectiveRep === 'T1' ? 'Dr. Shaimaa (Territory T1 - Dubai / Abu Dhabi / Al Ain)' : 'Dr. Marsel (Territory T2 - Northern Emirates)');
+
+  return {
+    repId: effectiveRep,
+    repTitle,
+    dateFrom: start,
+    dateTo: end,
+    activeFieldDays,
+    avgCallsPerActiveDay,
+    universeCount: territoryCustomers.length,
+    uniqueClinicsVisited,
+    coveragePct,
+    callFrequency,
+    plannedCount: plannedVisits.length,
+    completedPlannedCount: completedPlanned.length,
+    unvisitedPlannedCount: unvisitedPlanned.length,
+    planAdherencePct,
+    unplannedCount: unplannedVisits.length,
+    unplannedRatioPct,
+    totalCallsExecuted,
+    uniqueDoctorsCount: uniqueDoctorsSet.size,
+    sentiments,
+    positiveSentimentPct,
+    productsDetailedBreakdown,
+    totalSamplesDropped,
+    callsWithSamples,
+    samplingStrikeRatePct,
+    sampleProductTotals,
+    ordersCount: periodOrders.length,
+    approvedOrdersCount: approvedOrders.length,
+    pendingOrdersCount: pendingOrders.length,
+    rejectedOrdersCount: rejectedOrders.length,
+    orderStrikeRatePct,
+    totalSalesUnits,
+    totalFocUnits,
+    ordersSubtotalExcVat,
+    ordersVatAmount,
+    ordersTotalIncVat,
+    orderProductBreakdown,
+    unvisitedPlanned,
+    periodVisits,
+    periodOrders
+  };
+}
+window.computeRepPeriodReportData = computeRepPeriodReportData;
+
+function renderExportPeriodLiveSummary(expandDetails = false) {
+  if (expandDetails) periodDetailedPreviewExpanded = true;
+  const box = document.getElementById('exportPeriodLiveSummaryBox');
+  if (!box) return;
+
+  const repFilter = document.getElementById('exportPeriodRepSelect')?.value || 'T1';
+  const dateFrom = document.getElementById('exportPeriodDateFrom')?.value || '2026-10-01';
+  const dateTo = document.getElementById('exportPeriodDateTo')?.value || getSyncedTodayDate();
+
+  const d = computeRepPeriodReportData(repFilter, dateFrom, dateTo);
+
+  const topProductsHtml = d.productsDetailedBreakdown.length > 0
+    ? d.productsDetailedBreakdown.slice(0, 6).map(p =>
+        `<span class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-700 text-cyan-300 text-[10px] font-bold">${escapeHtml(p.product)}: ${p.calls} calls (${p.sharePct}%)</span>`
+      ).join('')
+    : '<span class="text-slate-500 italic text-[11px]">No product detailing recorded in this period.</span>';
+
+  const detailedSectionHtml = periodDetailedPreviewExpanded ? `
+    <div class="pt-3 border-t border-slate-800 space-y-3">
+      <!-- Detailed Orders & Product Sales Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-amber-300 flex items-center justify-between">
+            <span>📦 Commercial Orders in Period (${d.ordersCount})</span>
+            <span>Net: AED ${formatCurrency(d.ordersTotalIncVat)}</span>
+          </div>
+          ${d.periodOrders.length > 0 ? `
+            <div class="max-h-36 overflow-y-auto space-y-1 pr-1">
+              ${d.periodOrders.map(o => `
+                <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-800/70">
+                  <div class="truncate pr-2">
+                    <span class="font-mono text-amber-400 font-bold">${escapeHtml(o.invoiceNumber)}</span>
+                    <span class="text-slate-300"> • ${escapeHtml(o.clientName)}</span>
+                    <span class="text-[10px] text-slate-500"> (${o.date})</span>
+                  </div>
+                  <span class="font-bold text-emerald-400 shrink-0">AED ${formatCurrency(o.totalIncVat || 0)}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="text-[11px] text-slate-500 italic">No commercial orders booked in this period.</div>'}
+        </div>
+
+        <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-rose-300 flex items-center justify-between">
+            <span>⏳ Unvisited / Missed Planned Clinics (${d.unvisitedPlannedCount})</span>
+            <span>Follow-Up Agenda</span>
+          </div>
+          ${d.unvisitedPlanned.length > 0 ? `
+            <div class="max-h-36 overflow-y-auto space-y-1 pr-1">
+              ${d.unvisitedPlanned.map(u => `
+                <div class="flex items-center justify-between text-[11px] py-1 border-b border-slate-800/70">
+                  <div class="truncate pr-2">
+                    <span class="font-mono text-rose-400 font-bold">${escapeHtml(u.clientCode || 'ACC')}</span>
+                    <span class="text-slate-300"> • ${escapeHtml(u.clientName)}</span>
+                  </div>
+                  <span class="text-[10px] text-slate-400 shrink-0">${u.date} (${escapeHtml(u.status || 'Planned')})</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div class="text-[11px] text-emerald-400 font-semibold">✓ 100% of planned visits in this period were completed!</div>'}
+        </div>
+      </div>
+
+      <!-- Executed Visit Log Preview -->
+      <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1.5">
+        <div class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-300 flex items-center justify-between">
+          <span>📋 Period Visit Execution Log (${d.periodVisits.length} Total Records: ${d.completedPlannedCount} Planned Done, ${d.unplannedCount} Unplanned, ${d.unvisitedPlannedCount} Pending)</span>
+          <button type="button" onclick="periodDetailedPreviewExpanded=false; renderExportPeriodLiveSummary(false);" class="text-[10px] text-slate-400 hover:text-white underline">Hide Details</button>
+        </div>
+        ${d.periodVisits.length > 0 ? `
+          <div class="max-h-44 overflow-y-auto overflow-x-auto">
+            <table class="w-full text-left text-[11px]">
+              <thead>
+                <tr class="text-slate-400 border-b border-slate-800 text-[10px] uppercase">
+                  <th class="py-1 pr-2">Date</th>
+                  <th class="py-1 pr-2">Rep</th>
+                  <th class="py-1 pr-2">Clinic</th>
+                  <th class="py-1 pr-2">Type / Status</th>
+                  <th class="py-1 pr-2">Doctor Met</th>
+                  <th class="py-1 pr-2">Sentiment</th>
+                  <th class="py-1 pr-2">Samples</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60">
+                ${d.periodVisits.slice(0, 50).map(v => `
+                  <tr>
+                    <td class="py-1 pr-2 font-mono text-slate-300 whitespace-nowrap">${v.date || ''}</td>
+                    <td class="py-1 pr-2 font-bold text-sky-400">${v.repId || ''}</td>
+                    <td class="py-1 pr-2 text-white truncate max-w-[160px]">${escapeHtml(v.clientName || '')}</td>
+                    <td class="py-1 pr-2 whitespace-nowrap">
+                      <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${v.visitCategory === 'Unplanned' ? 'bg-amber-500/20 text-amber-300' : (v.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300')}">
+                        ${v.visitCategory === 'Unplanned' ? '⚡ Unplanned' : (v.status === 'Completed' ? '✓ Visited' : '⏳ Unvisited')}
+                      </span>
+                    </td>
+                    <td class="py-1 pr-2 text-slate-300 truncate max-w-[120px]">${escapeHtml(v.doctorName || '-')}</td>
+                    <td class="py-1 pr-2 text-slate-300">${escapeHtml(v.doctorSentiment || '-')}</td>
+                    <td class="py-1 pr-2 text-purple-300 font-bold">${Number(v.samplesDropped) || 0}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : '<div class="text-[11px] text-slate-500 italic">No visits recorded in this date range.</div>'}
+      </div>
+    </div>
+  ` : '';
+
+  box.innerHTML = `
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-slate-800">
+      <div>
+        <span class="font-extrabold text-cyan-300 text-xs">${escapeHtml(d.repTitle)}</span>
+        <span class="text-[11px] text-slate-400 block sm:inline sm:ml-2">Period: <strong class="text-white font-mono">${d.dateFrom}</strong> to <strong class="text-white font-mono">${d.dateTo}</strong> (${d.activeFieldDays} Active Field Days)</span>
+      </div>
+      <span class="px-2 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold self-start sm:self-auto">
+        All 24 Rep Parameters Retrieved
+      </span>
+    </div>
+
+    <!-- 8-Card All Parameters KPI Matrix for Weekly Manager Meeting -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Planned vs Visited</span>
+        <span class="text-sm font-black text-emerald-400">${d.completedPlannedCount} / ${d.plannedCount}</span>
+        <span class="text-[10px] text-emerald-300/90 block font-semibold">${d.planAdherencePct}% Adherence (${d.unvisitedPlannedCount} Missed)</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Total Calls Executed</span>
+        <span class="text-sm font-black text-cyan-400">${d.totalCallsExecuted} Calls</span>
+        <span class="text-[10px] text-amber-300/90 block font-semibold">⚡ ${d.unplannedCount} Unplanned (${d.unplannedRatioPct}%)</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Territory Coverage &amp; Freq</span>
+        <span class="text-sm font-black text-sky-400">${d.uniqueClinicsVisited} / ${d.universeCount} (${d.coveragePct}%)</span>
+        <span class="text-[10px] text-purple-300/90 block font-semibold">Freq: ${d.callFrequency}x • ${d.avgCallsPerActiveDay}/day</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Doctors &amp; Sentiments</span>
+        <span class="text-sm font-black text-teal-400">${d.uniqueDoctorsCount} Doctors Met</span>
+        <span class="text-[10px] text-slate-300 block font-semibold">👍${d.sentiments.Positive} (${d.positiveSentimentPct}%) • 😐${d.sentiments.Neutral} • 👎${d.sentiments.Negative}</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Samples &amp; Strike Rate</span>
+        <span class="text-sm font-black text-purple-400">${d.totalSamplesDropped} Units</span>
+        <span class="text-[10px] text-purple-300/90 block font-semibold">${d.callsWithSamples} Calls (${d.samplingStrikeRatePct}% Strike)</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Commercial Orders</span>
+        <span class="text-sm font-black text-amber-400">${d.ordersCount} Orders (${d.orderStrikeRatePct}%)</span>
+        <span class="text-[10px] text-slate-300 block font-semibold">✓${d.approvedOrdersCount} Approved • ⏳${d.pendingOrdersCount} Pending</span>
+      </div>
+      <div class="p-2 rounded-xl bg-slate-900 border border-slate-800">
+        <span class="text-[9px] uppercase font-bold text-slate-400 block">Units Sold + Bonus FOC</span>
+        <span class="text-sm font-black text-indigo-400">${d.totalSalesUnits} Sls + ${d.totalFocUnits} FOC</span>
+        <span class="text-[10px] text-slate-400 block font-semibold">Ex-VAT: AED ${formatCurrency(d.ordersSubtotalExcVat)}</span>
+      </div>
+      <div class="p-2 rounded-xl bg-emerald-950/30 border border-emerald-500/40">
+        <span class="text-[9px] uppercase font-bold text-emerald-300 block">Net Period Revenue (Inc VAT)</span>
+        <span class="text-sm font-black text-emerald-400">AED ${formatCurrency(d.ordersTotalIncVat)}</span>
+        <span class="text-[10px] text-emerald-300/80 block font-semibold">5% VAT: AED ${formatCurrency(d.ordersVatAmount)}</span>
+      </div>
+    </div>
+
+    <!-- Top Detailed Products Bar -->
+    <div class="flex flex-wrap items-center gap-1.5 pt-1">
+      <span class="text-[10px] font-bold uppercase text-slate-400 mr-1">Products Detailed (${d.productsDetailedBreakdown.length}):</span>
+      ${topProductsHtml}
+    </div>
+
+    ${detailedSectionHtml}
+  `;
+  safeLucide();
+}
+window.renderExportPeriodLiveSummary = renderExportPeriodLiveSummary;
+
+/**
+ * Exports the complete multi-section Medical Rep Custom Period & Weekly Meeting CSV Report
+ * containing all 24+ reporting parameters, product detailing, samples, orders, unvisited clinics, and full visit log.
+ */
+function exportCustomPeriodReportCSV() {
+  const repFilter = document.getElementById('exportPeriodRepSelect')?.value || 'T1';
+  const dateFrom = document.getElementById('exportPeriodDateFrom')?.value || '2026-10-01';
+  const dateTo = document.getElementById('exportPeriodDateTo')?.value || getSyncedTodayDate();
+
+  const d = computeRepPeriodReportData(repFilter, dateFrom, dateTo);
+  const lines = [];
+
+  // SECTION 1: EXECUTIVE WEEKLY MEETING & PERIOD SCORECARD (ALL REPORTING PARAMETERS)
+  lines.push('"================================================================================"');
+  lines.push('"CONCEPTORS ANIMAL HEALTH CRM - MEDICAL REPRESENTATIVE PERIOD & WEEKLY MEETING REPORT"');
+  lines.push('"================================================================================"');
+  lines.push(`"Medical Representative","${d.repTitle.replace(/"/g, '""')}"`);
+  lines.push(`"Reporting Period From","${d.dateFrom}","To","${d.dateTo}"`);
+  lines.push(`"Generated Timestamp (UAE GST)","${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })}"`);
+  lines.push('');
+  lines.push('"--- SECTION 1: EXECUTIVE FIELD & COMMERCIAL REPORTING PARAMETERS ---"');
+  lines.push('"Parameter Category","Reporting Parameter","Period Value","Benchmark / Notes"');
+  lines.push(`"1. Field Activity","Active Field Days in Period","${d.activeFieldDays} Days","Avg ${d.avgCallsPerActiveDay} calls per active day"`);
+  lines.push(`"2. Schedule Planning","Total Planned Visits Scheduled","${d.plannedCount} Calls","1-Day Advance Planning SOP"`);
+  lines.push(`"3. Plan Execution","Completed Planned Visits (Visited)","${d.completedPlannedCount} Calls","Executed on schedule"`);
+  lines.push(`"4. Plan Compliance","Planned Execution Adherence (%)","${d.planAdherencePct}%","Target >= 85% adherence"`);
+  lines.push(`"5. Missed / Pending","Unvisited / Missed Planned Calls","${d.unvisitedPlannedCount} Calls","Requires follow-up / rescheduling"`);
+  lines.push(`"6. Field Agility","Spontaneous Unplanned Visits","${d.unplannedCount} Calls","${d.unplannedRatioPct}% of total executed calls"`);
+  lines.push(`"7. Total Output","Total Field Calls Executed","${d.totalCallsExecuted} Calls","Planned Visited + Unplanned"`);
+  lines.push(`"8. Territory Universe","Assigned Active Clinic Accounts","${d.universeCount} Clinics","Territory ${d.repId}"`);
+  lines.push(`"9. Account Coverage","Unique Clinics Visited in Period","${d.uniqueClinicsVisited} Clinics","${d.coveragePct}% of territory universe reached"`);
+  lines.push(`"10. Call Intensity","Average Call Frequency","${d.callFrequency}x Calls/Clinic","Target 1.80x monthly frequency"`);
+  lines.push(`"11. Physician Reach","Unique Veterinarians / Doctors Met","${d.uniqueDoctorsCount} Doctors","Decision makers engaged"`);
+  lines.push(`"12. Doctor Sentiment","Positive Sentiment Calls","${d.sentiments.Positive} Calls (${d.positiveSentimentPct}%)","Neutral: ${d.sentiments.Neutral} | Negative: ${d.sentiments.Negative} | Pending: ${d.sentiments.Pending}"`);
+  lines.push(`"13. Portfolio Detailing","Distinct Products Detailed","${d.productsDetailedBreakdown.length} Products","Across ${d.totalCallsExecuted} executed calls"`);
+  lines.push(`"14. Field Sampling","Total Samples Dropped (Units)","${d.totalSamplesDropped} Units","Across ${d.callsWithSamples} sampling calls (${d.samplingStrikeRatePct}% strike rate)"`);
+  lines.push(`"15. Commercial Conversion","Field Sales Orders Booked","${d.ordersCount} Orders","${d.orderStrikeRatePct}% Call-to-Order Strike Rate"`);
+  lines.push(`"16. Order Approvals","Order Authorization Breakdown","Approved: ${d.approvedOrdersCount} | Pending: ${d.pendingOrdersCount} | Rejected: ${d.rejectedOrdersCount}","Senior Manager review status"`);
+  lines.push(`"17. Volume & Bonus FOC","Total Units Sold + Bonus FOC","${d.totalSalesUnits} Sales Qty + ${d.totalFocUnits} FOC Qty","Standard UAE FOC tiers"`);
+  lines.push(`"18. Commercial Revenue","Subtotal Revenue (Excl. VAT)","AED ${d.ordersSubtotalExcVat.toFixed(2)}","Net commercial value before tax"`);
+  lines.push(`"19. UAE Tax (5% VAT)","Total 5% VAT Amount","AED ${d.ordersVatAmount.toFixed(2)}","UAE Federal Tax Authority 5%"`);
+  lines.push(`"20. Gross Revenue","Total Revenue (Incl. 5% VAT)","AED ${d.ordersTotalIncVat.toFixed(2)}","Total invoice value booked in period"`);
+  lines.push('');
+
+  // SECTION 2: PRODUCT DETAILING & SAMPLING BREAKDOWN
+  lines.push('"--- SECTION 2: PORTFOLIO PRODUCT DETAILING & SAMPLING BREAKDOWN ---"');
+  lines.push('"Product Name","Calls Detailed","Detailing Penetration (% of Executed Calls)","Samples Dropped (Units)"');
+  if (d.productsDetailedBreakdown.length > 0) {
+    d.productsDetailedBreakdown.forEach(p => {
+      const sUnits = d.sampleProductTotals[p.product] || 0;
+      lines.push(`"${p.product.replace(/"/g, '""')}",${p.calls},"${p.sharePct}%",${sUnits}`);
+    });
+  } else {
+    lines.push('"No products detailed in this period",0,"0%",0');
+  }
+  lines.push('');
+
+  // SECTION 3: ITEMIZED PRODUCT SALES & BONUS FOC IN PERIOD
+  lines.push('"--- SECTION 3: COMMERCIAL PRODUCT SALES & BONUS FOC BREAKDOWN IN PERIOD ---"');
+  lines.push('"Product Code","Product Name","Unit Price (AED)","Total Sales Qty","Total Bonus FOC Qty","Revenue Excl. VAT (AED)"');
+  if (d.orderProductBreakdown.length > 0) {
+    d.orderProductBreakdown.forEach(it => {
+      lines.push(`"${it.productCode}","${(it.productName || '').replace(/"/g, '""')}",${it.unitPrice},${it.salesQty},${it.focQty},${it.revenueExcVat.toFixed(2)}`);
+    });
+  } else {
+    lines.push('"-" ,"No product sales booked in this period",0,0,0,0.00');
+  }
+  lines.push('');
+
+  // SECTION 4: UNVISITED / MISSED PLANNED CLINICS FOR WEEKLY MEETING FOLLOW-UP
+  lines.push('"--- SECTION 4: UNVISITED / MISSED PLANNED CLINICS REQUIRING FOLLOW-UP ---"');
+  lines.push('"Scheduled Date","Rep ID","Clinic Code","Clinic Name","Location","Time Slot","Status","Planned Purpose","Missed / Delay Reason"');
+  if (d.unvisitedPlanned.length > 0) {
+    d.unvisitedPlanned.forEach(u => {
+      lines.push([
+        `"${u.date || ''}"`,
+        `"${u.repId || ''}"`,
+        `"${u.clientCode || ''}"`,
+        `"${(u.clientName || '').replace(/"/g, '""')}"`,
+        `"${(u.location || '').replace(/"/g, '""')}"`,
+        `"${(u.timeSlot || '').replace(/"/g, '""')}"`,
+        `"${u.status || 'Planned'}"`,
+        `"${(u.purpose || '').replace(/"/g, '""')}"`,
+        `"${(u.missedReason || 'Pending Execution').replace(/"/g, '""')}"`
+      ].join(','));
+    });
+  } else {
+    lines.push('"-" ,"-" ,"-" ,"100% Planned Visits Completed - Zero Missed Clinics in Period","-" ,"-" ,"Completed","-" ,"-"');
+  }
+  lines.push('');
+
+  // SECTION 5: COMPLETE ITEMIZED VISIT LOG (ALL 24 COLUMNS)
+  lines.push('"--- SECTION 5: COMPLETE ITEMIZED FIELD VISIT LOG FOR PERIOD ---"');
+  const visitHeaders = [
+    'Date', 'Rep ID', 'Rep Name', 'Territory', 'Clinic Code', 'Clinic Name',
+    'Location', 'Visit Category', 'Status', 'Time Slot', 'Doctor Met',
+    'Doctor Role', 'Doctor Sentiment', 'Products Detailed', 'Samples Dropped',
+    'Sample Product', 'Order Placed', 'Order Ref', 'Order Value AED',
+    'Purpose', 'Unplanned Reason', 'Outcome / Notes', 'Missed Reason', 'Next Follow Up Date'
+  ];
+  lines.push(visitHeaders.join(','));
+  d.periodVisits.forEach(v => {
+    lines.push([
+      `"${v.date || ''}"`,
+      `"${v.repId || ''}"`,
+      `"${getRepName(v.repId)}"`,
+      `"${v.territory || v.repId || ''}"`,
+      `"${v.clientCode || ''}"`,
+      `"${(v.clientName || '').replace(/"/g, '""')}"`,
+      `"${(v.location || '').replace(/"/g, '""')}"`,
+      `"${v.visitCategory || 'Planned'}"`,
+      `"${v.status || 'Planned'}"`,
+      `"${(v.timeSlot || '').replace(/"/g, '""')}"`,
+      `"${(v.doctorName || '').replace(/"/g, '""')}"`,
+      `"${(v.doctorRole || '').replace(/"/g, '""')}"`,
+      `"${v.doctorSentiment || ''}"`,
+      `"${Array.isArray(v.productsDetailed) ? v.productsDetailed.join('; ').replace(/"/g, '""') : (v.productsDetailed || '')}"`,
+      v.samplesDropped || 0,
+      `"${(v.sampleProduct || '').replace(/"/g, '""')}"`,
+      v.orderPlaced ? 'YES' : 'NO',
+      `"${v.orderRef || ''}"`,
+      v.orderValueAed || 0,
+      `"${(v.purpose || '').replace(/"/g, '""')}"`,
+      `"${(v.unplannedReason || '').replace(/"/g, '""')}"`,
+      `"${(v.outcome || '').replace(/"/g, '""')}"`,
+      `"${(v.missedReason || '').replace(/"/g, '""')}"`,
+      `"${v.nextFollowUp || ''}"`
+    ].join(','));
+  });
+  lines.push('');
+
+  // SECTION 6: COMPLETE COMMERCIAL ORDERS LOG IN PERIOD
+  lines.push('"--- SECTION 6: COMMERCIAL FIELD ORDERS LOG FOR PERIOD ---"');
+  lines.push('"Invoice Number","Order Date","Rep ID","Rep Name","Clinic Code","Clinic Name","Location","Payment Terms","Delivery Urgency","Subtotal Exc VAT (AED)","VAT 5% (AED)","Total Inc VAT (AED)","Approval Status","Items Summary"');
+  d.periodOrders.forEach(o => {
+    const itemsStr = o.itemsSummary || (Array.isArray(o.items) ? o.items.map(i => `${i.productName} (${i.salesQty} Sls${i.focQty > 0 ? '+' + i.focQty + ' FOC' : ''})`).join('; ') : '');
+    lines.push([
+      `"${o.invoiceNumber || ''}"`,
+      `"${o.date || ''}"`,
+      `"${o.repId || ''}"`,
+      `"${(o.repName || getRepName(o.repId)).replace(/"/g, '""')}"`,
+      `"${o.clientCode || o.accountCode || ''}"`,
+      `"${(o.clientName || '').replace(/"/g, '""')}"`,
+      `"${(o.location || '').replace(/"/g, '""')}"`,
+      `"${(o.paymentTerms || '').replace(/"/g, '""')}"`,
+      `"${(o.deliveryUrgency || '').replace(/"/g, '""')}"`,
+      (Number(o.totalExcVat) || 0).toFixed(2),
+      (Number(o.vatAmount) || 0).toFixed(2),
+      (Number(o.totalIncVat) || 0).toFixed(2),
+      `"${o.approvalStatus || 'Pending'}"`,
+      `"${itemsStr.replace(/"/g, '""')}"`
+    ].join(','));
+  });
+
+  const repTag = d.repId === 'ALL' ? 'AllReps' : `Rep_${d.repId}`;
+  const filename = `Conceptors_Weekly_Period_Report_${repTag}_${d.dateFrom}_to_${d.dateTo}.csv`;
+  downloadCsvFile(filename, lines.join('\r\n'));
+  showToast('Period & Weekly Meeting Report Exported', `Downloaded full report (${d.periodVisits.length} visits, ${d.ordersCount} orders, all 20 KPI parameters) for ${d.dateFrom} → ${d.dateTo}.`, 'success');
+}
+window.exportCustomPeriodReportCSV = exportCustomPeriodReportCSV;
+
+/**
+ * Opens a clean, printable Weekly Meeting Review Sheet window containing all rep parameters,
+ * detailing mix, orders, missed visits, and manager-rep coaching sign-off.
+ */
+function printWeeklyMeetingReport() {
+  const repFilter = document.getElementById('exportPeriodRepSelect')?.value || 'T1';
+  const dateFrom = document.getElementById('exportPeriodDateFrom')?.value || '2026-10-01';
+  const dateTo = document.getElementById('exportPeriodDateTo')?.value || getSyncedTodayDate();
+  const d = computeRepPeriodReportData(repFilter, dateFrom, dateTo);
+
+  const win = window.open('', '_blank', 'width=1024,height=820');
+  if (!win) {
+    window.print();
+    return;
+  }
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Weekly Meeting & Period Report - ${escapeHtml(d.repTitle)} (${d.dateFrom} to ${d.dateTo})</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #0f172a; margin: 24px; font-size: 12px; line-height: 1.4; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 16px; }
+    h1 { font-size: 18px; margin: 0 0 4px 0; color: #0f172a; }
+    h2 { font-size: 13px; margin: 16px 0 8px 0; color: #0369a1; text-transform: uppercase; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+    .meta { font-size: 11px; color: #475569; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+    .kpi-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 10px; background: #f8fafc; }
+    .kpi-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+    .kpi-val { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+    .kpi-sub { font-size: 10px; color: #0284c7; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 11px; }
+    th, td { border: 1px solid #cbd5e1; padding: 5px 7px; text-align: left; }
+    th { background: #f1f5f9; font-weight: 700; text-transform: uppercase; font-size: 10px; color: #334155; }
+    .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; padding-top: 16px; border-top: 1px dashed #94a3b8; }
+    .sign-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; min-height: 70px; background: #fcfcfd; }
+    @media print { .no-print { display: none !important; } body { margin: 10px; } }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom:14px; display:flex; gap:10px;">
+    <button onclick="window.print()" style="background:#0284c7;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-weight:700;cursor:pointer;">🖨️ Print / Save PDF</button>
+    <button onclick="window.close()" style="background:#e2e8f0;color:#0f172a;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;">Close</button>
+  </div>
+  <div class="header">
+    <div>
+      <h1>CONCEPTORS ANIMAL HEALTH — WEEKLY MEETING &amp; PERIOD PERFORMANCE REPORT</h1>
+      <div class="meta"><strong>Representative:</strong> ${escapeHtml(d.repTitle)}</div>
+      <div class="meta"><strong>Reporting Period:</strong> ${d.dateFrom} to ${d.dateTo} (${d.activeFieldDays} Active Field Days)</div>
+    </div>
+    <div class="meta" style="text-align:right;">
+      <div><strong>Senior Sales Manager:</strong> Dr. Sameh Ageez</div>
+      <div><strong>Generated:</strong> ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })} GST</div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Planned vs Visited</div><div class="kpi-val">${d.completedPlannedCount} / ${d.plannedCount}</div><div class="kpi-sub">${d.planAdherencePct}% Plan Adherence (${d.unvisitedPlannedCount} Missed)</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total Calls Executed</div><div class="kpi-val">${d.totalCallsExecuted} Calls</div><div class="kpi-sub">${d.unplannedCount} Unplanned (${d.unplannedRatioPct}%) • ${d.avgCallsPerActiveDay}/day</div></div>
+    <div class="kpi-card"><div class="kpi-label">Territory Coverage</div><div class="kpi-val">${d.uniqueClinicsVisited} / ${d.universeCount} (${d.coveragePct}%)</div><div class="kpi-sub">Call Frequency: ${d.callFrequency}x</div></div>
+    <div class="kpi-card"><div class="kpi-label">Doctors &amp; Sentiment</div><div class="kpi-val">${d.uniqueDoctorsCount} Doctors Met</div><div class="kpi-sub">Pos: ${d.sentiments.Positive} (${d.positiveSentimentPct}%) | Neu: ${d.sentiments.Neutral} | Neg: ${d.sentiments.Negative}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Samples Dropped</div><div class="kpi-val">${d.totalSamplesDropped} Units</div><div class="kpi-sub">${d.callsWithSamples} Sampling Calls (${d.samplingStrikeRatePct}% Strike)</div></div>
+    <div class="kpi-card"><div class="kpi-label">Commercial Orders</div><div class="kpi-val">${d.ordersCount} Orders</div><div class="kpi-sub">${d.orderStrikeRatePct}% Order Strike (${d.approvedOrdersCount} Approved, ${d.pendingOrdersCount} Pending)</div></div>
+    <div class="kpi-card"><div class="kpi-label">Sales + FOC Units</div><div class="kpi-val">${d.totalSalesUnits} + ${d.totalFocUnits} FOC</div><div class="kpi-sub">Subtotal Ex-VAT: AED ${formatCurrency(d.ordersSubtotalExcVat)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Net Revenue (Inc 5% VAT)</div><div class="kpi-val">AED ${formatCurrency(d.ordersTotalIncVat)}</div><div class="kpi-sub">5% VAT: AED ${formatCurrency(d.ordersVatAmount)}</div></div>
+  </div>
+
+  <h2>1. Portfolio Detailing &amp; Sampling Mix (${d.productsDetailedBreakdown.length} Products)</h2>
+  <table>
+    <thead><tr><th>Product Detailed</th><th>Calls Pitched</th><th>Penetration %</th><th>Samples Dropped</th></tr></thead>
+    <tbody>
+      ${d.productsDetailedBreakdown.length > 0 ? d.productsDetailedBreakdown.map(p => `
+        <tr><td>${escapeHtml(p.product)}</td><td>${p.calls}</td><td>${p.sharePct}%</td><td>${d.sampleProductTotals[p.product] || 0}</td></tr>
+      `).join('') : '<tr><td colspan="4">No product detailing recorded in this period.</td></tr>'}
+    </tbody>
+  </table>
+
+  <h2>2. Commercial Orders Booked in Period (${d.ordersCount} Orders — AED ${formatCurrency(d.ordersTotalIncVat)})</h2>
+  <table>
+    <thead><tr><th>Invoice #</th><th>Date</th><th>Clinic Name</th><th>Location</th><th>Items &amp; Bonus FOC</th><th>Total Inc. VAT (AED)</th><th>Status</th></tr></thead>
+    <tbody>
+      ${d.periodOrders.length > 0 ? d.periodOrders.map(o => `
+        <tr>
+          <td><strong>${escapeHtml(o.invoiceNumber)}</strong></td>
+          <td>${o.date || ''}</td>
+          <td>${escapeHtml(o.clientName || '')} (${escapeHtml(o.clientCode || '')})</td>
+          <td>${escapeHtml(o.location || '')}</td>
+          <td>${escapeHtml(o.itemsSummary || (o.items || []).map(i => `${i.productName} (${i.salesQty}+${i.focQty || 0} FOC)`).join(', '))}</td>
+          <td><strong>AED ${formatCurrency(o.totalIncVat || 0)}</strong></td>
+          <td>${escapeHtml(o.approvalStatus || 'Pending')}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="7">No commercial orders booked in this period.</td></tr>'}
+    </tbody>
+  </table>
+
+  <h2>3. Unvisited / Missed Planned Clinics Requiring Follow-Up (${d.unvisitedPlannedCount})</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Clinic Code</th><th>Clinic Name</th><th>Location</th><th>Status</th><th>Planned Purpose / Reason</th></tr></thead>
+    <tbody>
+      ${d.unvisitedPlanned.length > 0 ? d.unvisitedPlanned.map(u => `
+        <tr>
+          <td>${u.date || ''}</td>
+          <td>${escapeHtml(u.clientCode || '')}</td>
+          <td>${escapeHtml(u.clientName || '')}</td>
+          <td>${escapeHtml(u.location || '')}</td>
+          <td>${escapeHtml(u.status || 'Planned')}</td>
+          <td>${escapeHtml(u.missedReason || u.purpose || 'Requires rescheduling')}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="6">100% Planned Adherence — All scheduled clinics were visited in this period.</td></tr>'}
+    </tbody>
+  </table>
+
+  <h2>4. Field Visit Execution Log (${d.periodVisits.length} Records)</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Rep</th><th>Clinic</th><th>Category / Status</th><th>Doctor Met</th><th>Sentiment</th><th>Products Detailed</th><th>Samples</th><th>Outcome / Notes</th></tr></thead>
+    <tbody>
+      ${d.periodVisits.map(v => `
+        <tr>
+          <td>${v.date || ''}</td>
+          <td>${escapeHtml(v.repId || '')}</td>
+          <td>${escapeHtml(v.clientName || '')} (${escapeHtml(v.clientCode || '')})</td>
+          <td>${escapeHtml(v.visitCategory || 'Planned')} (${escapeHtml(v.status || 'Planned')})</td>
+          <td>${escapeHtml(v.doctorName || '-')}</td>
+          <td>${escapeHtml(v.doctorSentiment || '-')}</td>
+          <td>${escapeHtml(Array.isArray(v.productsDetailed) ? v.productsDetailed.join(', ') : (v.productsDetailed || '-'))}</td>
+          <td>${Number(v.samplesDropped) || 0}</td>
+          <td>${escapeHtml(v.outcome || v.purpose || '-')}</td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+
+  <div class="sign-grid">
+    <div class="sign-box"><strong>Weekly Meeting Discussion &amp; Action Items (Next Week Priorities):</strong></div>
+    <div class="sign-box"><strong>Signatures:</strong><br><br>Medical Rep: ______________________ &nbsp;&nbsp; Senior Manager: ______________________</div>
+  </div>
+</body>
+</html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+window.printWeeklyMeetingReport = printWeeklyMeetingReport;
+
 function handleExportDailyDateRangeChange(val) {
   const monthWrap = document.getElementById('exportDailyMonthWrapper');
-  if (!monthWrap) return;
-  if (val === 'month') {
-    monthWrap.classList.remove('hidden');
-  } else {
-    monthWrap.classList.add('hidden');
+  const periodWrap = document.getElementById('exportDailyPeriodWrapper');
+  if (monthWrap) {
+    if (val === 'month') monthWrap.classList.remove('hidden');
+    else monthWrap.classList.add('hidden');
+  }
+  if (periodWrap) {
+    if (val === 'period') periodWrap.classList.remove('hidden');
+    else periodWrap.classList.add('hidden');
   }
 }
 window.handleExportDailyDateRangeChange = handleExportDailyDateRangeChange;
@@ -8769,6 +9706,8 @@ function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
     if (state.dailyReportViewMode === 'month') {
       rangeMode = 'month';
       chosenMonth = state.dailyReportMonth || currentYm;
+    } else if (state.dailyReportViewMode === 'period') {
+      rangeMode = 'period';
     } else {
       rangeMode = 'selected';
     }
@@ -8787,10 +9726,19 @@ function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
 
   let targetDate = state.dailyReportDate || today;
   let targetMonth = chosenMonth || state.dailyReportMonth || currentYm;
+  let periodFrom = document.getElementById('exportDailyDateFrom')?.value || state.dailyReportPeriodFrom || `${currentYm}-01`;
+  let periodTo = document.getElementById('exportDailyDateTo')?.value || state.dailyReportPeriodTo || today;
+  if (state.dailyReportViewMode === 'period' && !document.getElementById('exportCenterModal')?.classList.contains('hidden') === false) {
+    periodFrom = state.dailyReportPeriodFrom || periodFrom;
+    periodTo = state.dailyReportPeriodTo || periodTo;
+  }
+
   let visitsToExport = getScopedVisits();
 
   if (rangeMode === 'current_month') {
     visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(currentYm));
+  } else if (rangeMode === 'period') {
+    visitsToExport = visitsToExport.filter(v => v.date && v.date >= periodFrom && v.date <= periodTo);
   } else if (rangeMode === 'month') {
     if (targetMonth && targetMonth !== 'ALL') {
       visitsToExport = visitsToExport.filter(v => (v.date || '').startsWith(targetMonth));
@@ -8812,7 +9760,7 @@ function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
   }
 
   if (visitsToExport.length === 0) {
-    showToast('No Visits Found', 'No visit records match the selected date/month and representative filters.', 'warning');
+    showToast('No Visits Found', 'No visit records match the selected date/period and representative filters.', 'warning');
     return;
   }
 
@@ -8854,6 +9802,8 @@ function exportDailyReportCSV(rangeMode, repFilter, chosenMonth) {
   let fileLabel = 'Today_' + today;
   if (rangeMode === 'current_month') {
     fileLabel = `Month_${currentYm}`;
+  } else if (rangeMode === 'period') {
+    fileLabel = `Period_${periodFrom}_to_${periodTo}`;
   } else if (rangeMode === 'month') {
     fileLabel = `Month_${targetMonth}`;
   } else if (rangeMode === 'selected') {

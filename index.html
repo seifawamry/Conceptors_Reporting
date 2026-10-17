@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.1.0">
+  <link rel="stylesheet" href="./styles.css?v=3.3.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -248,6 +248,37 @@
         </div>
       </div>
 
+      <!-- Senior Manager Executive Quick Command Bar (Visible on Mobile & Desktop when Manager is Signed In) -->
+      <div id="dailyManagerQuickBar" class="hidden glass-panel rounded-2xl p-3.5 sm:p-4 border border-indigo-500/40 bg-indigo-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="font-extrabold text-white text-xs sm:text-sm">Senior Manager Executive Control Center</div>
+            <div class="text-[11px] text-slate-400">Direct mobile & desktop access to manager tools, test alerts, and data purge</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button type="button" onclick="switchTab('manager')" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span>Manager Hub</span>
+          </button>
+          <button type="button" onclick="triggerTestOrderNotification()" class="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation manager-action-amber">
+            <i data-lucide="send" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Dispatch Test Alert</span>
+          </button>
+          <button type="button" onclick="openManagerPurgeModal()" class="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation manager-action-rose">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+            <span>Reset Pilot / Purge Data</span>
+          </button>
+          <button type="button" onclick="openExportCenterModal('period')" class="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation">
+            <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Weekly Meeting Report</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Daily Scorecard Summary -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div class="glass-card rounded-2xl p-4 border border-slate-800">
@@ -360,9 +391,10 @@
 
         <!-- Date Controls & Rep Filter Bar -->
         <div class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
-          <!-- Scope Toggle: Day vs Month -->
+          <!-- Scope Toggle: Day vs Period vs Month -->
           <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1 text-xs">
             <button type="button" id="dailyReportScopeDayBtn" onclick="handleDailyReportScopeChange('day')" class="px-2.5 py-1.5 rounded-lg font-bold bg-cyan-600 text-white shadow-sm transition-all" title="View Single Day Records">Day</button>
+            <button type="button" id="dailyReportScopePeriodBtn" onclick="handleDailyReportScopeChange('period')" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all" title="View Custom Date Period (Weekly Meeting)">Period</button>
             <button type="button" id="dailyReportScopeMonthBtn" onclick="handleDailyReportScopeChange('month')" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-400 hover:text-white transition-all" title="View Full Month Records">Month</button>
           </div>
 
@@ -376,6 +408,14 @@
           <!-- HTML5 Date Picker (Shown in Day View) -->
           <div id="dailyReportDateInputWrapper" class="relative flex items-center">
             <input type="date" id="dailyReportDateInput" onchange="handleDailyReportDateChange(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl px-3 py-2 outline-none focus:border-cyan-500 shadow-inner" title="Choose any date to retrieve all daily records">
+          </div>
+
+          <!-- Custom Period From -> To Pickers (Shown in Period View) -->
+          <div id="dailyReportPeriodWrapper" class="hidden flex flex-wrap items-center gap-1.5 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs">
+            <span class="text-[10px] font-bold text-cyan-400 uppercase">From:</span>
+            <input type="date" id="dailyReportPeriodFrom" onchange="handleDailyReportPeriodChange()" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs font-mono rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
+            <span class="text-[10px] font-bold text-cyan-400 uppercase ml-1">To:</span>
+            <input type="date" id="dailyReportPeriodTo" onchange="handleDailyReportPeriodChange()" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs font-mono rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
           </div>
 
           <!-- Month Selector (Shown in Month View) -->
@@ -395,18 +435,22 @@
             <option value="T2">Dr. Marsel (Rep T2 - Northern Emirates)</option>
           </select>
 
-          <!-- Export CSV & Print Actions -->
-          <div class="flex items-center gap-1.5">
-            <button type="button" onclick="exportDailyReportCSV()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Export report as CSV spreadsheet">
+          <!-- Export CSV, Weekly Meeting Report & Print Actions -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" onclick="openExportCenterModal('period')" class="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 touch-manipulation" title="Retrieve & Export Custom Period / Weekly Meeting Report with All Rep Parameters">
+              <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Period / Weekly Report</span>
+            </button>
+            <button type="button" onclick="exportDailyReportCSV()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm" title="Export current view as CSV spreadsheet">
               <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
-              <span class="hidden sm:inline">Export CSV</span>
+              <span>Export CSV</span>
             </button>
             <button type="button" onclick="window.print()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-white text-xs font-bold transition-all shadow-sm" title="Print this field report">
               <i data-lucide="printer" class="w-3.5 h-3.5"></i>
             </button>
-            <button type="button" id="dailyReportManagerPurgeBtn" onclick="openManagerPurgeModal()" class="hidden px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 touch-manipulation" title="Manager Tool: Reset pilot test data or delete records for chosen dates/reps">
+            <button type="button" id="dailyReportManagerPurgeBtn" onclick="openManagerPurgeModal()" class="hidden px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 touch-manipulation manager-action-rose" title="Manager Tool: Reset pilot test data or delete records for chosen dates/reps">
               <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
-              <span class="hidden sm:inline">Reset / Purge Data</span>
+              <span>Reset / Purge Data</span>
             </button>
           </div>
         </div>
@@ -970,22 +1014,25 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap">
-          <div id="mobilePushStatusBadge"></div>
-          <button id="enablePushBtn" onclick="requestMobilePushPermissions()" class="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
-            <i data-lucide="bell-ring" class="w-4 h-4"></i> Enable Phone Alerts
+        <div id="managerControlActionToolbar" class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto">
+          <div id="mobilePushStatusBadge" class="col-span-2 sm:col-span-1 empty:hidden"></div>
+          <button id="enablePushBtn" type="button" onclick="requestMobilePushPermissions()" class="px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="bell-ring" class="w-4 h-4 shrink-0"></i> <span>Enable Phone Alerts</span>
           </button>
-          <button type="button" onclick="openIosAlertGuideModal()" class="px-3.5 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center gap-1.5 active:scale-95 touch-manipulation">
-            <i data-lucide="smartphone" class="w-4 h-4 text-indigo-400"></i> iPhone Guide
+          <button type="button" onclick="openIosAlertGuideModal()" class="manager-action-indigo px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 touch-manipulation">
+            <i data-lucide="smartphone" class="w-4 h-4 text-indigo-400 shrink-0"></i> <span>iPhone Guide</span>
           </button>
-          <button onclick="openManagerSettingsModal()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center gap-1.5 transition-colors">
-            <i data-lucide="settings" class="w-4 h-4 text-sky-400"></i> Notification Settings
+          <button type="button" onclick="openManagerSettingsModal()" class="px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95 touch-manipulation">
+            <i data-lucide="settings" class="w-4 h-4 text-sky-400 shrink-0"></i> <span>Notification Settings</span>
           </button>
-          <button onclick="triggerTestOrderNotification()" class="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs flex items-center gap-1.5">
-            <i data-lucide="send" class="w-3.5 h-3.5"></i> Dispatch Test Alert
+          <button type="button" onclick="openExportCenterModal('period')" class="px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all active:scale-95 touch-manipulation">
+            <i data-lucide="calendar-range" class="w-4 h-4 shrink-0"></i> <span>Weekly Meeting Report</span>
           </button>
-          <button type="button" onclick="openManagerPurgeModal()" class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 touch-manipulation" title="Reset pilot test trials and purge records by date or range">
-            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400"></i> Reset Pilot / Purge Data
+          <button id="managerDispatchTestAlertBtn" type="button" onclick="triggerTestOrderNotification()" class="manager-action-amber px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border border-amber-500/50 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation">
+            <i data-lucide="send" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i> <span>Dispatch Test Alert</span>
+          </button>
+          <button id="managerPurgeDataBtn" type="button" onclick="openManagerPurgeModal()" class="manager-action-rose px-3 py-2.5 sm:px-3.5 sm:py-2 rounded-xl bg-rose-500/25 hover:bg-rose-500/35 text-rose-300 border border-rose-500/50 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 touch-manipulation" title="Reset pilot test trials and purge records by date or range">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400 shrink-0"></i> <span>Reset Pilot / Purge Data</span>
           </button>
         </div>
       </div>
@@ -1295,6 +1342,10 @@
       <i data-lucide="shopping-cart" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Orders</span>
     </button>
+    <button type="button" onclick="switchTab('manager')" id="mobileNavBtn-manager" class="mobile-nav-btn hidden w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
+      <i data-lucide="shield-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
+      <span class="text-[10px] tracking-tight leading-none pointer-events-none">Manager</span>
+    </button>
     <button type="button" onclick="toggleMobileMoreDrawer()" id="mobileNavBtn-more" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
       <i data-lucide="menu" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">More</span>
@@ -1322,17 +1373,43 @@
         </button>
       </div>
 
+      <!-- Senior Manager Dedicated Executive Controls in Mobile Drawer (Visible only when Manager logged in) -->
+      <div id="mobileDrawerManagerSection" class="hidden p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/40 space-y-2.5">
+        <div class="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-indigo-300">
+          <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-indigo-400"></i> Senior Manager Executive Controls</span>
+          <span class="text-emerald-400">Active</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+          <button type="button" onclick="closeMobileMoreDrawer(); switchTab('manager');" class="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all">
+            <i data-lucide="shield-check" class="w-4 h-4 shrink-0"></i>
+            <span>Manager Hub</span>
+          </button>
+          <button type="button" onclick="closeMobileMoreDrawer(); triggerTestOrderNotification();" class="manager-action-amber p-2.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/35 border border-amber-500/50 text-amber-300 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all">
+            <i data-lucide="send" class="w-4 h-4 text-amber-400 shrink-0"></i>
+            <span>Dispatch Test Alert</span>
+          </button>
+          <button type="button" onclick="closeMobileMoreDrawer(); openManagerPurgeModal();" class="manager-action-rose p-2.5 rounded-xl bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-rose-300 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400 shrink-0"></i>
+            <span>Reset Pilot / Purge</span>
+          </button>
+          <button type="button" onclick="closeMobileMoreDrawer(); openManagerSettingsModal();" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all">
+            <i data-lucide="settings" class="w-4 h-4 text-sky-400 shrink-0"></i>
+            <span>Alert Settings</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Quick Action Navigation Grid -->
       <div class="grid grid-cols-2 gap-2.5 text-xs font-bold">
-        <!-- Central Export Data (Featured) -->
-        <button type="button" onclick="closeMobileMoreDrawer(); openExportCenterModal();" class="col-span-2 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/60 border border-emerald-500/40 text-emerald-300 hover:text-white flex items-center justify-between transition-all active:scale-[0.98] shadow-md">
+        <!-- Central Export Data & Weekly Meeting Report (Featured) -->
+        <button type="button" onclick="closeMobileMoreDrawer(); openExportCenterModal('period');" class="col-span-2 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/60 border border-emerald-500/40 text-emerald-300 hover:text-white flex items-center justify-between transition-all active:scale-[0.98] shadow-md">
           <div class="flex items-center gap-2.5">
             <div class="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
               <i data-lucide="download" class="w-5 h-5"></i>
             </div>
             <div class="text-left">
-              <div class="font-black text-white text-xs">📊 Export Data Center</div>
-              <div class="text-[10px] text-emerald-300/80 font-normal">Download Reports, Planning & Orders CSVs</div>
+              <div class="font-black text-white text-xs">📊 Export Data & Weekly Meeting Report</div>
+              <div class="text-[10px] text-emerald-300/80 font-normal">Retrieve Rep Period KPIs, Reports, Planning & Orders</div>
             </div>
           </div>
           <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-400"></i>
@@ -2953,6 +3030,78 @@
           </button>
         </div>
 
+        <!-- FEATURED MODULE: MEDICAL REP CUSTOM PERIOD & WEEKLY MEETING REVIEW REPORT -->
+        <div id="weeklyMeetingExportCard" class="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-950/50 via-slate-900 to-cyan-950/40 border-2 border-cyan-500/50 shadow-xl space-y-3.5">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shrink-0">
+                <i data-lucide="calendar-range" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-black text-white text-xs sm:text-sm">🤝 Medical Rep Period Report & Weekly Meeting Review</span>
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 uppercase tracking-wider">Manager + Rep 1-on-1 Ready</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mt-0.5">
+                  Retrieve, review &amp; export all reporting parameters for any custom period (Planned vs Executed, Adherence %, Coverage %, Call Frequency, Doctors Met, Sentiments, Products Detailed, Samples Dropped, Orders &amp; Missed Clinics).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter Controls: Medical Rep, Preset & Date Range (From -> To) -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-0.5">
+            <div>
+              <label for="exportPeriodRepSelect" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Medical Representative</label>
+              <select id="exportPeriodRepSelect" onchange="renderExportPeriodLiveSummary()" class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-xs font-bold rounded-xl px-2.5 py-2 outline-none focus:border-cyan-400">
+                <option value="T1">Dr. Shaimaa (Rep T1 - DXB/AUH)</option>
+                <option value="T2">Dr. Marsel (Rep T2 - Northern)</option>
+                <option value="ALL">All Representatives (T1 + T2 Combined)</option>
+              </select>
+            </div>
+            <div>
+              <label for="exportPeriodPresetSelect" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Meeting Period Preset</label>
+              <select id="exportPeriodPresetSelect" onchange="handleExportPeriodPresetChange(this.value)" class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-xs font-bold rounded-xl px-2.5 py-2 outline-none focus:border-cyan-400">
+                <option value="this_week" selected>📅 Weekly Meeting (Last 7 Days)</option>
+                <option value="prev_week">⏮️ Previous Week (7 Days)</option>
+                <option value="mtd">📈 Month-to-Date (Oct 1 – Today)</option>
+                <option value="current_month">🗓️ Full Current Month (Oct 2026)</option>
+                <option value="prev_month">📂 Previous Month (Sep 2026)</option>
+                <option value="custom">🎯 Custom Date Period (From – To)</option>
+              </select>
+            </div>
+            <div>
+              <label for="exportPeriodDateFrom" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Period From</label>
+              <input type="date" id="exportPeriodDateFrom" value="2026-10-01" onchange="document.getElementById('exportPeriodPresetSelect').value='custom'; renderExportPeriodLiveSummary();" class="w-full bg-slate-800 border border-slate-700 text-white text-xs font-mono font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-cyan-400">
+            </div>
+            <div>
+              <label for="exportPeriodDateTo" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Period To</label>
+              <input type="date" id="exportPeriodDateTo" value="2026-10-17" onchange="document.getElementById('exportPeriodPresetSelect').value='custom'; renderExportPeriodLiveSummary();" class="w-full bg-slate-800 border border-slate-700 text-white text-xs font-mono font-bold rounded-xl px-2.5 py-1.5 outline-none focus:border-cyan-400">
+            </div>
+          </div>
+
+          <!-- Live Retrieved Period Parameters Preview Container -->
+          <div id="exportPeriodLiveSummaryBox" class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3 text-xs">
+            <!-- Populated dynamically via renderExportPeriodLiveSummary() -->
+          </div>
+
+          <!-- Action Buttons: Retrieve On-Screen, Export Full CSV, Print Weekly Review Sheet -->
+          <div class="pt-1 flex flex-wrap items-center gap-2">
+            <button type="button" onclick="renderExportPeriodLiveSummary(true)" class="px-3.5 py-2.5 rounded-xl bg-cyan-600/25 hover:bg-cyan-600/35 border border-cyan-500/50 text-cyan-300 hover:text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95">
+              <i data-lucide="search" class="w-4 h-4"></i>
+              <span>Retrieve &amp; Preview All Parameters</span>
+            </button>
+            <button type="button" onclick="exportCustomPeriodReportCSV()" class="flex-1 min-w-[190px] py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-600/30 transition-all active:scale-95">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+              <span>Export Full Period Report (CSV)</span>
+            </button>
+            <button type="button" onclick="printWeeklyMeetingReport()" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all active:scale-95" title="Open Printable Weekly Meeting Review Sheet">
+              <i data-lucide="printer" class="w-4 h-4"></i>
+              <span>Print / PDF Weekly Meeting Sheet</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Grid of Specific Export Modules -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           <!-- CARD 1: DAILY VISIT REPORTS -->
@@ -2966,7 +3115,7 @@
                 <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">DCR Log</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                Executed calls, doctors met, products pitched, sample drops, sentiments & unplanned visits.
+                Executed calls, doctors met, products pitched, sample drops, sentiments &amp; unplanned visits.
               </p>
               <!-- Date Range & Rep Filters -->
               <div class="space-y-1.5 pt-1">
@@ -2974,11 +3123,22 @@
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Scope:</label>
                   <select id="exportDailyDateRange" onchange="handleExportDailyDateRangeChange(this.value)" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
                     <option value="current_month" selected>🗓️ Current Month (October 2026)</option>
+                    <option value="period">📆 Custom Date Period (From – To)</option>
                     <option value="month">📅 Specific Month...</option>
                     <option value="today">☀️ Today's Visits Only</option>
                     <option value="selected">🎯 Currently Selected Daily Report Date</option>
                     <option value="all">🌐 All-Time Historical Visits</option>
                   </select>
+                </div>
+                <div id="exportDailyPeriodWrapper" class="hidden grid grid-cols-2 gap-1.5 pt-0.5">
+                  <div class="flex items-center gap-1">
+                    <span class="text-[9px] text-slate-400 font-bold uppercase">From:</span>
+                    <input type="date" id="exportDailyDateFrom" value="2026-10-01" class="flex-1 bg-slate-800 border border-slate-700 text-white text-[11px] font-mono rounded-lg px-1.5 py-1 outline-none focus:border-cyan-500">
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <span class="text-[9px] text-slate-400 font-bold uppercase">To:</span>
+                    <input type="date" id="exportDailyDateTo" value="2026-10-31" class="flex-1 bg-slate-800 border border-slate-700 text-white text-[11px] font-mono rounded-lg px-1.5 py-1 outline-none focus:border-cyan-500">
+                  </div>
                 </div>
                 <div id="exportDailyMonthWrapper" class="hidden flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Month:</label>
@@ -2991,7 +3151,7 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Rep:</label>
                   <select id="exportDailyRepFilter" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-cyan-500">
-                    <option value="ALL">All Representatives (T1 & T2)</option>
+                    <option value="ALL">All Representatives (T1 &amp; T2)</option>
                     <option value="T1">Dr. Shaimaa (Rep T1)</option>
                     <option value="T2">Dr. Marsel (Rep T2)</option>
                   </select>
@@ -3035,7 +3195,7 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Rep:</label>
                   <select id="exportPlanningRep" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-sky-500">
-                    <option value="ALL">All Representatives (T1 & T2)</option>
+                    <option value="ALL">All Representatives (T1 &amp; T2)</option>
                     <option value="T1">Dr. Shaimaa (Rep T1)</option>
                     <option value="T2">Dr. Marsel (Rep T2)</option>
                   </select>
@@ -3067,7 +3227,7 @@
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Format:</label>
                   <select id="exportOrdersType" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-amber-500">
-                    <option value="itemized">Itemized Products & FOC Lines (Detailed)</option>
+                    <option value="itemized">Itemized Products &amp; FOC Lines (Detailed)</option>
                     <option value="summary">Order Invoices Totals (Summary)</option>
                   </select>
                 </div>
@@ -3096,7 +3256,7 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2 text-emerald-400 font-extrabold">
                   <i data-lucide="building-2" class="w-4 h-4"></i>
-                  <span>4. Clinics & Territory Accounts</span>
+                  <span>4. Clinics &amp; Territory Accounts</span>
                 </div>
                 <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Targeting</span>
               </div>
@@ -3143,7 +3303,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.2.0"></script>
-  <script src="./crm_app.js?v=3.2.0"></script>
+  <script src="./crm_data.js?v=3.3.0"></script>
+  <script src="./crm_app.js?v=3.3.0"></script>
 </body>
 </html>
