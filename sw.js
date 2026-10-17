@@ -1,5 +1,5 @@
 // Conceptors Veterinary CRM Service Worker for Mobile Push & Offline Shell
-const CACHE_NAME = 'conceptors-crm-v7';
+const CACHE_NAME = 'conceptors-crm-v8';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -2364,4 +2364,25 @@ html:not(.dark) #unplannedPurposeCheckboxes label:hover {
   border-color: #38bdf8 !important;
 }
 
+/* Products Pitched / Detailed Checkboxes in Bright Mode */
+html:not(.dark) #plannedProductCheckboxes,
+html:not(.dark) #unplannedProductCheckboxes {
+  background-color: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+html:not(.dark) #plannedProductCheckboxes label,
+html:not(.dark) #unplannedProductCheckboxes label {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html:not(.dark) #plannedProductCheckboxes label:hover,
+html:not(.dark) #unplannedProductCheckboxes label:hover {
+  background-color: #f0f9ff !important;
+  border-color: #38bdf8 !important;
+}
+
+
 

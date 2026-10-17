@@ -3637,6 +3637,51 @@ window.getPurposeControlsValue = function(prefix) {
   return 'Detailing';
 };
 
+// Detailing / Pitched Products Filter (Excludes 150ml products; includes Catalysis 30ml, BARD, Virulys, Rapid Tests)
+function getDetailingProducts() {
+  const allProds = Array.isArray(state.products) && state.products.length > 0 
+    ? state.products 
+    : (window.INITIAL_PRODUCTS || []);
+  
+  return allProds.filter(p => {
+    const name = String(p.name || '').toLowerCase();
+    const code = String(p.code || '').toLowerCase();
+    // Exclude all 150 ml / 150ml products
+    if (name.includes('150 ml') || name.includes('150ml')) return false;
+    if (code.endsWith('150') && !code.includes('015') && code !== 'fcv15') return false;
+    return true;
+  });
+}
+
+function renderDetailingProductCheckboxes(products, selectedList = [], accentColor = 'sky') {
+  return products.map(p => {
+    const isChecked = Array.isArray(selectedList) && (selectedList.includes(p.name) || selectedList.includes(p.code));
+    let brandBadge = '';
+    const b = (p.brand || '').toUpperCase();
+    if (b === 'BARD') {
+      brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-black bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">BARD</span>';
+    } else if (b === 'VITASIGNA') {
+      brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">VITASIGNA</span>';
+    } else if (b === 'RINGBIO' || (p.name || '').includes('Test Card')) {
+      brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-black bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">TEST</span>';
+    } else {
+      brandBadge = '<span class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-sky-500/15 text-sky-400 border border-sky-500/25 shrink-0">CATALYSIS</span>';
+    }
+
+    const accentClass = accentColor === 'amber' ? 'accent-amber-500' : 'accent-sky-500';
+
+    return `
+      <label class="flex items-center justify-between gap-1.5 p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-slate-200 text-[11px] group transition-all">
+        <div class="flex items-center gap-2 min-w-0">
+          <input type="checkbox" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} class="w-4 h-4 rounded ${accentClass} shrink-0 cursor-pointer">
+          <span class="truncate font-semibold">${escapeHtml(p.name)}</span>
+        </div>
+        ${brandBadge}
+      </label>
+    `;
+  }).join('');
+}
+
 window.openSubmitPlannedModal = function(visitId) {
   const visit = state.visits.find(v => v.id === visitId);
   if (!visit) return;
@@ -3653,20 +3698,14 @@ window.openSubmitPlannedModal = function(visitId) {
   const radio = document.querySelector(`input[name="plannedSentiment"][value="${visit.doctorSentiment || 'Enthusiastic'}"]`);
   if (radio) radio.checked = true;
 
+  const detailingProducts = getDetailingProducts();
+
   const sampleSelect = document.getElementById('plannedSampleProduct');
   sampleSelect.innerHTML = '<option value="">No sample given</option>' +
-    state.products.map(p => `<option value="${escapeHtml(p.name)}" ${p.name === visit.sampleProduct ? 'selected' : ''}>${escapeHtml(p.name)} (${p.brand})</option>`).join('');
+    detailingProducts.map(p => `<option value="${escapeHtml(p.name)}" ${p.name === visit.sampleProduct ? 'selected' : ''}>${escapeHtml(p.name)} (${p.brand})</option>`).join('');
 
   const prodContainer = document.getElementById('plannedProductCheckboxes');
-  prodContainer.innerHTML = state.products.slice(0, 18).map(p => {
-    const isChecked = Array.isArray(visit.productsDetailed) && visit.productsDetailed.includes(p.name);
-    return `
-      <label class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-slate-300 text-[11px]">
-        <input type="checkbox" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded accent-sky-500">
-        <span class="truncate">${escapeHtml(p.name)}</span>
-      </label>
-    `;
-  }).join('');
+  prodContainer.innerHTML = renderDetailingProductCheckboxes(detailingProducts, visit.productsDetailed || [], 'sky');
 
   document.getElementById('submitPlannedVisitModal').classList.remove('hidden');
   safeLucide();
@@ -3942,19 +3981,14 @@ window.openUnplannedVisitModal = function(defaultRep = null, defaultClient = nul
   document.getElementById('unplannedSampleUnits').value = 0;
   document.getElementById('unplannedOrderPlaced').checked = false;
 
+  const detailingProducts = getDetailingProducts();
+
   const sampleSelect = document.getElementById('unplannedSampleProduct');
   sampleSelect.innerHTML = '<option value="">No sample given</option>' +
-    state.products.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} (${p.brand})</option>`).join('');
+    detailingProducts.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} (${p.brand})</option>`).join('');
 
   const prodContainer = document.getElementById('unplannedProductCheckboxes');
-  prodContainer.innerHTML = state.products.slice(0, 18).map(p => {
-    return `
-      <label class="flex items-center gap-2 p-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-slate-300 text-[11px]">
-        <input type="checkbox" value="${escapeHtml(p.name)}" class="w-3.5 h-3.5 rounded accent-amber-500">
-        <span class="truncate">${escapeHtml(p.name)}</span>
-      </label>
-    `;
-  }).join('');
+  prodContainer.innerHTML = renderDetailingProductCheckboxes(detailingProducts, [], 'amber');
 
   document.getElementById('addUnplannedVisitModal').classList.remove('hidden');
   safeLucide();

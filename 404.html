@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.5.0">
+  <link rel="stylesheet" href="./styles.css?v=3.6.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -1581,8 +1581,11 @@
 
         <!-- Products Pitched Checkboxes -->
         <div>
-          <label class="block text-slate-400 mb-1.5 font-semibold">Products Pitched & Detailed (Select applicable)</label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800 max-h-36 overflow-y-auto" id="plannedProductCheckboxes">
+          <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+            <label class="block text-slate-400 font-semibold">Products Pitched &amp; Detailed (Select applicable)</label>
+            <span class="text-[10px] text-sky-400/90 font-medium">Catalysis 30ml • BARD • Virulys • Rapid Tests</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800 max-h-56 overflow-y-auto" id="plannedProductCheckboxes">
             <!-- Injected via JS -->
           </div>
         </div>
@@ -1820,8 +1823,11 @@
 
         <!-- Detailing Products -->
         <div>
-          <label class="block text-slate-400 mb-1.5 font-semibold">Products Pitched / Detailed (Select applicable)</label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800 max-h-36 overflow-y-auto" id="unplannedProductCheckboxes">
+          <div class="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+            <label class="block text-slate-400 font-semibold">Products Pitched / Detailed (Select applicable)</label>
+            <span class="text-[10px] text-amber-400/90 font-medium">Catalysis 30ml • BARD • Virulys • Rapid Tests</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-slate-900/60 p-3 rounded-xl border border-slate-800 max-h-56 overflow-y-auto" id="unplannedProductCheckboxes">
             <!-- Injected via JS -->
           </div>
         </div>
@@ -3493,7 +3499,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.5.0"></script>
-  <script src="./crm_app.js?v=3.5.0"></script>
+  <script src="./crm_data.js?v=3.6.0"></script>
+  <script src="./crm_app.js?v=3.6.0"></script>
 </body>
 </html>
