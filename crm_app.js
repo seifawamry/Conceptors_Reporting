@@ -1181,16 +1181,25 @@ window.toggleTheme = function() {
 function updateThemeButtonUI(theme) {
   const icon = document.getElementById('themeIcon');
   const label = document.getElementById('themeLabel');
+  const stripIcon = document.getElementById('mobileStripThemeIcon');
   if (theme === 'light') {
     if (icon) {
       icon.setAttribute('data-lucide', 'moon');
       icon.className = 'w-4 h-4 text-indigo-500';
+    }
+    if (stripIcon) {
+      stripIcon.setAttribute('data-lucide', 'moon');
+      stripIcon.className = 'w-4 h-4 text-indigo-500';
     }
     if (label) label.textContent = 'Dark Screen';
   } else {
     if (icon) {
       icon.setAttribute('data-lucide', 'sun');
       icon.className = 'w-4 h-4 text-amber-400';
+    }
+    if (stripIcon) {
+      stripIcon.setAttribute('data-lucide', 'sun');
+      stripIcon.className = 'w-4 h-4 text-amber-400';
     }
     if (label) label.textContent = 'Bright Screen';
   }
@@ -1411,6 +1420,38 @@ function updateUserProfileDisplay() {
     } else {
       rolePill.textContent = 'Senior Sales Manager';
       rolePill.className = 'text-[9px] text-emerald-400 font-bold uppercase';
+    }
+  }
+
+  // Synchronize Mobile Rep Command Strip Display (< md screens)
+  const stripAvatar = document.getElementById('mobileStripAvatar');
+  const stripName = document.getElementById('mobileStripName');
+  const stripRole = document.getElementById('mobileStripRole');
+  if (stripAvatar) stripAvatar.textContent = state.currentUser.avatar || 'US';
+  if (stripName) stripName.textContent = state.currentUser.name;
+  if (stripRole) {
+    if (state.currentUser.role === 'rep_t1') {
+      stripRole.textContent = 'Rep T1 (DXB / AUH / Al Ain)';
+    } else if (state.currentUser.role === 'rep_t2') {
+      stripRole.textContent = 'Rep T2 (Northern Emirates)';
+    } else {
+      stripRole.textContent = 'Senior Sales Manager';
+    }
+  }
+
+  // Synchronize Mobile More Drawer User Banner
+  const drawerAvatar = document.getElementById('mobileDrawerAvatar');
+  const drawerName = document.getElementById('mobileDrawerName');
+  const drawerRole = document.getElementById('mobileDrawerRole');
+  if (drawerAvatar) drawerAvatar.textContent = state.currentUser.avatar || 'US';
+  if (drawerName) drawerName.textContent = state.currentUser.name;
+  if (drawerRole) {
+    if (state.currentUser.role === 'rep_t1') {
+      drawerRole.textContent = 'Rep T1 (DXB / AUH / Al Ain)';
+    } else if (state.currentUser.role === 'rep_t2') {
+      drawerRole.textContent = 'Rep T2 (Northern Emirates)';
+    } else {
+      drawerRole.textContent = 'Senior Sales Manager';
     }
   }
 
@@ -6047,14 +6088,27 @@ window.handleOrderSubmit = function(e) {
 
 function updateNotificationBell() {
   const badge = document.getElementById('notificationBadge');
-  const unreadCount = state.notifications.filter(n => !n.read).length;
+  const mobileStripBadge = document.getElementById('mobileStripNotificationBadge');
+  const mobileDrawerBadge = document.getElementById('mobileDrawerNotificationBadge');
+  const mobileBottomMoreBadge = document.getElementById('mobileBottomMoreBadge');
+  const unreadCount = (state.notifications || []).filter(n => !n.read).length;
 
-  if (badge) {
-    badge.textContent = unreadCount;
+  [badge, mobileStripBadge, mobileDrawerBadge].forEach(b => {
+    if (b) {
+      b.textContent = unreadCount;
+      if (unreadCount > 0) {
+        b.classList.remove('hidden');
+      } else {
+        b.classList.add('hidden');
+      }
+    }
+  });
+
+  if (mobileBottomMoreBadge) {
     if (unreadCount > 0) {
-      badge.classList.remove('hidden');
+      mobileBottomMoreBadge.classList.remove('hidden');
     } else {
-      badge.classList.add('hidden');
+      mobileBottomMoreBadge.classList.add('hidden');
     }
   }
 }

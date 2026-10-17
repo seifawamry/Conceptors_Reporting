@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.8.0">
+  <link rel="stylesheet" href="./styles.css?v=3.9.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -99,53 +99,53 @@
         </div>
 
         <!-- Header Actions & Controls -->
-        <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <!-- Live UAE Time & Timezone Sync Pill (hidden on small phones) -->
           <div id="uaeTimezonePill" class="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm" title="Synchronized with UAE Standard Time (GST, UTC+4)">
             <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
             <span id="uaeLiveClock" class="font-mono text-emerald-300">UAE --:-- GST</span>
           </div>
 
-          <!-- Cloud Sync Badge (compact on mobile, full on sm+) -->
-          <div id="cloudSyncBadge" class="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0 touch-manipulation" onclick="openCloudSyncModal()" title="Cloud Synchronization Status">
+          <!-- Cloud Sync Badge (Always visible on mobile & desktop) -->
+          <div id="cloudSyncBadge" class="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] font-semibold text-slate-300 shadow-sm cursor-pointer hover:border-emerald-500/50 transition-colors shrink-0 touch-manipulation" onclick="openCloudSyncModal()" title="Cloud Synchronization Status">
             <span id="cloudSyncDot" class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-            <span id="cloudSyncText" class="font-mono text-emerald-300 text-[10px] sm:text-xs hidden sm:inline">⚡ Synced</span>
+            <span id="cloudSyncText" class="font-mono text-emerald-300 text-[10px] sm:text-xs">⚡ Synced</span>
           </div>
 
-          <!-- Central Export Data Button (hidden on phone, available in bottom More drawer) -->
-          <button type="button" onclick="openExportCenterModal()" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 hover:text-white text-[11px] sm:text-xs font-bold transition-all shadow-sm touch-manipulation" title="Export Reports, Planning & Orders Data (CSV / Excel)">
+          <!-- Central Export Data Button (Desktop/Tablet only; reachable on mobile via Command Strip & More Drawer) -->
+          <button type="button" onclick="openExportCenterModal()" class="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 hover:text-white text-[11px] sm:text-xs font-bold transition-all shadow-sm touch-manipulation" title="Export Reports, Planning & Orders Data (CSV / Excel)">
             <i data-lucide="download" class="w-3.5 h-3.5 text-emerald-400"></i>
-            <span class="hidden md:inline">Export Data</span>
+            <span>Export Data</span>
           </button>
 
-          <!-- Theme Toggle Button (Bright / Dark Mode) (Desktop/Tablet) -->
+          <!-- Theme Toggle Button (Bright / Dark Mode) (Desktop/Tablet only; reachable on mobile via Command Strip & More Drawer) -->
           <button id="btnThemeToggle" type="button" onclick="toggleTheme()" class="hidden md:flex px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-all text-xs font-bold items-center gap-1.5 shadow-sm touch-manipulation" title="Toggle Bright / Dark Screen Mode">
             <i id="themeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
             <span id="themeLabel" class="hidden lg:inline">Bright Screen</span>
           </button>
 
-          <!-- Senior Manager Order Notifications Bell -->
-          <button type="button" onclick="openNotificationsModal()" class="relative p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm touch-manipulation shrink-0" title="Order Notifications & Alerts">
+          <!-- Senior Manager Order Notifications Bell (Desktop/Tablet only; reachable on mobile via Command Strip & More Drawer) -->
+          <button type="button" onclick="openNotificationsModal()" class="hidden md:flex relative p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-all shadow-sm touch-manipulation shrink-0" title="Order Notifications & Alerts">
             <i data-lucide="bell" class="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400"></i>
             <span id="notificationBadge" class="absolute -top-1 -right-1 px-1 min-w-[16px] text-[9px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">0</span>
           </button>
 
           <!-- Quick Action: + Unplanned Visit Today -->
-          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Add Unplanned Visit for Today">
+          <button type="button" onclick="openUnplannedVisitModal()" class="flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 text-white font-bold text-xs px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl shadow-md shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Add Unplanned Visit for Today">
             <i data-lucide="zap" class="w-3.5 h-3.5 text-yellow-200 shrink-0"></i>
             <span class="hidden sm:inline">⚡ + Unplanned Visit</span>
             <span class="sm:hidden text-[10px] font-extrabold">Visit</span>
           </button>
 
           <!-- Quick Action: New Field Order -->
-          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-2 sm:px-3.5 py-1.5 sm:py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Book New Field Order">
+          <button type="button" onclick="openOrderModal()" class="flex items-center gap-1 bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl shadow-md shadow-brand-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap touch-manipulation shrink-0" title="Book New Field Order">
             <i data-lucide="plus-circle" class="w-3.5 h-3.5 shrink-0"></i>
             <span class="hidden sm:inline">New Order</span>
             <span class="sm:hidden text-[10px] font-extrabold">Order</span>
           </button>
 
-          <!-- Authenticated User Profile Badge & Fast Switcher (Accessible across Desktop, Tablet & Mobile) -->
-          <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <!-- Authenticated User Profile Badge & Fast Switcher (Desktop/Tablet only; reachable on mobile via Command Strip & More Drawer) -->
+          <div class="hidden md:flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button type="button" onclick="openProfileSwitcherModal()" id="userProfileWidget" class="flex items-center gap-1 sm:gap-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl p-1 sm:px-2 sm:py-1 text-xs shadow-inner transition-all hover:border-sky-500/40 active:scale-95 touch-manipulation cursor-pointer" title="Click to Switch Profile or Log Out">
               <div id="userAvatarBadge" class="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-[10px] sm:text-xs border border-sky-500/30 shrink-0">SH</div>
               <div class="text-left hidden sm:block max-w-[80px] sm:max-w-[110px]">
@@ -154,7 +154,7 @@
               </div>
               <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400 shrink-0 hidden sm:block"></i>
             </button>
-            <button type="button" onclick="handleLogout()" class="hidden sm:flex p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors touch-manipulation" title="Log Out & Lock CRM">
+            <button type="button" onclick="handleLogout()" class="flex p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors touch-manipulation" title="Log Out & Lock CRM">
               <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
             </button>
           </div>
@@ -211,7 +211,49 @@
   </header>
 
   <!-- ================= MAIN CONTENT CONTAINER ================= -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-6 pb-24 md:pb-8 space-y-6">
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-8 space-y-4 sm:space-y-6">
+
+    <!-- ================= MOBILE REP COMMAND STRIP (< md screens only) ================= -->
+    <!-- Ensures User Profile, Switcher, Notifications, Export, Theme & Sign Out are 1-tap reachable on mobile -->
+    <div id="mobileRepCommandStrip" class="block md:hidden glass-panel bg-[#0c1322]/95 border border-slate-800 rounded-2xl p-2.5 shadow-lg">
+      <div class="flex items-center justify-between gap-2">
+        <!-- 1-Tap Current Rep Profile Chip & Switcher -->
+        <button type="button" onclick="openProfileSwitcherModal()" class="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 active:scale-95 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-left transition-all touch-manipulation min-w-0 flex-1" title="Click to Switch Rep Profile or View Settings">
+          <div id="mobileStripAvatar" class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 font-extrabold flex items-center justify-center text-xs border border-sky-500/30 shrink-0">SH</div>
+          <div class="min-w-0 truncate">
+            <div class="flex items-center gap-1.5">
+              <span id="mobileStripName" class="font-bold text-white text-xs truncate">Shaimaa</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold border border-sky-500/30">Switch</span>
+            </div>
+            <div id="mobileStripRole" class="text-[9px] text-slate-400 font-medium truncate">Rep T1 (DXB/AUH)</div>
+          </div>
+        </button>
+
+        <!-- Reachable Mobile Action Icons: Notifications, Export Data, Theme, Sign Out -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <!-- Live Notifications Bell -->
+          <button type="button" onclick="openNotificationsModal()" class="relative p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 transition-all touch-manipulation" title="Order Notifications & Alerts">
+            <i data-lucide="bell" class="w-4 h-4 text-amber-400"></i>
+            <span id="mobileStripNotificationBadge" class="hidden absolute -top-1 -right-1 px-1 min-w-[16px] text-[9px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center shadow-lg shadow-rose-500/50">0</span>
+          </button>
+
+          <!-- Export Center Button -->
+          <button type="button" onclick="openExportCenterModal('period')" class="p-2 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 active:scale-95 border border-emerald-500/30 text-emerald-300 transition-all touch-manipulation" title="Export Reports, Planning & Orders Data">
+            <i data-lucide="download" class="w-4 h-4 text-emerald-400"></i>
+          </button>
+
+          <!-- Theme Toggle (Bright / Dark) -->
+          <button type="button" onclick="toggleTheme()" class="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-300 transition-all touch-manipulation" title="Toggle Bright / Dark Screen Mode">
+            <i id="mobileStripThemeIcon" data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
+          </button>
+
+          <!-- Direct Sign Out -->
+          <button type="button" onclick="handleLogout()" class="p-2 rounded-xl bg-slate-800/90 hover:bg-rose-950/50 active:scale-95 border border-slate-700 hover:border-rose-500/40 text-slate-400 hover:text-rose-400 transition-all touch-manipulation" title="Log Out & Lock CRM">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- ================= TAB 1: DAILY VISITS & TODAY'S CALL SHEET ================= -->
     <div id="tab-daily" class="tab-content space-y-6">
@@ -1341,9 +1383,10 @@
       <i data-lucide="shield-check" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">Manager</span>
     </button>
-    <button type="button" onclick="toggleMobileMoreDrawer()" id="mobileNavBtn-more" class="mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
+    <button type="button" onclick="toggleMobileMoreDrawer()" id="mobileNavBtn-more" class="relative mobile-nav-btn w-full flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl text-slate-400 font-bold transition-all active:scale-95">
       <i data-lucide="menu" class="w-5 h-5 mb-0.5 pointer-events-none"></i>
       <span class="text-[10px] tracking-tight leading-none pointer-events-none">More</span>
+      <span id="mobileBottomMoreBadge" class="hidden absolute top-1 right-2.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-slate-900 animate-pulse"></span>
     </button>
   </nav>
 
@@ -1396,6 +1439,21 @@
 
       <!-- Quick Action Navigation Grid -->
       <div class="grid grid-cols-2 gap-2.5 text-xs font-bold">
+        <!-- Live Order Notifications & Alerts Button (Featured) -->
+        <button type="button" onclick="closeMobileMoreDrawer(); openNotificationsModal();" class="col-span-2 p-3 rounded-2xl bg-gradient-to-r from-amber-950/60 to-orange-950/60 border border-amber-500/40 text-amber-300 hover:text-white flex items-center justify-between transition-all active:scale-[0.98] shadow-md">
+          <div class="flex items-center gap-2.5">
+            <div class="relative p-2 rounded-xl bg-amber-500/20 text-amber-400">
+              <i data-lucide="bell" class="w-5 h-5"></i>
+              <span id="mobileDrawerNotificationBadge" class="hidden absolute -top-1 -right-1 px-1 min-w-[16px] text-[9px] font-black bg-rose-500 text-white rounded-full inline-flex items-center justify-center">0</span>
+            </div>
+            <div class="text-left">
+              <div class="font-black text-white text-xs">🔔 Order Notifications & Alerts</div>
+              <div class="text-[10px] text-amber-300/80 font-normal">Live field order logs, rep dispatch alerts & updates</div>
+            </div>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-amber-400"></i>
+        </button>
+
         <!-- Central Export Data & Weekly Meeting Report (Featured) -->
         <button type="button" onclick="closeMobileMoreDrawer(); openExportCenterModal('period');" class="col-span-2 p-3 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/60 border border-emerald-500/40 text-emerald-300 hover:text-white flex items-center justify-between transition-all active:scale-[0.98] shadow-md">
           <div class="flex items-center gap-2.5">
@@ -3484,7 +3542,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.8.0"></script>
-  <script src="./crm_app.js?v=3.8.0"></script>
+  <script src="./crm_data.js?v=3.9.0"></script>
+  <script src="./crm_app.js?v=3.9.0"></script>
 </body>
 </html>

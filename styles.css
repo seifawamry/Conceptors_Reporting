@@ -2417,5 +2417,49 @@ html:not(.dark) #unplannedProductCheckboxes label:hover {
   border-color: #38bdf8 !important;
 }
 
+/* ================= MOBILE REP COMMAND STRIP & MOBILE HEADER POLISH ================= */
+#mobileRepCommandStrip {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
+}
+
+html:not(.dark) #mobileRepCommandStrip {
+  background-color: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 6px 20px -3px rgba(15, 23, 42, 0.08) !important;
+}
+
+html:not(.dark) #mobileRepCommandStrip button {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #mobileRepCommandStrip button:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html:not(.dark) #mobileStripName {
+  color: #0f172a !important;
+}
+
+html:not(.dark) #mobileStripRole {
+  color: #475569 !important;
+}
+
+html:not(.dark) #cloudSyncBadge {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+html:not(.dark) #cloudSyncText {
+  color: #059669 !important;
+}
+
+@media (max-width: 639px) {
+  #cloudSyncBadge {
+    padding: 4px 8px !important;
+  }
+}
+
 
 
