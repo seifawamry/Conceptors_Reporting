@@ -1455,6 +1455,35 @@ function updateUserProfileDisplay() {
     }
   }
 
+  // Synchronize Desktop Rep & Executive Command Cockpit (>= md screens)
+  const desktopAvatar = document.getElementById('desktopStripAvatar');
+  const desktopName = document.getElementById('desktopStripName');
+  const desktopRole = document.getElementById('desktopStripRole');
+  if (desktopAvatar) desktopAvatar.textContent = state.currentUser.avatar || 'US';
+  if (desktopName) desktopName.textContent = state.currentUser.name;
+  if (desktopRole) {
+    if (state.currentUser.role === 'rep_t1') {
+      desktopRole.textContent = 'Rep T1 (DXB/AUH)';
+      desktopRole.className = 'text-[9px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold uppercase';
+    } else if (state.currentUser.role === 'rep_t2') {
+      desktopRole.textContent = 'Rep T2 (Northern Emirates)';
+      desktopRole.className = 'text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold uppercase';
+    } else {
+      desktopRole.textContent = 'Senior Sales Manager';
+      desktopRole.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase';
+    }
+  }
+
+  const desktopAddClinicBtn = document.getElementById('desktopStripAddClinicBtn');
+  const desktopManagerSection = document.getElementById('desktopStripManagerSection');
+  if (state.currentUser && state.currentUser.role === 'manager') {
+    if (desktopAddClinicBtn) desktopAddClinicBtn.classList.remove('hidden');
+    if (desktopManagerSection) desktopManagerSection.classList.remove('hidden');
+  } else {
+    if (desktopAddClinicBtn) desktopAddClinicBtn.classList.add('hidden');
+    if (desktopManagerSection) desktopManagerSection.classList.add('hidden');
+  }
+
   // Hide or Show Senior Manager Tab, Mobile Bottom Nav Manager Button & Executive Quick Bars based on role
   const managerTabBtn = document.getElementById('tabBtn-manager');
   const mobileManagerBtn = document.getElementById('mobileNavBtn-manager');
