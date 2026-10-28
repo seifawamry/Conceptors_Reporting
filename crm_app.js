@@ -6177,17 +6177,18 @@ function renderManagerNotifications() {
     if (isAccountEvent) {
       const isFrozen = n.type === 'ACCOUNT_FROZEN';
       const isUnfrozen = n.type === 'ACCOUNT_UNFROZEN';
-      const iconName = isFrozen ? 'snowflake' : (isUnfrozen ? 'flame' : 'building-2');
+      const isUpdated = n.type === 'ACCOUNT_UPDATED';
+      const iconName = isFrozen ? 'snowflake' : (isUnfrozen ? 'flame' : (isUpdated ? 'edit-3' : 'building-2'));
       const iconStyle = isFrozen
         ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-teal-500/20 text-teal-300 border-teal-500/40');
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : (isUpdated ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' : 'bg-teal-500/20 text-teal-300 border-teal-500/40'));
       const badgeStyle = isFrozen
         ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
-        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
-      const badgeText = isFrozen ? '❄️ Account Frozen' : (isUnfrozen ? '🔥 Reactivated' : '✨ New Clinic Added');
+        : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : (isUpdated ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30'));
+      const badgeText = isFrozen ? '❄️ Account Frozen' : (isUnfrozen ? '🔥 Reactivated' : (isUpdated ? '✏️ Account Updated' : '✨ New Clinic Added'));
 
       return `
-        <div class="glass-card rounded-xl p-4 border ${isUnread ? (isFrozen ? 'border-cyan-500/50 bg-cyan-950/20' : 'border-teal-500/50 bg-teal-950/20') : 'border-slate-800 bg-slate-900/60'} relative transition-all">
+        <div class="glass-card rounded-xl p-4 border ${isUnread ? (isFrozen ? 'border-cyan-500/50 bg-cyan-950/20' : (isUpdated ? 'border-indigo-500/50 bg-indigo-950/20' : 'border-teal-500/50 bg-teal-950/20')) : 'border-slate-800 bg-slate-900/60'} relative transition-all">
           <div class="flex items-start justify-between gap-3">
             <div class="flex items-start gap-3">
               <div class="w-9 h-9 rounded-xl ${iconStyle} flex items-center justify-center shrink-0 border">
@@ -6224,8 +6225,13 @@ function renderManagerNotifications() {
 
             <div class="flex items-center gap-1.5">
               <button onclick="goToAccountInCRM('${n.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[11px] font-bold flex items-center gap-1">
-                <i data-lucide="building-2" class="w-3 h-3"></i> View in Accounts CRM
+                <i data-lucide="building-2" class="w-3 h-3"></i> View in CRM
               </button>
+              ${state.currentUser && state.currentUser.role === 'manager' && n.clientCode ? `
+                <button onclick="openEditAccountModal('${n.clientCode}')" class="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold flex items-center gap-1" title="Edit this account">
+                  <i data-lucide="edit-3" class="w-3 h-3"></i> Edit Clinic
+                </button>
+              ` : ''}
               ${isUnread ? `
                 <button onclick="markNotificationReadDirect('${n.id}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold">
                   Acknowledge
@@ -7050,9 +7056,14 @@ function renderAccountsGrid() {
           ${isFrozen ? `
             <span class="text-[11px] text-slate-500 font-semibold">Account Inactive (Frozen)</span>
             ${state.currentUser && state.currentUser.role === 'manager' ? `
-              <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
-                <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze Account
-              </button>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="openEditAccountModal('${c.code}')" class="px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1 transition-colors shadow-sm" title="Edit account data and code">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5 text-indigo-400"></i> Edit
+                </button>
+                <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors shadow-sm" title="Reactivate this clinic account">
+                  <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Unfreeze
+                </button>
+              </div>
             ` : '<span class="text-[10px] text-cyan-400 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/60">Manager Controlled</span>'}
           ` : `
             <div class="flex items-center gap-1.5">
@@ -7064,9 +7075,14 @@ function renderAccountsGrid() {
               </button>
             </div>
             ${state.currentUser && state.currentUser.role === 'manager' ? `
-              <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
-                <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
-              </button>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="openEditAccountModal('${c.code}')" class="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Edit account data and code">
+                  <i data-lucide="edit-3" class="w-3 h-3 text-indigo-400"></i> Edit
+                </button>
+                <button type="button" onclick="toggleAccountFreeze('${c.code}')" class="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-cyan-950/40 text-slate-400 hover:text-cyan-300 border border-slate-700/80 hover:border-cyan-500/40 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Freeze this account">
+                  <i data-lucide="snowflake" class="w-3 h-3 text-cyan-400"></i> Freeze
+                </button>
+              </div>
             ` : ''}
           `}
         </div>
@@ -7352,6 +7368,309 @@ window.toggleAccountFreeze = async function(clientCode) {
   renderAccountsGrid();
   renderManagerNotifications();
   renderManagerHub();
+};
+
+// =========================================================================
+// 14C. SENIOR MANAGER ACCOUNT EDIT & RESO-SYNC ENGINE (BACKEND & FRONTEND)
+// =========================================================================
+
+window.openEditAccountModal = function(clientCode) {
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to edit clinic account details.', 'error');
+    return;
+  }
+
+  const modal = document.getElementById('editAccountModal');
+  if (!modal) {
+    console.error('editAccountModal not found in DOM');
+    return;
+  }
+
+  const cust = (state.customers || []).find(c => c && c.code && c.code.toUpperCase() === String(clientCode).toUpperCase());
+  if (!cust) {
+    showToast('Account Not Found', `Unable to find clinic record with code "${clientCode}".`, 'warning');
+    return;
+  }
+
+  const origCodeInput = document.getElementById('editAccountOriginalCode');
+  const codeInput = document.getElementById('editAccountCode');
+  const nameInput = document.getElementById('editAccountName');
+  const tierSelect = document.getElementById('editAccountTier');
+  const terrSelect = document.getElementById('editAccountTerritory');
+  const locSelect = document.getElementById('editAccountLocation');
+  const statusSelect = document.getElementById('editAccountStatus');
+  const docInput = document.getElementById('editAccountDoctor');
+  const phoneInput = document.getElementById('editAccountPhone');
+  const addrInput = document.getElementById('editAccountAddress');
+  const notesInput = document.getElementById('editAccountNotes');
+
+  if (origCodeInput) origCodeInput.value = cust.code || '';
+  if (codeInput) codeInput.value = cust.code || '';
+  if (nameInput) nameInput.value = cust.name || '';
+  if (tierSelect) tierSelect.value = cust.tier || 'Silver';
+  if (terrSelect) terrSelect.value = cust.territory || cust.repId || 'T1';
+  if (locSelect) locSelect.value = cust.location || 'Dubai';
+  if (statusSelect) statusSelect.value = (cust.isActive !== false) ? 'ACTIVE' : 'FROZEN';
+  if (docInput) docInput.value = cust.contactPerson || '';
+  if (phoneInput) phoneInput.value = cust.phone || '';
+  if (addrInput) addrInput.value = cust.address || '';
+  if (notesInput) notesInput.value = cust.notes || '';
+
+  modal.style.display = 'flex';
+  modal.classList.remove('hidden');
+  safeLucide();
+};
+
+window.closeEditAccountModal = function() {
+  const modal = document.getElementById('editAccountModal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+  }
+};
+
+window.handleEditAccountSubmit = async function(e) {
+  if (e && e.preventDefault) e.preventDefault();
+
+  if (!state.currentUser || state.currentUser.role !== 'manager') {
+    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to edit clinic account details.', 'error');
+    return;
+  }
+
+  const saveBtn = document.getElementById('btnSaveEditAccount');
+  const origBtnHtml = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Resonating Changes...';
+    safeLucide();
+  }
+
+  try {
+    const origCodeInput = document.getElementById('editAccountOriginalCode');
+    const codeInput = document.getElementById('editAccountCode');
+    const nameInput = document.getElementById('editAccountName');
+    const tierSelect = document.getElementById('editAccountTier');
+    const terrSelect = document.getElementById('editAccountTerritory');
+    const locSelect = document.getElementById('editAccountLocation');
+    const statusSelect = document.getElementById('editAccountStatus');
+    const docInput = document.getElementById('editAccountDoctor');
+    const phoneInput = document.getElementById('editAccountPhone');
+    const addrInput = document.getElementById('editAccountAddress');
+    const notesInput = document.getElementById('editAccountNotes');
+
+    const origCode = (origCodeInput?.value || '').trim().toUpperCase();
+    const newCode = (codeInput?.value || '').trim().toUpperCase();
+    const name = (nameInput?.value || '').trim();
+    const tier = tierSelect?.value || 'Silver';
+    const territory = terrSelect?.value || 'T1';
+    const location = locSelect?.value || 'Dubai';
+    const status = statusSelect?.value || 'ACTIVE';
+    const isActive = (status === 'ACTIVE');
+    const contactPerson = (docInput?.value || '').trim();
+    const phone = (phoneInput?.value || '').trim();
+    const address = (addrInput?.value || '').trim();
+    const notes = (notesInput?.value || '').trim();
+
+    if (!newCode || !name) {
+      showToast('Missing Details', 'Account Code and Clinic Name are mandatory fields.', 'warning');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origBtnHtml; safeLucide(); }
+      return;
+    }
+
+    // Check code uniqueness if changed
+    const codeChanged = (origCode !== newCode);
+    if (codeChanged) {
+      const collision = (state.customers || []).find(c => c && c.code && c.code.toUpperCase() === newCode && c.code.toUpperCase() !== origCode);
+      if (collision) {
+        showToast('Duplicate Code', `Code "${newCode}" is already assigned to ${collision.name}. Please select a unique code.`, 'warning');
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origBtnHtml; safeLucide(); }
+        return;
+      }
+    }
+
+    const custIndex = (state.customers || []).findIndex(c => c && c.code && c.code.toUpperCase() === origCode);
+    if (custIndex === -1) {
+      showToast('Account Not Found', `Unable to find original account "${origCode}".`, 'error');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = origBtnHtml; safeLucide(); }
+      return;
+    }
+
+    const oldCust = state.customers[custIndex];
+    const nameChanged = (oldCust.name !== name);
+    const locationChanged = (oldCust.location !== location);
+    const statusChanged = (oldCust.isActive !== isActive);
+
+    // Build updated customer object
+    const updatedCust = {
+      ...oldCust,
+      code: newCode,
+      name: name,
+      location: location,
+      territory: territory,
+      repId: territory,
+      tier: tier,
+      contactPerson: contactPerson || 'Lead Veterinarian',
+      phone: phone,
+      address: address,
+      notes: notes,
+      isActive: isActive
+    };
+
+    // 1. Update customer in local state
+    state.customers[custIndex] = updatedCust;
+
+    // 2. Cascade code/name/location updates across local state.visits
+    let visitsUpdatedCount = 0;
+    (state.visits || []).forEach(v => {
+      if (v && v.clientCode && v.clientCode.toUpperCase() === origCode) {
+        if (codeChanged) v.clientCode = newCode;
+        if (nameChanged) v.clientName = name;
+        if (locationChanged) v.location = location;
+        visitsUpdatedCount++;
+      }
+    });
+
+    // 3. Cascade code/name/location updates across local state.orders
+    let ordersUpdatedCount = 0;
+    (state.orders || []).forEach(o => {
+      const oCode = (o.clientCode || o.accountCode || '').toUpperCase();
+      if (oCode === origCode) {
+        if (codeChanged) {
+          o.clientCode = newCode;
+          if (o.accountCode) o.accountCode = newCode;
+        }
+        if (nameChanged) o.clientName = name;
+        if (locationChanged) o.location = location;
+        ordersUpdatedCount++;
+      }
+    });
+
+    // 4. Save state to localStorage immediately
+    persistData();
+
+    // 5. Cloud Write-Through to Supabase Backend
+    try {
+      if (!codeChanged) {
+        // Direct PATCH to customer row
+        await supabaseRest(`customers?code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'PATCH',
+          body: mapCustomerToDb(updatedCust)
+        });
+      } else {
+        // Renaming account code:
+        // A. Insert new customer row with new code
+        await supabaseRest('customers', {
+          method: 'POST',
+          prefer: 'resolution=merge-duplicates',
+          body: mapCustomerToDb(updatedCust)
+        });
+
+        // B. Cascade update visits in Supabase
+        await supabaseRest(`visits?client_code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'PATCH',
+          body: {
+            client_code: newCode,
+            client_name: name,
+            location: location
+          }
+        });
+
+        // C. Cascade update orders in Supabase
+        await supabaseRest(`orders?client_code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'PATCH',
+          body: {
+            client_code: newCode,
+            client_name: name,
+            location: location
+          }
+        });
+
+        // D. Delete obsolete old customer row
+        await supabaseRest(`customers?code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'DELETE'
+        });
+      }
+
+      // If code didn't change but name or location changed, cascade to visits & orders in Supabase
+      if (!codeChanged && (nameChanged || locationChanged)) {
+        await supabaseRest(`visits?client_code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'PATCH',
+          body: {
+            client_name: name,
+            location: location
+          }
+        });
+        await supabaseRest(`orders?client_code=eq.${encodeURIComponent(origCode)}`, {
+          method: 'PATCH',
+          body: {
+            client_name: name,
+            location: location
+          }
+        });
+      }
+
+      updateCloudSyncBadge('connected', '✓ Cloud Synced');
+    } catch (cloudErr) {
+      console.warn('Customer Supabase cloud resonation warning:', cloudErr);
+    }
+
+    // 6. Generate real-time Senior Manager Audit Alert in Notifications
+    const repName = state.currentUser ? (state.currentUser.name || 'Dr. Sameh Ageez (Senior Sales Manager)') : 'Dr. Sameh Ageez';
+    const notif = {
+      id: `NOTIF-ACC-EDIT-${Date.now()}`,
+      type: 'ACCOUNT_UPDATED',
+      title: `Account Data Amended: ${updatedCust.name}`,
+      orderNumber: updatedCust.code,
+      repId: updatedCust.territory,
+      repName: repName,
+      clientCode: updatedCust.code,
+      clientName: updatedCust.name,
+      location: updatedCust.location,
+      timestamp: new Date().toISOString(),
+      read: false,
+      approvalStatus: updatedCust.isActive ? 'Active' : 'Frozen',
+      itemsSummary: `Account details updated by Senior Sales Manager. Code: ${updatedCust.code} (${codeChanged ? 'renamed from ' + origCode : 'unchanged'}), Tier: ${updatedCust.tier}, Status: ${updatedCust.isActive ? 'Active' : 'Frozen'}. Doctor: ${updatedCust.contactPerson || 'Lead Vet'}. Tel: ${updatedCust.phone || 'N/A'}. (Cascaded to ${visitsUpdatedCount} visits & ${ordersUpdatedCount} orders).`
+    };
+
+    state.notifications.unshift(notif);
+    persistData();
+
+    try {
+      await supabaseRest('notifications', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates',
+        body: mapNotifToDb(notif)
+      });
+    } catch (notifErr) {
+      console.warn('Notification sync warning:', notifErr);
+    }
+
+    if (state.managerSettings && state.managerSettings.soundAlert && typeof playNotificationChime === 'function') {
+      playNotificationChime();
+    }
+
+    showToast(
+      '✨ Account Data Updated & Synced',
+      `Changes to "${updatedCust.name}" (${updatedCust.code}) have resonated across local storage and the Supabase backend.`,
+      'success'
+    );
+
+    closeEditAccountModal();
+    updateNotificationBell();
+    renderAccountsGrid();
+    renderManagerNotifications();
+    renderManagerHub();
+    renderAll();
+  } catch (ex) {
+    console.error('Error submitting edit account form:', ex);
+    showToast('Amendment Error', ex.message, 'error');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = origBtnHtml;
+      safeLucide();
+    }
+  }
 };
 
 window.goToAccountInCRM = function(clientCode) {
@@ -8293,8 +8612,9 @@ function renderManagerHub() {
       accountsContainer.innerHTML = accountAlerts.slice(0, 8).map(a => {
         const isFrozen = a.type === 'ACCOUNT_FROZEN';
         const isUnfrozen = a.type === 'ACCOUNT_UNFROZEN';
-        const badgeColor = isFrozen ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30');
-        const badgeLabel = isFrozen ? '❄️ Frozen' : (isUnfrozen ? '🔥 Active' : '✨ Added');
+        const isUpdated = a.type === 'ACCOUNT_UPDATED';
+        const badgeColor = isFrozen ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' : (isUnfrozen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : (isUpdated ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30'));
+        const badgeLabel = isFrozen ? '❄️ Frozen' : (isUnfrozen ? '🔥 Active' : (isUpdated ? '✏️ Updated' : '✨ Added'));
 
         return `
           <div class="glass-card rounded-xl p-3 border border-slate-800 flex items-center justify-between">
@@ -8306,9 +8626,16 @@ function renderManagerHub() {
               </div>
               <p class="text-[10px] text-slate-400 mt-0.5 font-mono">${a.clientCode || ''} • ${escapeHtml(a.location || 'UAE')} • By ${escapeHtml(a.repName)}</p>
             </div>
-            <button onclick="goToAccountInCRM('${a.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[10px] font-bold shrink-0">
-              View
-            </button>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button onclick="goToAccountInCRM('${a.clientCode}')" class="px-2.5 py-1 rounded-lg bg-teal-600/20 hover:bg-teal-600/30 text-teal-300 border border-teal-500/30 text-[10px] font-bold">
+                View
+              </button>
+              ${state.currentUser && state.currentUser.role === 'manager' && a.clientCode ? `
+                <button onclick="openEditAccountModal('${a.clientCode}')" class="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold" title="Edit this account">
+                  Edit
+                </button>
+              ` : ''}
+            </div>
           </div>
         `;
       }).join('');

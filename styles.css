@@ -1284,7 +1284,9 @@ html:not(.dark) #managerSettingsModal input[type="tel"] {
 /* Submit & Amend Planned Visit Modals in Bright Mode */
 html:not(.dark) #submitPlannedVisitModal .glass-panel,
 html:not(.dark) #amendPlannedVisitModal .glass-panel,
-html:not(.dark) #iosAlertGuideModal .glass-panel {
+html:not(.dark) #iosAlertGuideModal .glass-panel,
+html:not(.dark) #editAccountModal .glass-panel,
+html:not(.dark) #addAccountModal .glass-panel {
   background-color: #ffffff !important;
   border: 2px solid #cbd5e1 !important;
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25) !important;
@@ -1294,8 +1296,12 @@ html:not(.dark) #iosAlertGuideModal .glass-panel {
 html:not(.dark) #submitPlannedVisitModal h3,
 html:not(.dark) #amendPlannedVisitModal h3,
 html:not(.dark) #iosAlertGuideModal h3,
+html:not(.dark) #editAccountModal h3,
+html:not(.dark) #addAccountModal h3,
 html:not(.dark) #submitPlannedVisitModal label,
-html:not(.dark) #amendPlannedVisitModal label {
+html:not(.dark) #amendPlannedVisitModal label,
+html:not(.dark) #editAccountModal label,
+html:not(.dark) #addAccountModal label {
   color: #0f172a !important;
 }
 

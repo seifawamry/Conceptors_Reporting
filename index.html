@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.10.0">
+  <link rel="stylesheet" href="./styles.css?v=3.11.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -3295,6 +3295,135 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: EDIT VETERINARY ACCOUNT CRM (SENIOR MANAGER) ================= -->
+  <div id="editAccountModal" onclick="if(event.target === this) closeEditAccountModal();" class="fixed inset-0 z-[70] bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="glass-panel bg-[#0c1322] border border-indigo-500/40 rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col" onclick="event.stopPropagation()">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800 shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+            <i data-lucide="edit-3" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+              <span>Edit Veterinary Account</span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">Manager Authority</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Modify clinic codes, classification, doctor details, and status</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeEditAccountModal()" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95" aria-label="Close modal">
+          <i data-lucide="x" class="w-5 h-5 pointer-events-none"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="editAccountForm" onsubmit="handleEditAccountSubmit(event)" class="py-4 space-y-3.5 overflow-y-auto flex-1 pr-1">
+        <!-- Hidden Original Code -->
+        <input type="hidden" id="editAccountOriginalCode">
+
+        <!-- Clinic Code & Classification -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">
+              Account Code <span class="text-rose-400">*</span>
+              <span class="text-[10px] font-normal text-slate-400 ml-1">(Cascades to visits & orders)</span>
+            </label>
+            <input type="text" id="editAccountCode" required placeholder="e.g. DC1050 or AC0600" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 uppercase font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Account Tier / Category <span class="text-rose-400">*</span></label>
+            <select id="editAccountTier" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-semibold">
+              <option value="VIP Platinum">💎 VIP Platinum (High Volume)</option>
+              <option value="VIP Gold">⭐ VIP Gold (Target Account)</option>
+              <option value="Silver">🔹 Silver (Standard Clinic / Pharmacy)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Account Name -->
+        <div>
+          <label class="block text-[11px] text-slate-300 font-bold mb-1">Veterinary Clinic / Hospital Name <span class="text-rose-400">*</span></label>
+          <input type="text" id="editAccountName" required placeholder="e.g. Pet Care Veterinary Specialty Clinic LLC" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-medium">
+        </div>
+
+        <!-- Territory & Emirate Location -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Territory Assignment <span class="text-rose-400">*</span></label>
+            <select id="editAccountTerritory" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-bold">
+              <option value="T1">Territory 1 - Dr. Shaimaa (Dubai / Abu Dhabi / Al Ain)</option>
+              <option value="T2">Territory 2 - Dr. Marsel (Northern Emirates)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Emirate / City <span class="text-rose-400">*</span></label>
+            <select id="editAccountLocation" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-medium">
+              <option value="Dubai">Dubai</option>
+              <option value="Abu Dhabi">Abu Dhabi</option>
+              <option value="Sharjah">Sharjah</option>
+              <option value="Ajman">Ajman</option>
+              <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+              <option value="Fujairah">Fujairah</option>
+              <option value="Umm Al Quwain">Umm Al Quwain</option>
+              <option value="Al Ain">Al Ain</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Operational Status & Contact Doctor -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Operational Status <span class="text-rose-400">*</span></label>
+            <select id="editAccountStatus" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-bold">
+              <option value="ACTIVE">🟢 Active Account (Visits & Orders Enabled)</option>
+              <option value="FROZEN">❄️ Frozen / Inactive (Disabled)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Key Doctor / Contact Person</label>
+            <input type="text" id="editAccountDoctor" placeholder="e.g. Dr. Sarah Al Mansoori (Medical Director)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <!-- Phone / Mobile Number & Address -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Phone / Mobile Number</label>
+            <input type="text" id="editAccountPhone" placeholder="e.g. +971 4 345 6789 / +971 50 123 4567" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Clinic Address & Area</label>
+            <input type="text" id="editAccountAddress" placeholder="e.g. Jumeirah 1, Al Wasl Road, Villa 12, Dubai" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <!-- Commercial / Clinical Notes -->
+        <div>
+          <label class="block text-[11px] text-slate-300 font-bold mb-1">Clinical Focus / Commercial Notes</label>
+          <textarea id="editAccountNotes" rows="2" placeholder="e.g. High case load of renal & cardiac canine cases; interested in ASBRIP & RENALOF clinic packs." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 resize-none"></textarea>
+        </div>
+
+        <!-- Cloud Resonation Notice Info -->
+        <div class="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-start gap-2 text-[11px] text-indigo-300">
+          <i data-lucide="cloud-lightning" class="w-4 h-4 shrink-0 mt-0.5 text-indigo-400"></i>
+          <span>Any amendments saved here are instantly synchronized to the <strong>Supabase Cloud Backend</strong> (cascading codes across visits and orders) and propagated in real-time.</span>
+        </div>
+
+        <!-- Submit Buttons -->
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeEditAccountModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors">
+            Cancel
+          </button>
+          <button type="submit" id="btnSaveEditAccount" class="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition-all active:scale-95">
+            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+            <span>Save & Resonate Changes</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ================= MODAL: DATA EXPORT CENTER (REPORTS, PLANNING, ORDERS) ================= -->
   <div id="exportCenterModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
     <div class="glass-panel bg-[#0c1322] border border-emerald-500/40 rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl relative text-xs my-6 max-h-[92vh] flex flex-col">
@@ -3611,7 +3740,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.10.0"></script>
-  <script src="./crm_app.js?v=3.10.0"></script>
+  <script src="./crm_data.js?v=3.11.0"></script>
+  <script src="./crm_app.js?v=3.11.0"></script>
 </body>
 </html>
