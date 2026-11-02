@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.11.0">
+  <link rel="stylesheet" href="./styles.css?v=3.12.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -2471,12 +2471,12 @@
           </div>
           <div class="min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <h3 class="text-sm sm:text-base font-bold text-white truncate modal-header-title">Executive Order Alert</h3>
-              <span id="emailModalStatusBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Dispatched
+              <h3 class="text-sm sm:text-base font-bold text-white truncate modal-header-title">Executive Order Email Dispatch</h3>
+              <span id="emailModalStatusBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                ⏳ Ready to Send
               </span>
             </div>
-            <p class="text-[11px] text-slate-400 truncate mt-0.5" id="emailRecipientHeader">Sent to Senior Management Team</p>
+            <p class="text-[11px] text-slate-400 truncate mt-0.5" id="emailRecipientHeader">Recipient: Dr. Sameh Ageez (s.ageez@the-conceptors.com)</p>
           </div>
         </div>
         <button type="button" onclick="closeEmailModal()" class="w-9 h-9 sm:w-10 sm:h-10 shrink-0 flex items-center justify-center rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-transform active:scale-95 touch-manipulation btn-close-modal" aria-label="Close email modal">
@@ -2484,17 +2484,41 @@
         </button>
       </div>
 
+      <!-- Action Required Callout Banner -->
+      <div id="emailDispatchActionBanner" class="mt-3 p-3 rounded-xl bg-gradient-to-r from-sky-950/70 to-indigo-950/70 border border-sky-500/40 text-xs flex items-start gap-2.5 shadow-md">
+        <div class="p-1.5 rounded-lg bg-sky-500/20 text-sky-300 shrink-0 mt-0.5">
+          <i data-lucide="send" class="w-4 h-4"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-extrabold text-white text-[12px] flex items-center gap-1.5 flex-wrap">
+            <span>Action Required: Press "Send" in your Email App</span>
+            <span class="px-2 py-0.5 rounded-full text-[9px] bg-amber-500/20 text-amber-300 font-extrabold border border-amber-500/30">Mandatory Send</span>
+          </div>
+          <p class="text-[11px] text-slate-300 mt-0.5">
+            To ensure <strong>Dr. Sameh Ageez</strong> (<code class="text-sky-300 font-mono">s.ageez@the-conceptors.com</code>) receives this order immediately, tap <strong>Open Mail App</strong> or <strong>Gmail Web</strong> below and click <strong>SEND</strong> in your mail window.
+          </p>
+        </div>
+      </div>
+
       <!-- Action Command Toolbar: Responsive Grid on Mobile for Perfect Alignment -->
       <div id="emailModalActionToolbar" class="pt-3 pb-2 shrink-0 grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 border-b border-slate-800/80">
+        <button id="btnResendEmailAction" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-transform touch-manipulation w-full sm:w-auto ring-2 ring-sky-400/30" title="Launch default email client (Outlook, Apple Mail) to press Send">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Open Mail App (Press Send)</span>
+        </button>
+        <button id="btnOpenGmailWebAction" class="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto" title="Open Gmail in web browser with pre-filled order draft">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span>Gmail Web</span>
+        </button>
+        <button id="btnOpenOutlookWebAction" class="px-3 py-2 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto" title="Open Microsoft 365 Outlook web compose">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span>Outlook Web</span>
+        </button>
         <button id="btnWhatsappShareAction" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
           <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
           <span>WhatsApp</span>
         </button>
-        <button id="btnResendEmailAction" class="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto">
-          <i data-lucide="send" class="w-3.5 h-3.5"></i>
-          <span>Mail Client</span>
-        </button>
-        <button id="btnCopyOrderTemplateAction" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto" title="Copy Order Text in WhatsApp Template Format">
+        <button id="btnCopyOrderTemplateAction" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform touch-manipulation w-full sm:w-auto" title="Copy Order Text in WhatsApp / Email format">
           <i data-lucide="copy" class="w-3.5 h-3.5"></i>
           <span>Copy Text</span>
         </button>
@@ -3740,7 +3764,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.11.0"></script>
-  <script src="./crm_app.js?v=3.11.0"></script>
+  <script src="./crm_data.js?v=3.12.0"></script>
+  <script src="./crm_app.js?v=3.12.0"></script>
 </body>
 </html>

@@ -243,7 +243,7 @@ CREATE INDEX idx_notifications_read ON notifications(read);
 -- K. MANAGER_SETTINGS (Configuration & Alert Preferences)
 CREATE TABLE manager_settings (
     id TEXT PRIMARY KEY DEFAULT 'default',
-    manager_emails TEXT NOT NULL DEFAULT 'sameh.ageez@conceptors.ae, gm@conceptors.ae',
+    manager_emails TEXT NOT NULL DEFAULT 's.ageez@the-conceptors.com',
     sound_alert BOOLEAN NOT NULL DEFAULT true,
     toast_alert BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -774,8 +774,8 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 5.9 SEED MANAGER SETTINGS
 INSERT INTO manager_settings (id, manager_emails, sound_alert, toast_alert) VALUES
-('default', 'sameh.ageez@conceptors.ae, gm@conceptors.ae', true, true)
-ON CONFLICT (id) DO NOTHING;
+('default', 's.ageez@the-conceptors.com', true, true)
+ON CONFLICT (id) DO UPDATE SET manager_emails = 's.ageez@the-conceptors.com';
 
 -- =============================================================================
 -- MIGRATION COMPLETE: All tables, views, RLS policies & master seed data ready.

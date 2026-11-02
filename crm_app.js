@@ -680,8 +680,15 @@ async function syncWithSupabase(force = false) {
     const setRes = await supabaseRest('manager_settings?id=eq.default&select=*');
     if (setRes.data && Array.isArray(setRes.data) && setRes.data.length > 0) {
       let hydratedEmails = setRes.data[0].manager_emails || state.managerSettings.managerEmails;
-      if (hydratedEmails && hydratedEmails.includes('@conceptors.ae')) {
+      if (!hydratedEmails || hydratedEmails.includes('@conceptors.ae') || hydratedEmails.includes('sameh.ageez')) {
         hydratedEmails = 's.ageez@the-conceptors.com';
+        supabaseRest('manager_settings?id=eq.default', {
+          method: 'PATCH',
+          body: {
+            manager_emails: 's.ageez@the-conceptors.com',
+            manager_cc_emails: 'a.tharayil@the-conceptors.com'
+          }
+        }).catch(() => {});
       }
       let hydratedPhone = setRes.data[0].whatsapp_phone || state.managerSettings.whatsappPhone;
       if (!hydratedPhone || hydratedPhone === '+971501234567') {
@@ -5389,9 +5396,9 @@ function renderOrdersTable() {
           ${formatCurrency(o.totalIncVat)} AED
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 inline-flex items-center gap-1">
-            <i data-lucide="mail-check" class="w-3 h-3 text-emerald-400"></i> Dispatched
-          </span>
+          <button type="button" onclick="dispatchOrderEmailDirect('${o.invoiceNumber}', false)" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 inline-flex items-center gap-1 active:scale-95 transition-all shadow-sm cursor-pointer" title="Open Email Window to Send to Dr. Sameh Ageez">
+            <i data-lucide="send" class="w-3 h-3 text-sky-400"></i> Open Email Window
+          </button>
         </td>
         <td class="py-3 px-3 text-center whitespace-nowrap">
           ${isApproved ? `
@@ -5413,8 +5420,8 @@ function renderOrdersTable() {
             <button onclick="openWhatsappOrderShare('${o.invoiceNumber}')" class="px-2 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95" title="Share Order to WhatsApp">
               <i data-lucide="message-circle" class="w-3 h-3 text-emerald-400"></i> WA
             </button>
-            <button onclick="viewNotificationEmailByOrder('${o.invoiceNumber}')" class="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[10px] font-bold flex items-center gap-1" title="View Executive Dispatched Email">
-              <i data-lucide="mail" class="w-3 h-3"></i> View Email
+            <button onclick="dispatchOrderEmailDirect('${o.invoiceNumber}', false)" class="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-transform" title="Open Email Window to Send to Dr. Sameh">
+              <i data-lucide="mail" class="w-3 h-3"></i> Send Email
             </button>
             ${state.currentUser && state.currentUser.role === 'manager' ? `
               ${!isApproved ? `
@@ -5988,6 +5995,9 @@ window.handleOrderSubmit = function(e) {
       'success'
     );
 
+    // Open email dispatch window for amended order so Dr. Sameh receives the updated details
+    dispatchOrderEmailDirect(amendedInvoiceNum, true);
+
     renderAll();
     return;
   }
@@ -6091,6 +6101,9 @@ window.handleOrderSubmit = function(e) {
     sendWebhookOrderAlert(newOrder, items);
   }
 
+  // >>> NEW EMAIL DISPATCH: OPEN THE EMAIL WINDOW DIRECTLY FOR USER TO PRESS SEND THEMSELVES <<<
+  dispatchOrderEmailDirect(newOrder.invoiceNumber, true);
+
   if (typeof triggerManagerOrderAlert === 'function') {
     triggerManagerOrderAlert(newOrder);
   } else {
@@ -6098,10 +6111,10 @@ window.handleOrderSubmit = function(e) {
     if (state.managerSettings.toastAlert) {
       showToast(
         `🚨 New Order #${orderNumber} Submitted!`,
-        `${newOrder.repName} booked an order for ${newOrder.clientName} [Account: ${clientCode}] (${newOrder.location}) totaling ${formatCurrency(totalIncVat)} AED.`,
+        `Email window opened to send to Dr. Sameh Ageez (s.ageez@the-conceptors.com). Please press Send in your mail app.`,
         'success',
         {
-          label: 'Send to Dr. Sameh on WhatsApp',
+          label: 'Send on WhatsApp',
           onClick: `openWhatsappOrderShare('${orderNumber}')`
         }
       );
@@ -6284,8 +6297,8 @@ function renderManagerNotifications() {
           </div>
 
           <div class="flex items-center gap-1.5 flex-wrap">
-            <button onclick="viewNotificationEmail('${n.id}')" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold flex items-center gap-1">
-              <i data-lucide="mail" class="w-3 h-3"></i> View Dispatched Email
+            <button onclick="dispatchOrderEmailDirect('${n.orderNumber}', false)" class="px-2.5 py-1 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-[11px] font-bold flex items-center gap-1" title="Open Email Window to Send to Dr. Sameh Ageez">
+              <i data-lucide="mail" class="w-3 h-3"></i> Open Email Window
             </button>
             ${state.currentUser && state.currentUser.role === 'manager' && n.type === 'ORDER_SUBMITTED' ? `
               ${!isApproved ? `
@@ -6467,6 +6480,84 @@ window.rejectOrderDirect = function(orderNum, reason = null) {
   }
 };
 
+window.dispatchOrderEmailDirect = function(orderNumber, autoLaunchMailto = false) {
+  let order = (state.orders || []).find(o => o.invoiceNumber === orderNumber || o.orderNumber === orderNumber);
+  let notif = (state.notifications || []).find(n => n.orderNumber === orderNumber);
+  if (!order && !notif) {
+    showToast('Order Not Found', `Cannot locate order #${orderNumber} to dispatch email.`, 'error');
+    return;
+  }
+
+  const targetOrder = order || {
+    invoiceNumber: notif.orderNumber,
+    date: notif.timestamp ? notif.timestamp.split('T')[0] : getSyncedTodayDate(),
+    clientCode: notif.clientCode || notif.accountCode,
+    accountCode: notif.accountCode || notif.clientCode,
+    clientName: notif.clientName,
+    location: notif.location,
+    territory: notif.repId,
+    totalExcVat: notif.totalExcVat,
+    vatAmount: ((notif.totalIncVat || 0) - (notif.totalExcVat || 0)),
+    totalIncVat: notif.totalIncVat,
+    approvalStatus: notif.approvalStatus || 'Pending',
+    paymentTerms: notif.paymentTerms,
+    deliveryUrgency: notif.deliveryUrgency,
+    items: notif.items || []
+  };
+
+  const repName = targetOrder.repName || (notif ? notif.repName : (state.currentUser ? state.currentUser.name : `Rep ${targetOrder.repId || 'T1'}`));
+  let accountCode = targetOrder.accountCode || targetOrder.account_code || targetOrder.clientCode || targetOrder.client_code || '';
+  if (!accountCode && targetOrder.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === targetOrder.clientName || c.clientName === targetOrder.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
+  const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
+
+  const toEmail = state.managerSettings?.managerEmails || 's.ageez@the-conceptors.com';
+  const ccEmail = state.managerSettings?.managerCcEmails || 'a.tharayil@the-conceptors.com';
+  const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
+  const subjectText = `[CONCEPTORS ORDER ALERT] New Field Order #${targetOrder.invoiceNumber} - ${targetOrder.clientName}${accountTag} (${formatCurrency(targetOrder.totalIncVat)} AED)`;
+  const plainTextBody = formatOrderEmailPlainText(targetOrder, repName);
+
+  const mailtoUrl = `mailto:${toEmail}?subject=${encodeURIComponent(subjectText)}${ccParam}&body=${encodeURIComponent(plainTextBody)}`;
+
+  // 1. If autoLaunchMailto is requested, trigger mail app immediately
+  if (autoLaunchMailto) {
+    try {
+      const mailLink = document.createElement('a');
+      mailLink.href = mailtoUrl;
+      mailLink.style.display = 'none';
+      document.body.appendChild(mailLink);
+      mailLink.click();
+      setTimeout(() => {
+        try { document.body.removeChild(mailLink); } catch (e) {}
+      }, 500);
+    } catch (err) {
+      console.warn('Mail client launch error:', err);
+    }
+  }
+
+  // 2. Open viewEmailModal for direct on-screen inspection & buttons
+  viewNotificationEmailByOrder(targetOrder.invoiceNumber);
+
+  // 3. Mark email status in state & localStorage
+  targetOrder.emailDispatched = true;
+  targetOrder.emailDispatchedAt = new Date().toISOString();
+  if (notif) {
+    notif.emailDispatched = true;
+    notif.emailDispatchedAt = targetOrder.emailDispatchedAt;
+  }
+  persistData();
+
+  if (autoLaunchMailto) {
+    showToast(
+      '📧 Email Window Ready',
+      `Drafted alert to Dr. Sameh Ageez (${toEmail}). Please press "Send" in your mail app!`,
+      'info'
+    );
+  }
+};
+
 window.viewNotificationEmailByOrder = function(orderNum) {
   const notif = state.notifications.find(n => n.orderNumber === orderNum);
   const order = state.orders.find(o => o.invoiceNumber === orderNum);
@@ -6489,7 +6580,7 @@ window.viewNotificationEmailByOrder = function(orderNum) {
     items: notif.items || []
   };
 
-  const repName = targetOrder.repName || (notif ? notif.repName : `Rep ${targetOrder.repId}`);
+  const repName = targetOrder.repName || (notif ? notif.repName : (state.currentUser ? state.currentUser.name : `Rep ${targetOrder.repId || 'T1'}`));
   const html = generateExecutiveEmailHtml(targetOrder, repName);
   const previewEl = document.getElementById('emailPreviewContent');
   if (previewEl) previewEl.innerHTML = html;
@@ -6498,51 +6589,86 @@ window.viewNotificationEmailByOrder = function(orderNum) {
   const ccEmail = state.managerSettings.managerCcEmails || 'a.tharayil@the-conceptors.com';
   const ccText = ccEmail ? ` (CC: ${ccEmail})` : '';
   const recipientEl = document.getElementById('emailRecipientHeader');
-  if (recipientEl) recipientEl.textContent = `Dispatched to: ${toEmail}${ccText}`;
+  if (recipientEl) recipientEl.textContent = `Recipient: Dr. Sameh Ageez (${toEmail})${ccText}`;
 
   // Update status badge
   const badge = document.getElementById('emailModalStatusBadge');
   if (badge) {
     if (targetOrder.approvalStatus === 'Approved') {
       badge.textContent = '✓ Approved';
-      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+      badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
     } else if (targetOrder.approvalStatus === 'Rejected') {
       badge.textContent = '✕ Rejected';
-      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
+      badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30';
     } else {
-      badge.textContent = '⏳ Dispatched';
-      badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
+      badge.textContent = '⏳ Ready to Send';
+      badge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30';
     }
   }
 
-  // Configure action toolbar buttons
+  // Account code & formatted text
+  let accountCode = targetOrder.accountCode || targetOrder.account_code || targetOrder.clientCode || targetOrder.client_code || '';
+  if (!accountCode && targetOrder.clientName && Array.isArray(state.customers)) {
+    const cust = state.customers.find(c => c.name === targetOrder.clientName || c.clientName === targetOrder.clientName);
+    if (cust) accountCode = cust.code || cust.clientCode || '';
+  }
+  const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
+  const subjectText = `[CONCEPTORS ORDER ALERT] New Field Order #${targetOrder.invoiceNumber} - ${targetOrder.clientName}${accountTag} (${formatCurrency(targetOrder.totalIncVat)} AED)`;
+  const plainTextBody = formatOrderEmailPlainText(targetOrder, repName);
+
+  const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
+  const mailtoUrl = `mailto:${toEmail}?subject=${encodeURIComponent(subjectText)}${ccParam}&body=${encodeURIComponent(plainTextBody)}`;
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(toEmail)}${ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : ''}&su=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(plainTextBody)}`;
+  const outlookUrl = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(toEmail)}${ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : ''}&subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(plainTextBody)}`;
+
+  // 1. Mail Client button (launch native app to press send)
+  const btnResend = document.getElementById('btnResendEmailAction');
+  if (btnResend) {
+    btnResend.onclick = () => {
+      try {
+        const mailLink = document.createElement('a');
+        mailLink.href = mailtoUrl;
+        mailLink.style.display = 'none';
+        document.body.appendChild(mailLink);
+        mailLink.click();
+        setTimeout(() => { try { document.body.removeChild(mailLink); } catch (e) {} }, 500);
+      } catch (err) {
+        window.location.href = mailtoUrl;
+      }
+      showToast('Mail App Launched', 'Please press Send in your mail app to deliver the order alert to Dr. Sameh Ageez.', 'success');
+    };
+  }
+
+  // 2. Gmail Web button
+  const btnGmail = document.getElementById('btnOpenGmailWebAction');
+  if (btnGmail) {
+    btnGmail.onclick = () => {
+      window.open(gmailUrl, '_blank');
+      showToast('Gmail Web Opened', 'Please click "Send" in the Gmail compose tab to alert Dr. Sameh Ageez.', 'info');
+    };
+  }
+
+  // 3. Outlook Web button
+  const btnOutlook = document.getElementById('btnOpenOutlookWebAction');
+  if (btnOutlook) {
+    btnOutlook.onclick = () => {
+      window.open(outlookUrl, '_blank');
+      showToast('Outlook Web Opened', 'Please click "Send" in the Outlook compose tab to alert Dr. Sameh Ageez.', 'info');
+    };
+  }
+
+  // 4. WhatsApp Share button
   const btnWa = document.getElementById('btnWhatsappShareAction');
   if (btnWa) {
     btnWa.onclick = () => openWhatsappOrderShare(targetOrder.invoiceNumber);
   }
 
-  const btnResend = document.getElementById('btnResendEmailAction');
-  if (btnResend) {
-    let accountCode = targetOrder.accountCode || targetOrder.account_code || targetOrder.clientCode || targetOrder.client_code || '';
-    if (!accountCode && targetOrder.clientName && Array.isArray(state.customers)) {
-      const cust = state.customers.find(c => c.name === targetOrder.clientName || c.clientName === targetOrder.clientName);
-      if (cust) accountCode = cust.code || cust.clientCode || '';
-    }
-    const accountTag = accountCode ? ` [Account: ${accountCode}]` : '';
-    const subject = encodeURIComponent(`[CONCEPTORS ORDER ALERT] New Field Order #${targetOrder.invoiceNumber} - ${targetOrder.clientName}${accountTag} (${formatCurrency(targetOrder.totalIncVat)} AED)`);
-    const plainTextBody = formatOrderEmailPlainText(targetOrder, repName);
-    btnResend.onclick = () => {
-      const ccParam = ccEmail ? `&cc=${encodeURIComponent(ccEmail)}` : '';
-      window.open(`mailto:${toEmail}?subject=${subject}${ccParam}&body=${encodeURIComponent(plainTextBody)}`, '_blank');
-    };
-  }
-
+  // 5. Copy Template button
   const btnCopy = document.getElementById('btnCopyOrderTemplateAction');
   if (btnCopy) {
     btnCopy.onclick = () => {
-      const textToCopy = formatOrderEmailPlainText(targetOrder, repName);
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(textToCopy).then(() => {
+        navigator.clipboard.writeText(plainTextBody).then(() => {
           showToast('Order Template Copied', 'Order alert text copied to clipboard in WhatsApp / Email format.', 'success');
         }).catch(() => {
           showToast('Copy Notice', 'Could not access clipboard automatically.', 'info');
@@ -6622,7 +6748,7 @@ window.viewNotificationEmail = function(notifId) {
     updateNotificationBell();
     renderManagerNotifications();
   }
-  viewNotificationEmailByOrder(notif.orderNumber);
+  dispatchOrderEmailDirect(notif.orderNumber, false);
 };
 
 window.closeEmailModal = function() {
@@ -8590,8 +8716,8 @@ function renderManagerHub() {
             </div>
 
             <div class="flex items-center gap-2">
-              <button onclick="viewNotificationEmailByOrder('${o.invoiceNumber}')" class="px-2.5 py-1.5 rounded-lg bg-sky-600/20 text-sky-300 border border-sky-500/30 text-xs font-bold">
-                View Email
+              <button onclick="dispatchOrderEmailDirect('${o.invoiceNumber}', false)" class="px-2.5 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 text-xs font-bold flex items-center gap-1" title="Open Email Window to Send to Dr. Sameh Ageez">
+                <i data-lucide="mail" class="w-3.5 h-3.5"></i> Open Email Window
               </button>
               <button onclick="approveOrderDirect('${o.invoiceNumber}')" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-sm">
                 Approve
@@ -9136,6 +9262,9 @@ window.triggerTestOrderNotification = function() {
   if (typeof sendWebhookOrderAlert === 'function') {
     sendWebhookOrderAlert(notif, notif.items);
   }
+
+  // Open email window ready for test dispatch
+  dispatchOrderEmailDirect(testOrderNum, false);
 
   updateNotificationBell();
   renderManagerNotifications();

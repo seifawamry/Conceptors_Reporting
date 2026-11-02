@@ -1199,11 +1199,27 @@ html:not(.dark) #emailModalActionToolbar {
 /* Ensure buttons in email modal retain white text on colored backgrounds */
 #viewEmailModal #btnWhatsappShareAction,
 #viewEmailModal #btnResendEmailAction,
+#viewEmailModal #btnOpenGmailWebAction,
+#viewEmailModal #btnOpenOutlookWebAction,
 #viewEmailModal #btnCopyOrderTemplateAction,
 #viewEmailModal #btnModalAuthorizeOrder,
 #viewEmailModal #btnModalAmendOrder,
 #viewEmailModal #btnModalRejectOrder {
   color: #ffffff !important;
+}
+
+/* Email Dispatch Banner in Light Mode */
+html:not(.dark) #emailDispatchActionBanner {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  border: 1.5px solid #7dd3fc !important;
+  color: #0369a1 !important;
+}
+html:not(.dark) #emailDispatchActionBanner .text-white {
+  color: #0c4a6e !important;
+}
+html:not(.dark) #emailDispatchActionBanner p,
+html:not(.dark) #emailDispatchActionBanner .text-slate-300 {
+  color: #334155 !important;
 }
 
 /* Analytics Period Picker in Bright Mode */
