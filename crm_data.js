@@ -52,56 +52,8 @@ window.INITIAL_SENIOR_MANAGERS = [
 
 window.INITIAL_USERS = [
   {
-    username: 'shaimaa.t1',
-    password: 'rep1',
-    name: 'Dr. Shaimaa',
-    title: 'Medical Representative - Territory 1',
-    role: 'rep_t1',
-    territory: 'T1',
-    email: 'shaimaa.t1@conceptors.ae',
-    phone: '+971 50 123 4567',
-    avatar: 'SH',
-    color: '#38bdf8'
-  },
-  {
-    username: 'ahmed.t1', // alias
-    password: 'rep1',
-    name: 'Dr. Shaimaa',
-    title: 'Medical Representative - Territory 1',
-    role: 'rep_t1',
-    territory: 'T1',
-    email: 'shaimaa.t1@conceptors.ae',
-    phone: '+971 50 123 4567',
-    avatar: 'SH',
-    color: '#38bdf8'
-  },
-  {
-    username: 'marsel.t2',
-    password: 'rep2',
-    name: 'Dr. Marsel',
-    title: 'Medical Representative - Territory 2',
-    role: 'rep_t2',
-    territory: 'T2',
-    email: 'marsel.t2@conceptors.ae',
-    phone: '+971 55 987 6543',
-    avatar: 'MR',
-    color: '#c084fc'
-  },
-  {
-    username: 'youssef.t2', // alias
-    password: 'rep2',
-    name: 'Dr. Marsel',
-    title: 'Medical Representative - Territory 2',
-    role: 'rep_t2',
-    territory: 'T2',
-    email: 'marsel.t2@conceptors.ae',
-    phone: '+971 55 987 6543',
-    avatar: 'MR',
-    color: '#c084fc'
-  },
-  {
-    username: 'sameh.ageez',
-    password: 'admin',
+    username: 'SAMEH',
+    password: 'DUBAI2026',
     name: 'Dr. Sameh Ageez',
     title: 'Senior Sales Manager UAE',
     role: 'manager',
@@ -112,16 +64,28 @@ window.INITIAL_USERS = [
     color: '#10b981'
   },
   {
-    username: 'manager', // alias
-    password: 'admin',
-    name: 'Dr. Sameh Ageez',
-    title: 'Senior Sales Manager UAE',
-    role: 'manager',
-    territory: 'ALL',
-    email: 's.ageez@the-conceptors.com',
-    phone: '+971 52 533 3329',
-    avatar: 'SA',
-    color: '#10b981'
+    username: 'SHAIMAA',
+    password: 'T1',
+    name: 'Dr. Shaimaa',
+    title: 'Medical Representative - Territory 1',
+    role: 'rep_t1',
+    territory: 'T1',
+    email: 'shaimaa.t1@conceptors.ae',
+    phone: '+971 50 123 4567',
+    avatar: 'SH',
+    color: '#38bdf8'
+  },
+  {
+    username: 'MARSEL',
+    password: 'T2',
+    name: 'Dr. Marsel',
+    title: 'Medical Representative - Territory 2',
+    role: 'rep_t2',
+    territory: 'T2',
+    email: 'marsel.t2@conceptors.ae',
+    phone: '+971 55 987 6543',
+    avatar: 'MR',
+    color: '#c084fc'
   }
 ];
 

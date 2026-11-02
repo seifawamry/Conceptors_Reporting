@@ -1029,21 +1029,26 @@ function loadStoredData() {
 
   const storedUser = localStorage.getItem(STORAGE_KEY_AUTH_USER);
   if (storedUser) {
-    try { state.currentUser = JSON.parse(storedUser); } catch (e) { state.currentUser = null; }
+    try {
+      const parsed = JSON.parse(storedUser);
+      // Validate that stored session matches an authorized Level 2 user
+      const valid = (window.INITIAL_USERS || []).find(u => 
+        u.username.toLowerCase() === String(parsed.username || '').toLowerCase()
+      );
+      if (valid) {
+        state.currentUser = { ...valid, ...parsed, role: valid.role, territory: valid.territory };
+      } else {
+        // Expire outdated/demo credentials
+        state.currentUser = null;
+        localStorage.removeItem(STORAGE_KEY_AUTH_USER);
+      }
+    } catch (e) {
+      state.currentUser = null;
+    }
   }
 
-  // AUTOMATIC DEMO ONBOARDING FOR GITHUB PAGES / FRESH BROWSERS:
-  // If no user is stored in localStorage and user hasn't explicitly logged out,
-  // default to Senior Sales Manager (Dr. Sameh Ageez) so data renders immediately.
-  const hasLoggedOut = localStorage.getItem('conceptors_crm_logged_out');
-  if (!state.currentUser && !hasLoggedOut && window.INITIAL_USERS && window.INITIAL_USERS.length > 0) {
-    const defaultUser = window.INITIAL_USERS.find(u => u.username === 'manager') || window.INITIAL_USERS[0];
-    state.currentUser = { ...defaultUser };
-    state.filters.analyticsRepFilter = 'ALL';
-    state.filters.dailyReportRep = 'ALL';
-    state.filters.accountsTerritory = 'ALL';
-    try { localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(state.currentUser)); } catch(e) {}
-  } else if (state.currentUser) {
+  // Level 2 Security: The app is strictly locked. No automatic onboarding or anonymous viewing.
+  if (state.currentUser) {
     if (typeof isUserManager === 'function' && isUserManager(state.currentUser)) {
       state.filters.dailyReportRep = 'ALL';
       state.filters.analyticsRepFilter = 'ALL';
@@ -1241,10 +1246,12 @@ function updateThemeButtonUI(theme) {
 
 function isUserManager(user = state.currentUser) {
   if (!user) return false;
+  const u = String(user.username || '').toLowerCase();
   return (
     user.role === 'manager' ||
-    user.username === 'sameh.ageez' ||
-    user.username === 'manager' ||
+    u === 'sameh' ||
+    u === 'sameh.ageez' ||
+    u === 'manager' ||
     user.territory === 'ALL' ||
     user.email === 's.ageez@the-conceptors.com' ||
     user.email === 'sameh.ageez@conceptors.ae'
@@ -1254,13 +1261,15 @@ window.isUserManager = isUserManager;
 
 function getActiveRepTerritory(user = state.currentUser) {
   if (!user) return 'T1';
+  const u = String(user.username || '').toLowerCase();
   if (
     user.role === 'rep_t1' ||
     user.territory === 'T1' ||
     user.id === 'T1' ||
     user.repId === 'T1' ||
-    user.username === 'shaimaa.t1' ||
-    user.username === 'ahmed.t1' ||
+    u === 'shaimaa' ||
+    u === 'shaimaa.t1' ||
+    u === 'ahmed.t1' ||
     (user.name && user.name.toLowerCase().includes('shaimaa'))
   ) {
     return 'T1';
@@ -1270,8 +1279,9 @@ function getActiveRepTerritory(user = state.currentUser) {
     user.territory === 'T2' ||
     user.id === 'T2' ||
     user.repId === 'T2' ||
-    user.username === 'marsel.t2' ||
-    user.username === 'youssef.t2' ||
+    u === 'marsel' ||
+    u === 'marsel.t2' ||
+    u === 'youssef.t2' ||
     (user.name && user.name.toLowerCase().includes('marsel'))
   ) {
     return 'T2';
@@ -1295,29 +1305,114 @@ function checkAuthSession() {
 
 window.handleLoginSubmit = function(e) {
   e.preventDefault();
-  const username = document.getElementById('loginUsername').value.trim().toLowerCase();
-  const password = document.getElementById('loginPassword').value.trim();
+  const username = document.getElementById('loginUsername')?.value || '';
+  const password = document.getElementById('loginPassword')?.value || '';
   performLogin(username, password);
+};
+
+window.promptSwitchAccount = function(username = '') {
+  // Close open switcher modals and drawers
+  const switcherModal = document.getElementById('profileSwitcherModal');
+  if (switcherModal) {
+    switcherModal.style.display = 'none';
+    switcherModal.classList.add('hidden');
+  }
+  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
+
+  // In Level 2 Security, switching accounts requires entering the account's password
+  const uInput = document.getElementById('loginUsername');
+  const pInput = document.getElementById('loginPassword');
+  const errorEl = document.getElementById('loginErrorMessage');
+  if (uInput) uInput.value = username || '';
+  if (pInput) {
+    pInput.value = '';
+    setTimeout(() => pInput.focus(), 150);
+  }
+  if (errorEl) errorEl.classList.add('hidden');
+
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.classList.remove('hidden');
+  }
+  safeLucide();
 };
 
 window.quickLogin = function(username, password) {
-  const uInput = document.getElementById('loginUsername');
-  const pInput = document.getElementById('loginPassword');
-  if (uInput) uInput.value = username;
-  if (pInput) pInput.value = password;
-  performLogin(username, password);
+  // QuickLogin bypass is disabled in Level 2 Security.
+  promptSwitchAccount(username);
 };
 
-function performLogin(username, password) {
-  const users = window.INITIAL_USERS || [];
-  const foundUser = users.find(u => u.username.toLowerCase() === username && u.password === password);
+window.quickSwitchUser = function(username) {
+  // Bypasses removed: every user must enter password to authenticate Level 2
+  promptSwitchAccount(username);
+};
+
+async function performLogin(username, password) {
+  const cleanUsername = String(username || '').trim().toLowerCase();
+  const cleanPassword = String(password || '').trim();
 
   const errorEl = document.getElementById('loginErrorMessage');
 
+  if (!cleanUsername || !cleanPassword) {
+    if (errorEl) {
+      errorEl.innerHTML = `
+        <div class="flex items-center justify-center gap-1.5 font-bold text-rose-300">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-rose-400"></i>
+          Please enter both username and password.
+        </div>
+      `;
+      errorEl.classList.remove('hidden');
+      safeLucide();
+    }
+    return;
+  }
+
+  // 1. Check local authorized Level 2 user credentials
+  const users = window.INITIAL_USERS || [];
+  let foundUser = users.find(u => 
+    u.username.toLowerCase() === cleanUsername && 
+    (u.password === cleanPassword || u.password.toUpperCase() === cleanPassword.toUpperCase())
+  );
+
+  // 2. Cloud Fallback / Verification via Supabase users table
+  if (!foundUser && typeof supabaseRest === 'function') {
+    try {
+      const cloudRes = await supabaseRest(`users?username=ilike.${encodeURIComponent(cleanUsername)}`);
+      if (cloudRes && cloudRes.data && Array.isArray(cloudRes.data) && cloudRes.data.length > 0) {
+        const cloudUser = cloudRes.data[0];
+        const cloudPw = String(cloudUser.password_hash || '').trim();
+        if (cloudPw === cleanPassword || cloudPw.toUpperCase() === cleanPassword.toUpperCase()) {
+          foundUser = {
+            username: cloudUser.username.toUpperCase(),
+            password: cloudUser.password_hash,
+            name: cloudUser.name,
+            title: cloudUser.title,
+            role: cloudUser.role,
+            territory: cloudUser.territory,
+            email: cloudUser.email,
+            phone: cloudUser.phone,
+            avatar: cloudUser.avatar || 'US',
+            color: cloudUser.color || '#38bdf8'
+          };
+        }
+      }
+    } catch (cloudErr) {
+      console.warn('Cloud login check fallback:', cloudErr);
+    }
+  }
+
   if (!foundUser) {
     if (errorEl) {
-      errorEl.textContent = 'Invalid username or password. Please check credentials or use one-click test logins below.';
+      errorEl.innerHTML = `
+        <div class="flex items-center justify-center gap-1.5 font-bold text-rose-300">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+          Access Denied: Invalid Credentials
+        </div>
+        <p class="text-[11px] text-rose-200/80 mt-1">Level 2 Security is active. Please enter your authorized username and password.</p>
+      `;
       errorEl.classList.remove('hidden');
+      safeLucide();
     }
     return;
   }
@@ -1344,9 +1439,13 @@ function performLogin(username, password) {
     overlay.classList.add('hidden');
   }
 
+  // Clear password from DOM after successful sign-in
+  const pInput = document.getElementById('loginPassword');
+  if (pInput) pInput.value = '';
+
   showToast(
     `Welcome, ${state.currentUser.name}!`,
-    `Signed in as ${state.currentUser.title}. Data restricted strictly to ${state.currentUser.territory === 'ALL' ? 'All UAE Territories' : state.currentUser.territory}.`,
+    `Signed in as ${state.currentUser.title}. Level 2 Authorized.`,
     'success'
   );
 
@@ -1356,53 +1455,9 @@ function performLogin(username, password) {
   syncWithSupabase(false);
 }
 
-window.quickSwitchUser = function(username) {
-  const users = window.INITIAL_USERS || [];
-  const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (!foundUser) {
-    showToast('User Not Found', `Profile ${username} not found.`, 'warning');
-    return;
-  }
-
-  localStorage.removeItem('conceptors_crm_logged_out');
-  state.currentUser = { ...foundUser };
-
-  if (isUserManager(state.currentUser)) {
-    state.filters.analyticsRepFilter = 'ALL';
-    state.filters.dailyReportRep = 'ALL';
-    state.filters.accountsTerritory = 'ALL';
-  } else {
-    const userTerritory = getActiveRepTerritory(state.currentUser);
-    state.filters.analyticsRepFilter = userTerritory;
-    state.filters.dailyReportRep = userTerritory;
-    state.filters.accountsTerritory = userTerritory;
-
-    // If currently on manager tab, redirect to daily
-    const currentTabManager = document.getElementById('tab-manager');
-    if (currentTabManager && !currentTabManager.classList.contains('hidden')) {
-      switchTab('daily');
-    }
-  }
-
-  persistData();
-  syncWithSupabase(false);
-
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay) {
-    overlay.style.display = 'none';
-    overlay.classList.add('hidden');
-  }
-  closeProfileSwitcherModal();
-  if (typeof closeMobileMoreDrawer === 'function') closeMobileMoreDrawer();
-
-  showToast(
-    `Switched to ${state.currentUser.name}`,
-    `Active Profile: ${state.currentUser.title}. Data restricted to ${state.currentUser.territory === 'ALL' ? 'All UAE Territories' : state.currentUser.territory}.`,
-    'success'
-  );
-
-  renderAll();
-};
+window.performLogin = performLogin;
+window.isUserManager = isUserManager;
+window.getActiveRepTerritory = getActiveRepTerritory;
 
 window.openProfileSwitcherModal = function() {
   const m = document.getElementById('profileSwitcherModal');
@@ -7161,7 +7216,7 @@ function renderAccountsGrid() {
   const todayStr = state.dailyDate || getSyncedTodayDate();
   const currentMonthKey = todayStr.slice(0, 7); // 'YYYY-MM'
 
-  if (monthFilterSelect && monthFilterSelect.options.length === 0) {
+  if (monthFilterSelect && monthFilterSelect.options && monthFilterSelect.options.length === 0) {
     const [curY, curM] = currentMonthKey.split('-').map(Number);
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

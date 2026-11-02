@@ -55,7 +55,7 @@
   <base href="./">
   <link rel="icon" type="image/png" href="conceptors_logo.png">
   <link rel="apple-touch-icon" href="conceptors_logo.png">
-  <link rel="stylesheet" href="./styles.css?v=3.13.0">
+  <link rel="stylesheet" href="./styles.css?v=3.14.0">
 </head>
 <body class="bg-[#eaf0f8] dark:bg-[#070d19] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -271,12 +271,15 @@
             </div>
           </div>
 
-          <!-- 1-Click Profile Switch Pills -->
+          <!-- Account Switch & Lock -->
           <div class="flex items-center gap-1.5 bg-slate-950/70 border border-slate-800 rounded-xl p-1 text-xs">
-            <span class="text-[10px] text-slate-400 font-extrabold px-1.5 uppercase tracking-wider">Fast Switch:</span>
-            <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-sky-300 hover:bg-sky-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Switch to Dr. Shaimaa (Rep T1)">Shaimaa (T1)</button>
-            <button type="button" onclick="quickSwitchUser('marsel.t2')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-purple-300 hover:bg-purple-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Switch to Dr. Marsel (Rep T2)">Marsel (T2)</button>
-            <button type="button" onclick="quickSwitchUser('manager')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Switch to Senior Manager">Manager</button>
+            <span class="text-[10px] text-slate-400 font-extrabold px-1.5 uppercase tracking-wider">Account:</span>
+            <button type="button" onclick="promptSwitchAccount('SHAIMAA')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-sky-300 hover:bg-sky-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Sign In as Dr. Shaimaa (Rep T1)">Shaimaa (T1)</button>
+            <button type="button" onclick="promptSwitchAccount('MARSEL')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-purple-300 hover:bg-purple-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Sign In as Dr. Marsel (Rep T2)">Marsel (T2)</button>
+            <button type="button" onclick="promptSwitchAccount('SAMEH')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 hover:text-white transition-all active:scale-95 touch-manipulation" title="Sign In as Senior Sales Manager">Sameh (MGR)</button>
+            <button type="button" onclick="handleLogout()" class="px-2 py-1 rounded-lg text-xs font-bold text-rose-400 hover:bg-rose-500/20 hover:text-white transition-all active:scale-95 touch-manipulation flex items-center gap-1" title="Sign Out & Lock CRM">
+              <i data-lucide="lock" class="w-3 h-3"></i> Lock
+            </button>
           </div>
         </div>
 
@@ -1153,11 +1156,11 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-          <span class="text-[11px] text-slate-400 font-semibold">Switch to Field Rep:</span>
-          <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
+          <span class="text-[11px] text-slate-400 font-semibold">Switch Account:</span>
+          <button type="button" onclick="promptSwitchAccount('SHAIMAA')" class="px-3 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
             <i data-lucide="user" class="w-3.5 h-3.5"></i> Dr. Shaimaa (Rep T1)
           </button>
-          <button type="button" onclick="quickSwitchUser('marsel.t2')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
+          <button type="button" onclick="promptSwitchAccount('MARSEL')" class="px-3 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95 touch-manipulation">
             <i data-lucide="user" class="w-3.5 h-3.5"></i> Dr. Marsel (Rep T2)
           </button>
           <button type="button" onclick="handleLogout()" class="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 touch-manipulation">
@@ -1583,18 +1586,18 @@
       <!-- Fast Profile Switcher in Mobile Drawer -->
       <div class="pt-3 border-t border-slate-800 space-y-1.5">
         <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-          <span>Switch Profile (1-Tap)</span>
-          <span class="text-sky-400 font-semibold">Instant Access</span>
+          <span>Switch Account (Level 2)</span>
+          <span class="text-sky-400 font-semibold">Requires Password</span>
         </div>
         <div class="grid grid-cols-3 gap-1.5 text-xs font-bold">
-          <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="py-2 px-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-center active:scale-95 transition-all">
+          <button type="button" onclick="promptSwitchAccount('SHAIMAA')" class="py-2 px-1 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 text-center active:scale-95 transition-all">
             Shaimaa (T1)
           </button>
-          <button type="button" onclick="quickSwitchUser('marsel.t2')" class="py-2 px-1 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-center active:scale-95 transition-all">
+          <button type="button" onclick="promptSwitchAccount('MARSEL')" class="py-2 px-1 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 text-center active:scale-95 transition-all">
             Marsel (T2)
           </button>
-          <button type="button" onclick="quickSwitchUser('manager')" class="py-2 px-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-center active:scale-95 transition-all">
-            Manager
+          <button type="button" onclick="promptSwitchAccount('SAMEH')" class="py-2 px-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-center active:scale-95 transition-all">
+            Dr. Sameh
           </button>
         </div>
       </div>
@@ -2960,7 +2963,7 @@
           <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Username / ID</label>
           <div class="relative">
             <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-            <input type="text" id="loginUsername" required placeholder="e.g. shaimaa.t1, marsel.t2 or manager" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-brand-500">
+            <input type="text" id="loginUsername" required placeholder="Enter authorized username (SAMEH / SHAIMAA / MARSEL)" autocomplete="username" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-brand-500 font-medium">
           </div>
         </div>
 
@@ -2968,7 +2971,7 @@
           <label class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Password</label>
           <div class="relative">
             <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-            <input type="password" id="loginPassword" required placeholder="Enter password" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-10 py-2.5 text-xs text-white outline-none focus:border-brand-500">
+            <input type="password" id="loginPassword" required placeholder="Enter confidential password" autocomplete="current-password" class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-10 py-2.5 text-xs text-white outline-none focus:border-brand-500 font-mono">
             <button type="button" onclick="togglePasswordReveal()" class="absolute right-3 top-2.5 text-slate-400 hover:text-white p-0.5">
               <i id="eyeIcon" data-lucide="eye" class="w-4 h-4"></i>
             </button>
@@ -2977,27 +2980,17 @@
 
         <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-brand-600 to-sky-500 hover:from-brand-500 text-white font-bold text-xs shadow-lg shadow-brand-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]">
           <i data-lucide="log-in" class="w-4 h-4"></i>
-          <span>Sign In to Field CRM</span>
+          <span>Sign In to Level 2 CRM</span>
         </button>
       </form>
 
-      <!-- Quick Demo Login Chips -->
-      <div class="pt-4 border-t border-slate-800 text-center space-y-2.5">
-        <span class="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">One-Click Testing Accounts</span>
-        <div class="grid grid-cols-1 gap-1.5 text-xs">
-          <button type="button" onclick="quickLogin('shaimaa.t1', 'rep1')" class="w-full p-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 font-bold flex items-center justify-between transition-colors">
-            <span class="flex items-center gap-1.5"><i data-lucide="user" class="w-3.5 h-3.5"></i> Shaimaa (Rep T1)</span>
-            <span class="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded">pw: rep1</span>
-          </button>
-          <button type="button" onclick="quickLogin('marsel.t2', 'rep2')" class="w-full p-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold flex items-center justify-between transition-colors">
-            <span class="flex items-center gap-1.5"><i data-lucide="user" class="w-3.5 h-3.5"></i> Marsel (Rep T2)</span>
-            <span class="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded">pw: rep2</span>
-          </button>
-          <button type="button" onclick="quickLogin('manager', 'admin')" class="w-full p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold flex items-center justify-between transition-colors">
-            <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Dr. Sameh Ageez (Senior Sales Manager)</span>
-            <span class="text-[10px] text-slate-400 font-mono bg-slate-900 px-2 py-0.5 rounded">pw: admin</span>
-          </button>
+      <!-- Level 2 Security Protocol Notice -->
+      <div class="pt-4 border-t border-slate-800 text-center space-y-1.5">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900/80 border border-slate-700/80 text-[10px] font-bold text-slate-400">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>Level 2 Security Gateway • Role-Based Authentication</span>
         </div>
+        <p class="text-[10px] text-slate-500">Each team member must authenticate with their designated credentials.</p>
       </div>
     </div>
   </div>
@@ -3035,42 +3028,45 @@
 
       <!-- Switch Options -->
       <div class="space-y-2">
-        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Switch To Profile:</div>
+        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+          <span>Switch Account (Level 2):</span>
+          <span class="text-sky-400 text-[10px] lowercase font-semibold">password required</span>
+        </div>
         
         <!-- Option 1: Shaimaa -->
-        <button type="button" onclick="quickSwitchUser('shaimaa.t1')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-sky-500/10 border border-slate-700 hover:border-sky-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+        <button type="button" onclick="promptSwitchAccount('SHAIMAA')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-sky-500/10 border border-slate-700 hover:border-sky-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-300 font-bold flex items-center justify-center text-xs border border-sky-500/30">SH</div>
             <div>
               <div class="font-bold text-white text-xs group-hover:text-sky-300 transition-colors">Dr. Shaimaa (Medical Rep T1)</div>
-              <div class="text-[10px] text-slate-400">Territory 1: Dubai, Abu Dhabi & Al Ain (160 Clinics)</div>
+              <div class="text-[10px] text-slate-400">Territory 1: Dubai, Abu Dhabi & Al Ain • Sign in with password</div>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors"></i>
+          <i data-lucide="key" class="w-4 h-4 text-slate-500 group-hover:text-sky-400 transition-colors"></i>
         </button>
 
         <!-- Option 2: Marsel -->
-        <button type="button" onclick="quickSwitchUser('marsel.t2')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-purple-500/10 border border-slate-700 hover:border-purple-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+        <button type="button" onclick="promptSwitchAccount('MARSEL')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-purple-500/10 border border-slate-700 hover:border-purple-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 font-bold flex items-center justify-center text-xs border border-purple-500/30">MA</div>
             <div>
               <div class="font-bold text-white text-xs group-hover:text-purple-300 transition-colors">Dr. Marsel (Medical Rep T2)</div>
-              <div class="text-[10px] text-slate-400">Territory 2: Northern Emirates (100 Clinics)</div>
+              <div class="text-[10px] text-slate-400">Territory 2: Northern Emirates • Sign in with password</div>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-purple-400 transition-colors"></i>
+          <i data-lucide="key" class="w-4 h-4 text-slate-500 group-hover:text-purple-400 transition-colors"></i>
         </button>
 
         <!-- Option 3: Senior Manager -->
-        <button type="button" onclick="quickSwitchUser('manager')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-emerald-500/10 border border-slate-700 hover:border-emerald-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
+        <button type="button" onclick="promptSwitchAccount('SAMEH')" class="w-full p-3 rounded-2xl bg-slate-800/60 hover:bg-emerald-500/10 border border-slate-700 hover:border-emerald-500/40 text-left flex items-center justify-between transition-all group active:scale-[0.99]">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-300 font-bold flex items-center justify-center text-xs border border-emerald-500/30">SA</div>
             <div>
               <div class="font-bold text-white text-xs group-hover:text-emerald-300 transition-colors">Dr. Sameh Ageez (Senior Sales Manager)</div>
-              <div class="text-[10px] text-slate-400">Executive Command: Approvals, Quotas & Live Alerts</div>
+              <div class="text-[10px] text-slate-400">Executive Master View • Sign in with confidential password</div>
             </div>
           </div>
-          <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors"></i>
+          <i data-lucide="key" class="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-colors"></i>
         </button>
       </div>
 
@@ -3764,7 +3760,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.13.0"></script>
-  <script src="./crm_app.js?v=3.13.0"></script>
+  <script src="./crm_data.js?v=3.14.0"></script>
+  <script src="./crm_app.js?v=3.14.0"></script>
 </body>
 </html>
