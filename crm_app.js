@@ -594,9 +594,21 @@ async function syncWithSupabase(force = false) {
       try { localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(state.monthlyPlans)); } catch(e) {}
     }
 
-    const custRes = await supabaseRest('customers?select=*');
+    let custQuery = 'customers?select=*&order=name.asc';
+    if (state.currentUser && typeof isUserManager === 'function' && !isUserManager(state.currentUser)) {
+      const repTerr = typeof getActiveRepTerritory === 'function' ? getActiveRepTerritory(state.currentUser) : 'T1';
+      custQuery = `customers?territory=eq.${encodeURIComponent(repTerr)}&select=*&order=name.asc`;
+    }
+    const custRes = await supabaseRest(custQuery);
     if (custRes.data && Array.isArray(custRes.data) && custRes.data.length > 0) {
-      state.customers = custRes.data.map(mapCustomerFromDb);
+      const fetchedCustomers = custRes.data.map(mapCustomerFromDb);
+      if (!state.currentUser || (typeof isUserManager === 'function' && isUserManager(state.currentUser))) {
+        state.customers = fetchedCustomers;
+      } else {
+        const repTerr = typeof getActiveRepTerritory === 'function' ? getActiveRepTerritory(state.currentUser) : 'T1';
+        const otherCustomers = (state.customers || []).filter(c => (c.territory || c.repId) !== repTerr);
+        state.customers = [...otherCustomers, ...fetchedCustomers];
+      }
     }
 
     const prodRes = await supabaseRest('products?select=*');
@@ -1029,12 +1041,18 @@ function loadStoredData() {
     state.currentUser = { ...defaultUser };
     state.filters.analyticsRepFilter = 'ALL';
     state.filters.dailyReportRep = 'ALL';
+    state.filters.accountsTerritory = 'ALL';
     try { localStorage.setItem(STORAGE_KEY_AUTH_USER, JSON.stringify(state.currentUser)); } catch(e) {}
   } else if (state.currentUser) {
-    if (state.currentUser.role === 'manager') {
+    if (typeof isUserManager === 'function' && isUserManager(state.currentUser)) {
       state.filters.dailyReportRep = 'ALL';
+      state.filters.analyticsRepFilter = 'ALL';
+      state.filters.accountsTerritory = 'ALL';
     } else {
-      state.filters.dailyReportRep = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+      const terr = typeof getActiveRepTerritory === 'function' ? getActiveRepTerritory(state.currentUser) : (state.currentUser.territory || 'T1');
+      state.filters.dailyReportRep = terr;
+      state.filters.analyticsRepFilter = terr;
+      state.filters.accountsTerritory = terr;
     }
   }
 
@@ -1221,6 +1239,50 @@ function updateThemeButtonUI(theme) {
 // 4. PASSWORD AUTHENTICATION & SESSION MANAGEMENT
 // =========================================================================
 
+function isUserManager(user = state.currentUser) {
+  if (!user) return false;
+  return (
+    user.role === 'manager' ||
+    user.username === 'sameh.ageez' ||
+    user.username === 'manager' ||
+    user.territory === 'ALL' ||
+    user.email === 's.ageez@the-conceptors.com' ||
+    user.email === 'sameh.ageez@conceptors.ae'
+  );
+}
+window.isUserManager = isUserManager;
+
+function getActiveRepTerritory(user = state.currentUser) {
+  if (!user) return 'T1';
+  if (
+    user.role === 'rep_t1' ||
+    user.territory === 'T1' ||
+    user.id === 'T1' ||
+    user.repId === 'T1' ||
+    user.username === 'shaimaa.t1' ||
+    user.username === 'ahmed.t1' ||
+    (user.name && user.name.toLowerCase().includes('shaimaa'))
+  ) {
+    return 'T1';
+  }
+  if (
+    user.role === 'rep_t2' ||
+    user.territory === 'T2' ||
+    user.id === 'T2' ||
+    user.repId === 'T2' ||
+    user.username === 'marsel.t2' ||
+    user.username === 'youssef.t2' ||
+    (user.name && user.name.toLowerCase().includes('marsel'))
+  ) {
+    return 'T2';
+  }
+  if (user.territory && user.territory !== 'ALL') {
+    return user.territory;
+  }
+  return 'T1';
+}
+window.getActiveRepTerritory = getActiveRepTerritory;
+
 function checkAuthSession() {
   const overlay = document.getElementById('loginOverlay');
   if (!state.currentUser) {
@@ -1264,13 +1326,15 @@ function performLogin(username, password) {
 
   localStorage.removeItem('conceptors_crm_logged_out');
   state.currentUser = { ...foundUser };
-  if (state.currentUser.role === 'manager') {
+  if (isUserManager(state.currentUser)) {
     state.filters.analyticsRepFilter = 'ALL';
     state.filters.dailyReportRep = 'ALL';
+    state.filters.accountsTerritory = 'ALL';
   } else {
-    const userTerritory = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    const userTerritory = getActiveRepTerritory(state.currentUser);
     state.filters.analyticsRepFilter = userTerritory;
     state.filters.dailyReportRep = userTerritory;
+    state.filters.accountsTerritory = userTerritory;
   }
   persistData();
 
@@ -1289,6 +1353,7 @@ function performLogin(username, password) {
   // Switch to Daily tab upon login
   switchTab('daily');
   renderAll();
+  syncWithSupabase(false);
 }
 
 window.quickSwitchUser = function(username) {
@@ -1302,13 +1367,15 @@ window.quickSwitchUser = function(username) {
   localStorage.removeItem('conceptors_crm_logged_out');
   state.currentUser = { ...foundUser };
 
-  if (state.currentUser.role === 'manager') {
+  if (isUserManager(state.currentUser)) {
     state.filters.analyticsRepFilter = 'ALL';
     state.filters.dailyReportRep = 'ALL';
+    state.filters.accountsTerritory = 'ALL';
   } else {
-    const userTerritory = state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : 'T2');
+    const userTerritory = getActiveRepTerritory(state.currentUser);
     state.filters.analyticsRepFilter = userTerritory;
     state.filters.dailyReportRep = userTerritory;
+    state.filters.accountsTerritory = userTerritory;
 
     // If currently on manager tab, redirect to daily
     const currentTabManager = document.getElementById('tab-manager');
@@ -1318,6 +1385,7 @@ window.quickSwitchUser = function(username) {
   }
 
   persistData();
+  syncWithSupabase(false);
 
   const overlay = document.getElementById('loginOverlay');
   if (overlay) {
@@ -1483,7 +1551,7 @@ function updateUserProfileDisplay() {
 
   const desktopAddClinicBtn = document.getElementById('desktopStripAddClinicBtn');
   const desktopManagerSection = document.getElementById('desktopStripManagerSection');
-  if (state.currentUser && state.currentUser.role === 'manager') {
+  if (isUserManager(state.currentUser)) {
     if (desktopAddClinicBtn) desktopAddClinicBtn.classList.remove('hidden');
     if (desktopManagerSection) desktopManagerSection.classList.remove('hidden');
   } else {
@@ -1497,7 +1565,7 @@ function updateUserProfileDisplay() {
   const mobileBottomNav = document.getElementById('mobileBottomNav');
   const dailyManagerQuickBar = document.getElementById('dailyManagerQuickBar');
   const mobileDrawerManagerSection = document.getElementById('mobileDrawerManagerSection');
-  if (state.currentUser && state.currentUser.role === 'manager') {
+  if (isUserManager(state.currentUser)) {
     if (managerTabBtn) managerTabBtn.classList.remove('hidden');
     if (mobileManagerBtn) mobileManagerBtn.classList.remove('hidden');
     if (mobileBottomNav) {
@@ -1524,7 +1592,7 @@ function updateUserProfileDisplay() {
   const formattedDate = formatDisplayDate(state.dailyDate);
 
   if (greetingEl) {
-    greetingEl.textContent = state.currentUser.role === 'manager' 
+    greetingEl.textContent = isUserManager(state.currentUser)
       ? 'Executive Operations Command' 
       : `Welcome back, ${state.currentUser.name}`;
   }
@@ -1546,8 +1614,8 @@ function updateUserProfileDisplay() {
     dateSubtitle.textContent = `Itinerary & Execution for ${formattedDate}`;
   }
 
-  // Restrict Add Account options strictly to Senior Sales Manager
-  const isManager = (state.currentUser && state.currentUser.role === 'manager');
+  // Restrict Add Account options strictly to Senior Sales Manager Dr. Sameh Ageez
+  const isManager = isUserManager(state.currentUser);
   const addAccountHeaderBtn = document.getElementById('addAccountBtnHeader');
   if (addAccountHeaderBtn) {
     if (isManager) addAccountHeaderBtn.classList.remove('hidden');
@@ -1573,46 +1641,46 @@ function updateUserProfileDisplay() {
 // =========================================================================
 
 function getScopedCustomers() {
-  if (state.currentUser && state.currentUser.role === 'rep_t1') {
-    return state.customers.filter(c => c.repId === 'T1' || c.territory === 'T1');
+  const user = state.currentUser;
+  if (!user) {
+    return state.customers || [];
   }
-  if (state.currentUser && state.currentUser.role === 'rep_t2') {
-    return state.customers.filter(c => c.repId === 'T2' || c.territory === 'T2');
+  // Senior Sales Manager Dr. Sameh Ageez is the ONLY user permitted to view all territories
+  if (isUserManager(user)) {
+    return state.customers || [];
   }
-  return state.customers || []; // Manager or default sees all
+  // Medical Reps are strictly scoped to their designated territory only
+  const repTerr = getActiveRepTerritory(user);
+  return (state.customers || []).filter(c => (c.repId === repTerr || c.territory === repTerr));
 }
 window.getScopedCustomers = getScopedCustomers;
 
 function getScopedVisits() {
-  if (state.currentUser && state.currentUser.role === 'rep_t1') {
-    return (state.visits || []).filter(v => v.repId === 'T1' || v.territory === 'T1');
-  }
-  if (state.currentUser && state.currentUser.role === 'rep_t2') {
-    return (state.visits || []).filter(v => v.repId === 'T2' || v.territory === 'T2');
-  }
-  return state.visits || []; // Manager or default sees all
+  const user = state.currentUser;
+  if (!user) return state.visits || [];
+  if (isUserManager(user)) return state.visits || [];
+  const repTerr = getActiveRepTerritory(user);
+  return (state.visits || []).filter(v => v.repId === repTerr || v.territory === repTerr);
 }
 window.getScopedVisits = getScopedVisits;
 
 function getScopedOrders() {
-  if (state.currentUser && state.currentUser.role === 'rep_t1') {
-    return state.orders.filter(o => o.repId === 'T1' || o.territory === 'T1');
-  }
-  if (state.currentUser && state.currentUser.role === 'rep_t2') {
-    return state.orders.filter(o => o.repId === 'T2' || o.territory === 'T2');
-  }
-  return state.orders || []; // Manager or default sees all
+  const user = state.currentUser;
+  if (!user) return state.orders || [];
+  if (isUserManager(user)) return state.orders || [];
+  const repTerr = getActiveRepTerritory(user);
+  return (state.orders || []).filter(o => o.repId === repTerr || o.territory === repTerr);
 }
+window.getScopedOrders = getScopedOrders;
 
 function getScopedPlans() {
-  if (state.currentUser && state.currentUser.role === 'rep_t1') {
-    return state.monthlyPlans.filter(p => p.repId === 'T1');
-  }
-  if (state.currentUser && state.currentUser.role === 'rep_t2') {
-    return state.monthlyPlans.filter(p => p.repId === 'T2');
-  }
-  return state.monthlyPlans || []; // Manager or default sees all
+  const user = state.currentUser;
+  if (!user) return state.monthlyPlans || [];
+  if (isUserManager(user)) return state.monthlyPlans || [];
+  const repTerr = getActiveRepTerritory(user);
+  return (state.monthlyPlans || []).filter(p => p.repId === repTerr || p.territory === repTerr);
 }
+window.getScopedPlans = getScopedPlans;
 
 // =========================================================================
 // 5B. 1-DAY (24-HOUR) ADVANCE PLANNING UTILITY & INTERACTIVE CUSTOMER COMBOBOX ENGINE
@@ -7033,8 +7101,59 @@ function renderAccountsGrid() {
   const container = document.getElementById('accountsGrid');
   if (!container) return;
 
+  const isMgr = isUserManager(state.currentUser);
+  const repTerr = isMgr ? null : getActiveRepTerritory(state.currentUser);
+
+  // Synchronize and lock/unlock territory dropdown based on role
+  const territorySelect = document.getElementById('accountsTerritoryFilter');
+  if (territorySelect) {
+    if (isMgr) {
+      // Senior Sales Manager Dr. Sameh Ageez is the ONLY user authorized to view All Territories
+      territorySelect.disabled = false;
+      territorySelect.className = 'bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-brand-500 cursor-pointer font-medium';
+      territorySelect.title = 'Dr. Sameh Ageez Executive View: Select territory or view all';
+      territorySelect.innerHTML = `
+        <option value="ALL">All Territories (UAE Master Directory)</option>
+        <option value="T1">Territory 1 (Dubai / AUH / Al Ain - Dr. Shaimaa)</option>
+        <option value="T2">Territory 2 (Northern Emirates - Dr. Marsel)</option>
+      `;
+      if (!state.filters.accountsTerritory) {
+        state.filters.accountsTerritory = 'ALL';
+      }
+      territorySelect.value = state.filters.accountsTerritory;
+    } else {
+      // Medical Rep: Strictly locked to designated territory; "All Territories" is completely omitted
+      state.filters.accountsTerritory = repTerr;
+      territorySelect.disabled = true;
+      territorySelect.className = 'bg-slate-800/90 border border-sky-500/40 text-sky-300 font-bold rounded-lg px-2.5 py-1.5 text-xs outline-none cursor-not-allowed shadow-inner';
+      territorySelect.title = `Strictly locked to your designated territory (${repTerr})`;
+      if (repTerr === 'T1') {
+        territorySelect.innerHTML = `
+          <option value="T1" selected>🔒 Territory 1 (Dubai / AUH / Al Ain - Dr. Shaimaa)</option>
+        `;
+      } else {
+        territorySelect.innerHTML = `
+          <option value="T2" selected>🔒 Territory 2 (Northern Emirates - Dr. Marsel)</option>
+        `;
+      }
+      territorySelect.value = repTerr;
+    }
+  }
+
+  // Update subtitle to clearly show designated territory vs manager view
+  const subtitleEl = document.getElementById('accountsDirectorySubtitle');
+  if (subtitleEl) {
+    if (isMgr) {
+      subtitleEl.innerHTML = `<span class="text-emerald-400 font-semibold">Senior Management View (Dr. Sameh Ageez):</span> Master veterinary accounts database across all UAE territories`;
+    } else if (repTerr === 'T1') {
+      subtitleEl.innerHTML = `<span class="text-sky-400 font-semibold">Designated Accounts:</span> Dr. Shaimaa • Territory 1 (Dubai, Abu Dhabi & Al Ain)`;
+    } else {
+      subtitleEl.innerHTML = `<span class="text-purple-400 font-semibold">Designated Accounts:</span> Dr. Marsel • Territory 2 (Northern Emirates)`;
+    }
+  }
+
   const searchQ = (state.filters.accountsSearch || '').toLowerCase();
-  const terrFilter = state.filters.accountsTerritory || 'ALL';
+  const terrFilter = isMgr ? (state.filters.accountsTerritory || 'ALL') : repTerr;
   const statusFilter = state.filters.accountsStatus || 'ACTIVE';
 
   // Initialize and synchronize accountsMonthFilter dropdown
@@ -7070,10 +7189,10 @@ function renderAccountsGrid() {
   let activeMonth = state.filters.accountsMonthFilter || currentMonthKey;
   if (activeMonth === 'CURRENT') activeMonth = currentMonthKey;
 
-  // Strictly scoped customers
+  // Strictly scoped customers: Reps automatically get ONLY their designated accounts
   let list = getScopedCustomers();
 
-  if (terrFilter !== 'ALL') {
+  if (isMgr && terrFilter !== 'ALL') {
     list = list.filter(c => c.territory === terrFilter || c.repId === terrFilter);
   }
 
@@ -7220,7 +7339,11 @@ window.renderAccountsGrid = renderAccountsGrid;
 
 window.handleAccountsFilter = function() {
   state.filters.accountsSearch = document.getElementById('accountsSearchInput')?.value || '';
-  state.filters.accountsTerritory = document.getElementById('accountsTerritoryFilter')?.value || 'ALL';
+  if (isUserManager(state.currentUser)) {
+    state.filters.accountsTerritory = document.getElementById('accountsTerritoryFilter')?.value || 'ALL';
+  } else {
+    state.filters.accountsTerritory = getActiveRepTerritory(state.currentUser);
+  }
   state.filters.accountsStatus = document.getElementById('accountsStatusFilter')?.value || 'ACTIVE';
   state.filters.accountsMonthFilter = document.getElementById('accountsMonthFilter')?.value || 'CURRENT';
   renderAccountsGrid();
@@ -7235,7 +7358,7 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
   }
   openPlanVisitModal();
   const repSelect = document.getElementById('planRepSelect');
-  if (repSelect && (!state.currentUser || state.currentUser.role === 'manager')) {
+  if (repSelect && (!state.currentUser || isUserManager(state.currentUser))) {
     repSelect.value = repId;
     filterPlanClinics();
   }
@@ -7247,8 +7370,8 @@ window.openPlanVisitModalForClient = function(clientCode, repId) {
 // =========================================================================
 
 window.openAddAccountModal = function() {
-  if (!state.currentUser || state.currentUser.role !== 'manager') {
-    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to add new clinic accounts.', 'error');
+  if (!state.currentUser || !isUserManager(state.currentUser)) {
+    showToast('Permission Denied', 'Only Senior Sales Manager Dr. Sameh Ageez is authorized to add new clinic accounts.', 'error');
     return;
   }
 
@@ -7433,8 +7556,8 @@ window.handleAddAccountSubmit = async function(e) {
 };
 
 window.toggleAccountFreeze = async function(clientCode) {
-  if (!state.currentUser || state.currentUser.role !== 'manager') {
-    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to freeze or reactivate clinic accounts.', 'error');
+  if (!state.currentUser || !isUserManager(state.currentUser)) {
+    showToast('Permission Denied', 'Only Senior Sales Manager Dr. Sameh Ageez is authorized to freeze or reactivate clinic accounts.', 'error');
     return;
   }
 
@@ -7501,8 +7624,8 @@ window.toggleAccountFreeze = async function(clientCode) {
 // =========================================================================
 
 window.openEditAccountModal = function(clientCode) {
-  if (!state.currentUser || state.currentUser.role !== 'manager') {
-    showToast('Permission Denied', 'Only the Senior Sales Manager is authorized to edit clinic account details.', 'error');
+  if (!state.currentUser || !isUserManager(state.currentUser)) {
+    showToast('Permission Denied', 'Only Senior Sales Manager Dr. Sameh Ageez is authorized to edit clinic account details.', 'error');
     return;
   }
 
@@ -7802,6 +7925,18 @@ window.handleEditAccountSubmit = async function(e) {
 window.goToAccountInCRM = function(clientCode) {
   closeNotificationsModal();
   switchTab('accounts');
+  const user = state.currentUser;
+  const isMgr = isUserManager(user);
+  const targetCust = (state.customers || []).find(c => c && c.code && c.code.toUpperCase() === String(clientCode).toUpperCase());
+
+  if (!isMgr && targetCust) {
+    const repTerr = getActiveRepTerritory(user);
+    if ((targetCust.territory || targetCust.repId) !== repTerr) {
+      showToast('Territory Restricted', `Account ${targetCust.name} (${targetCust.code}) belongs to Territory ${(targetCust.territory || targetCust.repId)}. It is only accessible by Senior Management or that territory's medical rep.`, 'warning');
+      return;
+    }
+  }
+
   const searchInput = document.getElementById('accountsSearchInput');
   if (searchInput) {
     searchInput.value = clientCode;
@@ -9726,7 +9861,7 @@ window.exportAllDataCSVs = function() {
   // 3. Clinics Directory CSV
   setTimeout(() => {
     const clinicHeaders = ['Clinic Code', 'Clinic Name', 'Location / Emirate', 'Territory', 'Assigned Rep', 'Tier', 'Contact Person', 'Phone'];
-    const clinicRows = (state.customers || []).map(c => [
+    const clinicRows = getScopedCustomers().map(c => [
       `"${c.code}"`,
       `"${(c.name || '').replace(/"/g, '""')}"`,
       `"${c.location || ''}"`,
@@ -10952,9 +11087,11 @@ function handleExportClinics() {
 window.handleExportClinics = handleExportClinics;
 
 function exportClinicsCSV(scope = 'unvisited', territoryFilter = 'ALL') {
-  let clinics = state.customers || [];
-  if (territoryFilter && territoryFilter !== 'ALL') {
-    clinics = clinics.filter(c => (c.territory || c.repId) === territoryFilter);
+  let clinics = getScopedCustomers();
+  if (isUserManager(state.currentUser)) {
+    if (territoryFilter && territoryFilter !== 'ALL') {
+      clinics = clinics.filter(c => (c.territory || c.repId) === territoryFilter);
+    }
   }
 
   const currentYM = (getSyncedTodayDate()).substring(0, 7);
