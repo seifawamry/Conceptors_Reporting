@@ -3234,9 +3234,9 @@
           <div>
             <label class="block text-[11px] text-slate-300 font-bold mb-1">Account Tier / Category <span class="text-rose-400">*</span></label>
             <select id="newAccountTier" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-semibold">
-              <option value="VIP Platinum">💎 VIP Platinum (High Volume)</option>
-              <option value="VIP Gold">⭐ VIP Gold (Target Account)</option>
-              <option value="Silver" selected>🔹 Silver (Standard Clinic / Pharmacy)</option>
+              <option value="VIP Platinum">💎 VIP Platinum (Class A - High Volume)</option>
+              <option value="VIP Gold">⭐ VIP Gold (Class B - Target Account)</option>
+              <option value="Silver" selected>🔹 Silver (Class C - Standard Clinic / Pharmacy)</option>
             </select>
           </div>
         </div>
@@ -3253,7 +3253,7 @@
             <label class="block text-[11px] text-slate-300 font-bold mb-1">Territory Assignment <span class="text-rose-400">*</span></label>
             <select id="newAccountTerritory" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-teal-500 font-bold">
               <option value="T1">Territory 1 - Dr. Shaimaa (Dubai / Abu Dhabi / Al Ain)</option>
-              <option value="T2">Territory 2 - Dr. Marsel (Northern Emirates)</option>
+              <option value="T2">Territory 2 - Dr. Marsel (Dubai &amp; Northern Emirates)</option>
             </select>
           </div>
           <div>
@@ -3263,9 +3263,9 @@
               <option value="Abu Dhabi">Abu Dhabi</option>
               <option value="Sharjah">Sharjah</option>
               <option value="Ajman">Ajman</option>
-              <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+              <option value="Ras al- Khaimah">Ras al- Khaimah</option>
               <option value="Fujairah">Fujairah</option>
-              <option value="Umm Al Quwain">Umm Al Quwain</option>
+              <option value="Umm al- Quwain">Umm al- Quwain</option>
               <option value="Al Ain">Al Ain</option>
             </select>
           </div>
@@ -3352,11 +3352,11 @@
             <input type="text" id="editAccountCode" required placeholder="e.g. DC1050 or AC0600" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 uppercase font-mono">
           </div>
           <div>
-            <label class="block text-[11px] text-slate-300 font-bold mb-1">Account Tier / Category <span class="text-rose-400">*</span></label>
+            <label class="block text-[11px] text-slate-300 font-bold mb-1">Account Tier / Class (A/B/C) <span class="text-rose-400">*</span></label>
             <select id="editAccountTier" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-semibold">
-              <option value="VIP Platinum">💎 VIP Platinum (High Volume)</option>
-              <option value="VIP Gold">⭐ VIP Gold (Target Account)</option>
-              <option value="Silver">🔹 Silver (Standard Clinic / Pharmacy)</option>
+              <option value="VIP Platinum">💎 VIP Platinum — Class A (High Volume)</option>
+              <option value="VIP Gold">⭐ VIP Gold — Class B (Target Account)</option>
+              <option value="Silver">🔹 Silver — Class C (Standard Clinic / Pharmacy)</option>
             </select>
           </div>
         </div>
@@ -3373,7 +3373,7 @@
             <label class="block text-[11px] text-slate-300 font-bold mb-1">Territory Assignment <span class="text-rose-400">*</span></label>
             <select id="editAccountTerritory" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-bold">
               <option value="T1">Territory 1 - Dr. Shaimaa (Dubai / Abu Dhabi / Al Ain)</option>
-              <option value="T2">Territory 2 - Dr. Marsel (Northern Emirates)</option>
+              <option value="T2">Territory 2 - Dr. Marsel (Dubai &amp; Northern Emirates)</option>
             </select>
           </div>
           <div>
@@ -3381,12 +3381,12 @@
             <select id="editAccountLocation" required class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 text-xs outline-none focus:border-indigo-500 font-medium">
               <option value="Dubai">Dubai</option>
               <option value="Abu Dhabi">Abu Dhabi</option>
+              <option value="Al Ain">Al Ain</option>
               <option value="Sharjah">Sharjah</option>
               <option value="Ajman">Ajman</option>
-              <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+              <option value="Ras al- Khaimah">Ras al- Khaimah</option>
               <option value="Fujairah">Fujairah</option>
-              <option value="Umm Al Quwain">Umm Al Quwain</option>
-              <option value="Al Ain">Al Ain</option>
+              <option value="Umm al- Quwain">Umm al- Quwain</option>
             </select>
           </div>
         </div>
@@ -3718,14 +3718,14 @@
                 <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Targeting</span>
               </div>
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                Export clinics that have NOT been visited this month across UAE, or full 260 accounts roster.
+                Export clinics that have NOT been visited this month across UAE, or full 407 accounts roster.
               </p>
               <div class="space-y-1.5 pt-1">
                 <div class="flex items-center gap-2">
                   <label class="text-[10px] text-slate-400 font-bold uppercase w-12">Scope:</label>
                   <select id="exportClinicsScope" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500">
                     <option value="unvisited">Unvisited Clinics This Month Only</option>
-                    <option value="all">Full UAE Customer Roster (All 260)</option>
+                    <option value="all">Full UAE Customer Roster (All 407)</option>
                   </select>
                 </div>
                 <div class="flex items-center gap-2">
@@ -3733,7 +3733,7 @@
                   <select id="exportClinicsTerritory" class="flex-1 bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1 outline-none focus:border-emerald-500">
                     <option value="ALL">All Emirates (T1 + T2)</option>
                     <option value="T1">Territory 1 (Dubai, Abu Dhabi, Al Ain)</option>
-                    <option value="T2">Territory 2 (Sharjah, Ajman, RAK, Fujairah)</option>
+                    <option value="T2">Territory 2 (Dubai, Sharjah, Ajman, RAK, Fujairah, UAQ)</option>
                   </select>
                 </div>
               </div>
@@ -3760,7 +3760,7 @@
 
   <!-- Scripts with cache-busting -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./crm_data.js?v=3.14.0"></script>
-  <script src="./crm_app.js?v=3.14.0"></script>
+  <script src="./crm_data.js?v=3.15.0"></script>
+  <script src="./crm_app.js?v=3.15.0"></script>
 </body>
 </html>

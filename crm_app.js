@@ -410,16 +410,40 @@ function mapPlanToDb(p) {
   };
 }
 
+function normalizeAccountTier(rawTier) {
+  const t = String(rawTier || '').trim().toUpperCase();
+  if (t === 'A' || t === 'CLASS A' || t.includes('PLATINUM')) return 'VIP Platinum';
+  if (t === 'B' || t === 'CLASS B' || t.includes('GOLD')) return 'VIP Gold';
+  if (t === 'C' || t === 'CLASS C' || t.includes('SILVER')) return 'Silver';
+  return 'Silver';
+}
+window.normalizeAccountTier = normalizeAccountTier;
+
+function getAccountClassFromTier(tier) {
+  const norm = normalizeAccountTier(tier);
+  if (norm === 'VIP Platinum') return 'A';
+  if (norm === 'VIP Gold') return 'B';
+  return 'C';
+}
+window.getAccountClassFromTier = getAccountClassFromTier;
+
 function mapCustomerFromDb(row) {
+  const code = String(row.code || '').trim().toUpperCase();
+  const initMatch = (window.INITIAL_CUSTOMERS || []).find(ic => ic && ic.code === code);
+  const tier = normalizeAccountTier(row.tier || (initMatch && initMatch.tier) || 'Silver');
+  const loc = row.location === 'ABU DHABI' ? 'Abu Dhabi' : (row.location || (initMatch && initMatch.location) || 'Dubai');
   return {
-    code: row.code,
+    code: code,
     name: row.name,
-    location: row.location,
+    type: row.type || (initMatch && initMatch.type) || 'Clinic/Hospital',
+    location: loc,
     territory: row.territory,
-    repId: row.rep_id,
-    tier: row.tier,
-    contactPerson: row.contact_person,
-    phone: row.phone,
+    repId: row.rep_id || row.territory,
+    tier: tier,
+    accountClass: getAccountClassFromTier(tier),
+    priority: (initMatch && initMatch.priority) || '',
+    contactPerson: row.contact_person || 'Lead Veterinarian',
+    phone: row.phone || '+971 4 000 0000',
     address: row.address || '',
     notes: row.notes || '',
     isActive: row.is_active !== false
@@ -427,15 +451,16 @@ function mapCustomerFromDb(row) {
 }
 
 function mapCustomerToDb(c) {
+  const tier = normalizeAccountTier(c.tier || c.accountClass || 'Silver');
   return {
-    code: c.code,
+    code: String(c.code || '').trim().toUpperCase(),
     name: c.name,
-    location: c.location,
+    location: c.location === 'ABU DHABI' ? 'Abu Dhabi' : c.location,
     territory: c.territory || c.repId,
     rep_id: c.repId || c.territory,
-    tier: c.tier || 'Silver',
-    contact_person: c.contactPerson || '',
-    phone: c.phone || '',
+    tier: tier,
+    contact_person: c.contactPerson || 'Lead Veterinarian',
+    phone: c.phone || '+971 4 000 0000',
     address: c.address || '',
     notes: c.notes || '',
     is_active: c.isActive !== false
@@ -606,8 +631,7 @@ async function syncWithSupabase(force = false) {
         state.customers = fetchedCustomers;
       } else {
         const repTerr = typeof getActiveRepTerritory === 'function' ? getActiveRepTerritory(state.currentUser) : 'T1';
-        const otherCustomers = (state.customers || []).filter(c => (c.territory || c.repId) !== repTerr);
-        state.customers = [...otherCustomers, ...fetchedCustomers];
+        state.customers = fetchedCustomers.filter(c => (c.territory || c.repId) === repTerr);
       }
     }
 
@@ -1050,11 +1074,13 @@ function loadStoredData() {
   // Level 2 Security: The app is strictly locked. No automatic onboarding or anonymous viewing.
   if (state.currentUser) {
     if (typeof isUserManager === 'function' && isUserManager(state.currentUser)) {
+      state.customers = [...(window.INITIAL_CUSTOMERS || [])];
       state.filters.dailyReportRep = 'ALL';
       state.filters.analyticsRepFilter = 'ALL';
       state.filters.accountsTerritory = 'ALL';
     } else {
       const terr = typeof getActiveRepTerritory === 'function' ? getActiveRepTerritory(state.currentUser) : (state.currentUser.territory || 'T1');
+      state.customers = (window.INITIAL_CUSTOMERS || []).filter(c => (c.territory || c.repId) === terr);
       state.filters.dailyReportRep = terr;
       state.filters.analyticsRepFilter = terr;
       state.filters.accountsTerritory = terr;
@@ -1422,11 +1448,13 @@ async function performLogin(username, password) {
   localStorage.removeItem('conceptors_crm_logged_out');
   state.currentUser = { ...foundUser };
   if (isUserManager(state.currentUser)) {
+    state.customers = [...(window.INITIAL_CUSTOMERS || [])];
     state.filters.analyticsRepFilter = 'ALL';
     state.filters.dailyReportRep = 'ALL';
     state.filters.accountsTerritory = 'ALL';
   } else {
     const userTerritory = getActiveRepTerritory(state.currentUser);
+    state.customers = (window.INITIAL_CUSTOMERS || []).filter(c => (c.territory || c.repId) === userTerritory);
     state.filters.analyticsRepFilter = userTerritory;
     state.filters.dailyReportRep = userTerritory;
     state.filters.accountsTerritory = userTerritory;
@@ -1889,7 +1917,7 @@ window.renderCustomerComboboxList = function(modalKey, query = '') {
           <div class="flex items-center gap-2 text-[11px] text-slate-400">
             <span class="truncate">📍 ${escapeHtml(c.location || c.city || 'UAE')}</span>
             <span class="text-slate-600">•</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold inline-flex items-center justify-center leading-tight ${tierColor}">${escapeHtml(c.tier)}</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full border font-bold inline-flex items-center justify-center leading-tight ${tierColor}">${escapeHtml(c.tier)} (Class ${getAccountClassFromTier(c.tier)})</span>
           </div>
         </div>
         <div class="text-right shrink-0">
@@ -7168,9 +7196,9 @@ function renderAccountsGrid() {
       territorySelect.className = 'bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-brand-500 cursor-pointer font-medium';
       territorySelect.title = 'Dr. Sameh Ageez Executive View: Select territory or view all';
       territorySelect.innerHTML = `
-        <option value="ALL">All Territories (UAE Master Directory)</option>
-        <option value="T1">Territory 1 (Dubai / AUH / Al Ain - Dr. Shaimaa)</option>
-        <option value="T2">Territory 2 (Northern Emirates - Dr. Marsel)</option>
+        <option value="ALL">All Territories (UAE Master Directory • ${(state.customers || []).length} Accounts)</option>
+        <option value="T1">Territory 1 (Dr. Shaimaa • ${(state.customers || []).filter(c => (c.territory || c.repId) === 'T1').length} Accounts)</option>
+        <option value="T2">Territory 2 (Dr. Marsel • ${(state.customers || []).filter(c => (c.territory || c.repId) === 'T2').length} Accounts)</option>
       `;
       if (!state.filters.accountsTerritory) {
         state.filters.accountsTerritory = 'ALL';
@@ -7182,13 +7210,14 @@ function renderAccountsGrid() {
       territorySelect.disabled = true;
       territorySelect.className = 'bg-slate-800/90 border border-sky-500/40 text-sky-300 font-bold rounded-lg px-2.5 py-1.5 text-xs outline-none cursor-not-allowed shadow-inner';
       territorySelect.title = `Strictly locked to your designated territory (${repTerr})`;
+      const repAccountCount = getScopedCustomers().length;
       if (repTerr === 'T1') {
         territorySelect.innerHTML = `
-          <option value="T1" selected>🔒 Territory 1 (Dubai / AUH / Al Ain - Dr. Shaimaa)</option>
+          <option value="T1" selected>🔒 Territory 1 (Dr. Shaimaa • ${repAccountCount} Designated Accounts)</option>
         `;
       } else {
         territorySelect.innerHTML = `
-          <option value="T2" selected>🔒 Territory 2 (Northern Emirates - Dr. Marsel)</option>
+          <option value="T2" selected>🔒 Territory 2 (Dr. Marsel • ${repAccountCount} Designated Accounts)</option>
         `;
       }
       territorySelect.value = repTerr;
@@ -7199,11 +7228,11 @@ function renderAccountsGrid() {
   const subtitleEl = document.getElementById('accountsDirectorySubtitle');
   if (subtitleEl) {
     if (isMgr) {
-      subtitleEl.innerHTML = `<span class="text-emerald-400 font-semibold">Senior Management View (Dr. Sameh Ageez):</span> Master veterinary accounts database across all UAE territories`;
+      subtitleEl.innerHTML = `<span class="text-emerald-400 font-semibold">Senior Management View (Dr. Sameh Ageez):</span> Master veterinary accounts database across all UAE territories (${(state.customers || []).length} total accounts)`;
     } else if (repTerr === 'T1') {
-      subtitleEl.innerHTML = `<span class="text-sky-400 font-semibold">Designated Accounts:</span> Dr. Shaimaa • Territory 1 (Dubai, Abu Dhabi & Al Ain)`;
+      subtitleEl.innerHTML = `<span class="text-sky-400 font-semibold">Designated Accounts (${getScopedCustomers().length}):</span> Dr. Shaimaa • Territory 1 (Dubai, Abu Dhabi & Al Ain)`;
     } else {
-      subtitleEl.innerHTML = `<span class="text-purple-400 font-semibold">Designated Accounts:</span> Dr. Marsel • Territory 2 (Northern Emirates)`;
+      subtitleEl.innerHTML = `<span class="text-purple-400 font-semibold">Designated Accounts (${getScopedCustomers().length}):</span> Dr. Marsel • Territory 2 (Dubai & Northern Emirates)`;
     }
   }
 
@@ -7259,12 +7288,18 @@ function renderAccountsGrid() {
   }
 
   if (searchQ) {
-    list = list.filter(c =>
-      (c.name && c.name.toLowerCase().includes(searchQ)) ||
-      (c.code && c.code.toLowerCase().includes(searchQ)) ||
-      (c.location && c.location.toLowerCase().includes(searchQ)) ||
-      (c.contactPerson && c.contactPerson.toLowerCase().includes(searchQ))
-    );
+    list = list.filter(c => {
+      const clsLetter = getAccountClassFromTier(c.tier);
+      return (
+        (c.name && c.name.toLowerCase().includes(searchQ)) ||
+        (c.code && c.code.toLowerCase().includes(searchQ)) ||
+        (c.location && c.location.toLowerCase().includes(searchQ)) ||
+        (c.type && c.type.toLowerCase().includes(searchQ)) ||
+        (c.tier && c.tier.toLowerCase().includes(searchQ)) ||
+        (`class ${clsLetter.toLowerCase()}`).includes(searchQ) ||
+        (c.contactPerson && c.contactPerson.toLowerCase().includes(searchQ))
+      );
+    });
   }
 
   if (list.length === 0) {
@@ -7297,17 +7332,19 @@ function renderAccountsGrid() {
     const plannedCount = clientVisits.filter(v => v.visitCategory === 'Planned' || !v.visitCategory).length;
     const visitedCount = clientVisits.filter(v => v.status === 'Completed').length;
 
+    const normTier = normalizeAccountTier(c.tier);
+    const classLetter = getAccountClassFromTier(normTier);
     let badgeClass = 'badge-draft';
-    if (c.tier === 'VIP Platinum') badgeClass = 'badge-vip-platinum';
-    else if (c.tier === 'VIP Gold') badgeClass = 'badge-vip-gold';
+    if (normTier === 'VIP Platinum') badgeClass = 'badge-vip-platinum';
+    else if (normTier === 'VIP Gold') badgeClass = 'badge-vip-gold';
 
     return `
       <div class="glass-card rounded-xl p-4 border ${isFrozen ? 'border-cyan-500/40 bg-cyan-950/20' : 'border-slate-800 hover:border-teal-500/40'} transition-all flex flex-col justify-between space-y-3">
         <div>
           <div class="flex items-start justify-between gap-2">
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-1.5 flex-wrap">
               <span class="px-2 py-0.5 rounded text-[10px] font-bold ${c.repId === 'T1' ? 'badge-t1' : 'badge-t2'}">${c.repId}</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${c.tier}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${normTier} (Class ${classLetter})</span>
             </div>
             ${isFrozen ? `
               <span class="px-2 py-0.5 rounded text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1 shadow-sm">
@@ -7318,7 +7355,7 @@ function renderAccountsGrid() {
             `}
           </div>
           <h4 class="font-bold text-white text-sm mt-2 truncate" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</h4>
-          <p class="text-[11px] text-slate-400">${c.code} • ${escapeHtml(c.location || 'UAE')}</p>
+          <p class="text-[11px] text-slate-400">${c.code} • ${escapeHtml(c.location || 'UAE')}${c.type ? ` • <span class="text-slate-500">${escapeHtml(c.type)}</span>` : ''}</p>
 
           ${isFrozen ? `
             <div class="account-frozen-notice p-2 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-[11px] text-cyan-300 flex items-center justify-between my-2.5">
@@ -8430,7 +8467,7 @@ function renderAnalyticsDashboard() {
         <div>
           <div class="flex items-center justify-between text-xs mb-1 font-semibold">
             <span class="flex items-center gap-1.5 text-white">
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${col.badge}">${ts.tier}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${col.badge}">${ts.tier} (Class ${getAccountClassFromTier(ts.tier)})</span>
               <span class="text-slate-400">(${ts.reached}/${ts.total} accounts)</span>
             </span>
             <span class="text-slate-200">${ts.coveragePct.toFixed(1)}% <span class="text-slate-400 text-[10px]">(${ts.calls} calls • ${ts.freq.toFixed(1)}x)</span></span>
@@ -8527,8 +8564,8 @@ function renderAnalyticsRosterOnly() {
   const tbody = document.getElementById('analyticsRosterTableBody');
   if (!tbody) return;
 
-  const isManager = state.currentUser && state.currentUser.role === 'manager';
-  const userTerritory = state.currentUser ? (state.currentUser.territory || (state.currentUser.role === 'rep_t1' ? 'T1' : (state.currentUser.role === 'rep_t2' ? 'T2' : 'ALL'))) : 'ALL';
+  const isManager = isUserManager(state.currentUser);
+  const userTerritory = isManager ? 'ALL' : getActiveRepTerritory(state.currentUser);
   const activeRep = isManager ? (state.filters.analyticsRepFilter || 'ALL') : userTerritory;
   const dateFrom = state.filters.analyticsDateFrom || '';
   const dateTo = state.filters.analyticsDateTo || '';
@@ -8544,8 +8581,8 @@ function renderAnalyticsRosterOnly() {
   const q = (state.filters.analyticsRosterSearch || '').toLowerCase().trim();
   const filterType = state.filters.analyticsRosterFilter || 'ALL';
 
-  // Accounts list based on rep filter
-  const accounts = (state.customers || []).filter(c => {
+  // Accounts list based on strictly scoped customers and rep filter
+  const accounts = getScopedCustomers().filter(c => {
     if (activeRep === 'ALL') return true;
     return c.repId === activeRep || c.territory === activeRep || c.territoryId === activeRep;
   });
@@ -8625,7 +8662,7 @@ function renderAnalyticsRosterOnly() {
         </td>
         <td class="py-2.5 px-3">
           <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${tierBadgeClass}">
-            ${acc.tier || 'Silver'}
+            ${acc.tier || 'Silver'} (Class ${getAccountClassFromTier(acc.tier)})
           </span>
         </td>
         <td class="py-2.5 px-3 text-center">
